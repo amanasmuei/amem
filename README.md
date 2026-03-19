@@ -20,27 +20,38 @@ ai-memory-template/
 ├── memory.md            # Persistent: identity + user + patterns + decisions
 ├── session.md           # Ephemeral: auto-resets each conversation
 ├── diary/               # Optional: append-only session logs
-├── validate-memory.sh   # Auto-validates memory after every edit
-├── reset-session.sh     # Auto-resets session on conversation start
+├── auto-save.sh         # Copies Working Notes to summary on exit
+├── reset-session.sh     # Resets session on conversation start
+├── validate-memory.sh   # Validates memory after every edit
 ├── setup.sh             # Interactive setup (fill in memory.md)
 └── install.sh           # Install hooks into host project
 ```
 
 ## How It Works
 
-| Step | When | What happens |
-|------|------|--------------|
-| **Load** | Conversation starts | AI reads `memory.md` + `session.md` |
-| **Reset** | Conversation starts | `session.md` auto-resets (carries over previous summary or working notes) |
-| **Work** | During conversation | Just chat normally |
-| **Save** | Conversation ends | AI auto-saves (skips if nothing meaningful happened) |
-| **Validate** | After every edit | Checks structure, size, append-only rules, diary format |
+| Step | When | What happens | How |
+|------|------|--------------|-----|
+| **Load** | Conversation starts | AI reads `memory.md` + `session.md` | CLAUDE.md |
+| **Reset** | Conversation starts | Session resets, carries over previous summary | SessionStart hook |
+| **Work** | During conversation | AI updates Working Notes in `session.md` | CLAUDE.md |
+| **Save** | User says "save" | AI does intelligent save: patterns, decisions, projects | CLAUDE.md |
+| **Auto-save** | Conversation ends | Working Notes copied to summary mechanically | Stop hook |
+| **Validate** | After every edit | Checks structure, size, append-only rules | PostToolUse hook |
+
+### Two types of save
+
+| | Auto-save (on exit) | Manual save (user says "save") |
+|---|---|---|
+| **What** | Copies Working Notes → End-of-Session Summary | Updates patterns, decisions, projects, summary |
+| **How** | Bash script, no AI | AI with full conversation context |
+| **Cost** | 0 tokens, <0.01s | Normal AI usage |
+| **When** | Every exit | When user explicitly asks |
 
 ## Two Usage Modes
 
 ### Standalone (template IS the project)
 
-Just run `./setup.sh`. Hooks work out of the box via `.claude/settings.json`.
+Just run `./setup.sh`. Hooks work out of the box.
 
 ### Subfolder (template inside another project)
 
@@ -51,16 +62,11 @@ cd my-project/ai-memory-template/
 ./install.sh    # install hooks + CLAUDE.md into host project
 ```
 
-`install.sh` handles:
-- Copying/merging CLAUDE.md to project root
-- Creating `.claude/settings.json` with correct paths
-- Updating `.gitignore`
-
 ## For Other AI Platforms
 
 Paste this at the start of each conversation:
 
-> Read memory.md and session.md, then follow the instructions in CLAUDE.md for how to manage memory during our session.
+> Read memory.md and session.md, then follow the instructions in CLAUDE.md.
 
 ## Diary Format
 

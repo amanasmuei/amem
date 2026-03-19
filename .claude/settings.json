@@ -29,10 +29,10 @@
       {
         "hooks": [
           {
-            "type": "agent",
-            "prompt": "The conversation is ending. Check if anything needs saving.\n\n1. Read session.md FIRST. Look at the Working Notes section.\n2. If Working Notes still says [empty], there is nothing to save. Just respond 'Nothing to save' and stop.\n3. If Working Notes has real content, then:\n   a. Read memory.md\n   b. Append any new learned patterns (never delete existing)\n   c. Update Active Projects table\n   d. Append decisions to Decision Log with today's date\n   e. Update Last updated date\n   f. Do NOT modify Identity or User sections\n   g. Write End-of-Session Summary in session.md (2-3 sentences)\n\nCRITICAL: Only append to Learned Patterns and Decision Log. Never remove entries.",
-            "timeout": 60,
-            "statusMessage": "Auto-saving memory..."
+            "type": "command",
+            "command": "bash auto-save.sh",
+            "timeout": 5,
+            "statusMessage": "Auto-saving session..."
           }
         ]
       }
