@@ -100,6 +100,18 @@ export function recallMemories(
     candidates = candidates.filter((m) => m.confidence >= minConfidence);
   }
 
+  // When query exists but no embeddings, filter to keyword matches only
+  if (query && !queryEmbedding) {
+    const q = query.toLowerCase();
+    const keywordMatches = candidates.filter(
+      (m) => m.content.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q)),
+    );
+    if (keywordMatches.length > 0) {
+      candidates = keywordMatches;
+    }
+    // If no keyword matches, keep all candidates (broad fallback)
+  }
+
   const scored: RecalledMemory[] = candidates.map((memory) => {
     let relevance = 0.5;
     if (queryEmbedding && memory.embedding) {
