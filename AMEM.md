@@ -1,12 +1,12 @@
-# Engram
+# Amem
 
 The memory layer for AI coding tools. Local-first. Developer-specific. Works everywhere.
 
-> Your AI forgets everything between conversations. Engram fixes that.
+> Your AI forgets everything between conversations. Amem fixes that.
 
 ## What it does
 
-Engram is an MCP server that gives any AI assistant persistent memory about:
+Amem is an MCP server that gives any AI assistant persistent memory about:
 
 - **Corrections** — "Don't mock the database in integration tests" (highest priority, always surfaced)
 - **Decisions** — "Chose Postgres over MongoDB because of ACID requirements"
@@ -26,9 +26,9 @@ Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
-    "engram": {
+    "amem": {
       "command": "node",
-      "args": ["/path/to/engram/dist/index.js"]
+      "args": ["/path/to/amem/dist/index.js"]
     }
   }
 }
@@ -41,9 +41,9 @@ Add to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "engram": {
+    "amem": {
       "command": "node",
-      "args": ["/path/to/engram/dist/index.js"]
+      "args": ["/path/to/amem/dist/index.js"]
     }
   }
 }
@@ -51,7 +51,7 @@ Add to `.cursor/mcp.json`:
 
 ### Connect to any MCP client
 
-Engram speaks standard MCP over stdio. Any client that supports MCP can connect.
+Amem speaks standard MCP over stdio. Any client that supports MCP can connect.
 
 ## Tools
 
@@ -125,11 +125,11 @@ memory_forget({ query: "old project", confirm: true })
 ## CLI
 
 ```bash
-engram-cli recall "authentication"    # Search memories
-engram-cli stats                      # Show statistics
-engram-cli list --type correction     # List by type
-engram-cli export --file memories.md  # Export to markdown
-engram-cli forget abc12345            # Delete a memory
+amem-cli recall "authentication"    # Search memories
+amem-cli stats                      # Show statistics
+amem-cli list --type correction     # List by type
+amem-cli export --file memories.md  # Export to markdown
+amem-cli forget abc12345            # Delete a memory
 ```
 
 ## How it works
@@ -141,7 +141,7 @@ engram-cli forget abc12345            # Delete a memory
 └──────────┬──────────────────────┘
            │ MCP Protocol (stdio)
 ┌──────────▼──────────────────────┐
-│         Engram Server           │
+│         Amem Server           │
 │                                 │
 │  ┌───────────┐  ┌────────────┐ │
 │  │  Scoring   │  │  Conflict  │ │
@@ -150,7 +150,7 @@ engram-cli forget abc12345            # Delete a memory
 │        │              │        │
 │  ┌─────▼──────────────▼──────┐ │
 │  │    SQLite + Embeddings    │ │
-│  │    ~/.engram/memory.db    │ │
+│  │    ~/.amem/memory.db    │ │
 │  └───────────────────────────┘ │
 └─────────────────────────────────┘
 ```
@@ -170,14 +170,14 @@ score = relevance × recency × confidence × importance
 
 ### Conflict detection
 
-When storing a new memory, Engram checks for conflicts:
+When storing a new memory, Amem checks for conflicts:
 - **>85% similarity** with different content — conflict detected, existing memory updated
 - **>80% similarity** with same intent — existing memory reinforced (confidence +0.1)
 - **No match** — new memory stored
 
 ### Local-first
 
-- All data stays on your machine at `~/.engram/memory.db`
+- All data stays on your machine at `~/.amem/memory.db`
 - Embeddings generated locally via `all-MiniLM-L6-v2` (~80MB model, runs on CPU)
 - No cloud, no API keys, no data leaving your laptop
 - Works offline after first model download
@@ -186,8 +186,8 @@ When storing a new memory, Engram checks for conflicts:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENGRAM_DIR` | `~/.engram` | Directory for Engram data |
-| `ENGRAM_DB` | `~/.engram/memory.db` | Database file path |
+| `ENGRAM_DIR` | `~/.amem` | Directory for Amem data |
+| `ENGRAM_DB` | `~/.amem/memory.db` | Database file path |
 
 ## Roadmap
 
@@ -195,7 +195,7 @@ When storing a new memory, Engram checks for conflicts:
 - [ ] Memory evolution (related memories update when new ones are stored)
 - [ ] Proactive context (surface relevant memories mid-conversation)
 - [ ] Team memory (shared project context)
-- [ ] npm publish (`npx engram`)
+- [ ] npm publish (`npx amem`)
 
 ## License
 

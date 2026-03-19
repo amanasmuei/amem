@@ -7,8 +7,8 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 
-const ENGRAM_DIR = process.env.ENGRAM_DIR || path.join(os.homedir(), ".engram");
-const DB_PATH = process.env.ENGRAM_DB || path.join(ENGRAM_DIR, "memory.db");
+const AMEM_DIR = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -20,7 +20,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
 
 if (!fs.existsSync(DB_PATH)) {
   console.error(`No memory database found at ${DB_PATH}`);
-  console.error("Start the Engram MCP server first, or set ENGRAM_DB to your database path.");
+  console.error("Start the Amem MCP server first, or set AMEM_DB to your database path.");
   process.exit(1);
 }
 
@@ -57,10 +57,10 @@ try {
 
 function printHelp() {
   console.log(`
-engram — The memory layer for AI coding tools
+amem — The memory layer for AI coding tools
 
 USAGE
-  engram <command> [options]
+  amem <command> [options]
 
 COMMANDS
   recall <query>       Search memories semantically
@@ -79,18 +79,18 @@ MEMORY TYPES
   fact        General knowledge (lowest priority)
 
 EXAMPLES
-  engram recall "authentication approach"
-  engram stats
-  engram list --type correction
-  engram export --file memories.md
-  engram forget abc12345
+  amem recall "authentication approach"
+  amem stats
+  amem list --type correction
+  amem export --file memories.md
+  amem forget abc12345
 `.trim());
 }
 
 async function handleRecall(args: string[]) {
   const query = args.join(" ");
   if (!query) {
-    console.error("Usage: engram recall <query>");
+    console.error("Usage: amem recall <query>");
     process.exit(1);
   }
 
@@ -127,7 +127,7 @@ function handleStats() {
   const stats = db.getStats();
   const all = db.getAll();
 
-  console.log("Engram Memory Statistics\n");
+  console.log("Amem Memory Statistics\n");
   console.log(`  Total memories: ${stats.total}`);
   console.log(`  Database: ${DB_PATH}`);
   console.log();
@@ -189,7 +189,7 @@ function handleExport(args: string[]) {
   }
 
   const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
-  let md = `# Engram Memory Export\n\n`;
+  let md = `# Amem Memory Export\n\n`;
   md += `*Exported: ${new Date().toISOString()}*\n`;
   md += `*Total: ${all.length} memories*\n\n`;
 
@@ -251,8 +251,8 @@ function handleList(args: string[]) {
 function handleForget(args: string[]) {
   const id = args[0];
   if (!id) {
-    console.error("Usage: engram forget <memory-id>");
-    console.error("Use 'engram list' to see memory IDs.");
+    console.error("Usage: amem forget <memory-id>");
+    console.error("Use 'amem list' to see memory IDs.");
     process.exit(1);
   }
 

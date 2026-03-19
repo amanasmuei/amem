@@ -8,30 +8,30 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 
-const ENGRAM_DIR = process.env.ENGRAM_DIR || path.join(os.homedir(), ".engram");
-const DB_PATH = process.env.ENGRAM_DB || path.join(ENGRAM_DIR, "memory.db");
+const AMEM_DIR = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = createDatabase(DB_PATH);
 
 const server = new McpServer({
-  name: "engram-dev",
+  name: "amem",
   version: "0.1.0",
 });
 
 registerTools(server, db);
 
-// Register MCP prompts — these teach AI clients how to use Engram effectively
+// Register MCP prompts — these teach AI clients how to use Amem effectively
 server.prompt(
   "extraction-guide",
-  "Guidelines for what to extract from conversations into Engram memory",
+  "Guidelines for what to extract from conversations into Amem memory",
   () => ({
     messages: [{
       role: "user",
       content: {
         type: "text",
-        text: `You have access to Engram, a persistent memory system. Use it to remember important information across conversations.
+        text: `You have access to Amem, a persistent memory system. Use it to remember important information across conversations.
 
 ## What to Extract
 
@@ -74,52 +74,52 @@ Call memory_extract with an array of memories. Each memory should be:
 // Register MCP resources — proactive context that clients can read automatically
 server.resource(
   "corrections",
-  "engram://corrections",
+  "amem://corrections",
   { mimeType: "text/plain", description: "All active corrections — hard constraints that should always be followed" },
   () => {
     const corrections = db.searchByType("correction" as any);
     if (corrections.length === 0) {
-      return { contents: [{ uri: "engram://corrections", mimeType: "text/plain", text: "No corrections stored." }] };
+      return { contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: "No corrections stored." }] };
     }
     const text = corrections
       .sort((a, b) => b.confidence - a.confidence)
       .map(c => `- ${c.content} (${(c.confidence * 100).toFixed(0)}% confidence)`)
       .join("\n");
     return {
-      contents: [{ uri: "engram://corrections", mimeType: "text/plain", text: `# Corrections (${corrections.length})\n\n${text}` }],
+      contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: `# Corrections (${corrections.length})\n\n${text}` }],
     };
   },
 );
 
 server.resource(
   "decisions",
-  "engram://decisions",
+  "amem://decisions",
   { mimeType: "text/plain", description: "Active architectural decisions and their rationale" },
   () => {
     const decisions = db.searchByType("decision" as any);
     if (decisions.length === 0) {
-      return { contents: [{ uri: "engram://decisions", mimeType: "text/plain", text: "No decisions stored." }] };
+      return { contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: "No decisions stored." }] };
     }
     const text = decisions
       .sort((a, b) => b.confidence - a.confidence)
       .map(d => `- ${d.content} (${(d.confidence * 100).toFixed(0)}% confidence)`)
       .join("\n");
     return {
-      contents: [{ uri: "engram://decisions", mimeType: "text/plain", text: `# Decisions (${decisions.length})\n\n${text}` }],
+      contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: `# Decisions (${decisions.length})\n\n${text}` }],
     };
   },
 );
 
 server.resource(
   "profile",
-  "engram://profile",
+  "amem://profile",
   { mimeType: "text/plain", description: "Developer profile — preferences, patterns, and tool choices" },
   () => {
     const preferences = db.searchByType("preference" as any);
     const patterns = db.searchByType("pattern" as any);
     const all = [...preferences, ...patterns].sort((a, b) => b.confidence - a.confidence);
     if (all.length === 0) {
-      return { contents: [{ uri: "engram://profile", mimeType: "text/plain", text: "No profile data stored." }] };
+      return { contents: [{ uri: "amem://profile", mimeType: "text/plain", text: "No profile data stored." }] };
     }
     const prefText = preferences.length > 0
       ? "## Preferences\n\n" + preferences.map(p => `- ${p.content}`).join("\n")
@@ -128,27 +128,27 @@ server.resource(
       ? "## Patterns\n\n" + patterns.map(p => `- ${p.content}`).join("\n")
       : "";
     return {
-      contents: [{ uri: "engram://profile", mimeType: "text/plain", text: [prefText, patText].filter(Boolean).join("\n\n") }],
+      contents: [{ uri: "amem://profile", mimeType: "text/plain", text: [prefText, patText].filter(Boolean).join("\n\n") }],
     };
   },
 );
 
 server.resource(
   "summary",
-  "engram://summary",
+  "amem://summary",
   { mimeType: "text/plain", description: "Quick summary of all stored memories" },
   () => {
     const stats = db.getStats();
     if (stats.total === 0) {
-      return { contents: [{ uri: "engram://summary", mimeType: "text/plain", text: "No memories stored yet." }] };
+      return { contents: [{ uri: "amem://summary", mimeType: "text/plain", text: "No memories stored yet." }] };
     }
     const typeOrder = ["correction", "decision", "pattern", "preference", "topology", "fact"];
     const lines = typeOrder
       .filter(t => (stats.byType[t] || 0) > 0)
       .map(t => `  ${t}: ${stats.byType[t]}`);
-    const text = `Engram: ${stats.total} memories\n\n${lines.join("\n")}`;
+    const text = `Amem: ${stats.total} memories\n\n${lines.join("\n")}`;
     return {
-      contents: [{ uri: "engram://summary", mimeType: "text/plain", text }],
+      contents: [{ uri: "amem://summary", mimeType: "text/plain", text }],
     };
   },
 );
@@ -161,7 +161,7 @@ server.prompt(
       role: "user",
       content: {
         type: "text",
-        text: `You have access to Engram memory. At the start of this conversation:
+        text: `You have access to Amem memory. At the start of this conversation:
 
 1. Call memory_context with the likely topic (based on what the user asks about)
 2. Use any corrections as hard constraints — they override other context
@@ -186,4 +186,4 @@ process.on("SIGTERM", () => {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error("Engram running. DB: " + DB_PATH);
+console.error("Amem running. DB: " + DB_PATH);

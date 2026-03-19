@@ -1,4 +1,4 @@
-import type { EngramDatabase } from "./database.js";
+import type { AmemDatabase } from "./database.js";
 import { cosineSimilarity } from "./embeddings.js";
 
 export const MemoryType = {
@@ -81,7 +81,7 @@ export interface RecalledMemory extends Memory {
 }
 
 export function recallMemories(
-  db: EngramDatabase,
+  db: AmemDatabase,
   options: RecallOptions,
 ): RecalledMemory[] {
   const { query, queryEmbedding, limit, type, tag, minConfidence } = options;

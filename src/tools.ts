@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { EngramDatabase } from "./database.js";
+import type { AmemDatabase } from "./database.js";
 import { MemoryType, type MemoryTypeValue, IMPORTANCE_WEIGHTS, recallMemories, detectConflict } from "./memory.js";
 import { generateEmbedding, cosineSimilarity } from "./embeddings.js";
 
 const MEMORY_TYPES = Object.values(MemoryType);
 
-export function registerTools(server: McpServer, db: EngramDatabase): void {
+export function registerTools(server: McpServer, db: AmemDatabase): void {
 
   // ── memory_store ──────────────────────────────────────────
   server.registerTool(
@@ -400,7 +400,7 @@ Each memory should be a specific, self-contained statement that would be useful 
       }
 
       const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
-      let md = `# Engram Memory Export\n\n`;
+      let md = `# Amem Memory Export\n\n`;
       md += `*Exported: ${new Date().toISOString()}*\n`;
       md += `*Total: ${all.length} memories*\n\n`;
 

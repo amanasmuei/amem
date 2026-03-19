@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createDatabase, type EngramDatabase } from "../src/database.js";
+import { createDatabase, type AmemDatabase } from "../src/database.js";
 import { MemoryType } from "../src/memory.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-describe("EngramDatabase", () => {
-  let db: EngramDatabase;
+describe("AmemDatabase", () => {
+  let db: AmemDatabase;
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = path.join(os.tmpdir(), `engram-test-${Date.now()}.db`);
+    dbPath = path.join(os.tmpdir(), `amem-test-${Date.now()}.db`);
     db = createDatabase(dbPath);
   });
 

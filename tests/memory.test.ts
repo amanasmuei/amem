@@ -108,7 +108,7 @@ describe("recallMemories", () => {
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = path.join(os.tmpdir(), `engram-recall-test-${Date.now()}.db`);
+    dbPath = path.join(os.tmpdir(), `amem-recall-test-${Date.now()}.db`);
     db = createDatabase(dbPath);
   });
 

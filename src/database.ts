@@ -16,7 +16,7 @@ export interface MemoryStats {
   byType: Record<string, number>;
 }
 
-export interface EngramDatabase {
+export interface AmemDatabase {
   insertMemory(input: MemoryInput): string;
   getById(id: string): Memory | null;
   searchByType(type: MemoryTypeValue): Memory[];
@@ -66,7 +66,7 @@ function rowToMemory(row: MemoryRow): Memory {
   };
 }
 
-export function createDatabase(dbPath: string): EngramDatabase {
+export function createDatabase(dbPath: string): AmemDatabase {
   const db = new Database(dbPath);
 
   db.pragma("journal_mode = WAL");

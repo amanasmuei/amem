@@ -1,11 +1,11 @@
 {
-  "name": "engram-dev",
+  "name": "amem",
   "version": "0.1.0",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "bin": {
-    "engram": "dist/index.js",
-    "engram-cli": "dist/cli.js"
+    "amem": "dist/index.js",
+    "amem-cli": "dist/cli.js"
   },
   "files": ["dist"],
   "scripts": {
