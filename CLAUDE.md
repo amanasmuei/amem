@@ -6,11 +6,13 @@ This project uses a file-based memory system. Follow these rules in every conver
 
 1. Read `memory.md` — restore the AI identity, user profile, and all context.
 2. Read `session.md` — check the Previous Session Recap for continuity.
+3. If `archive/memory-archive.md` exists, read it — restore historical context (past decisions, completed projects).
 
 ## During conversation
 
 - When you make progress or discover something important, update `session.md` → Working Notes.
 - This is critical — Working Notes is what gets auto-saved if the user exits without saying "save".
+- If the user asks about a past project, decision, or pattern that isn't in `memory.md`, check `archive/memory-archive.md` and `diary/` for historical context.
 
 ## When user says "save"
 

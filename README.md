@@ -405,7 +405,29 @@ AI context windows have limits. When `memory.md` exceeds ~200 lines, details in 
 | **Completed projects** | Status is *done*, *completed*, *shipped*, *cancelled*, or *closed* | `API rewrite — Completed — shipped to prod` |
 | **Old decisions** | Date older than 90 days (configurable) | `2024-11-01 — Chose PostgreSQL over MongoDB` |
 
-Archived entries move to `archive/memory-archive.md` — still accessible, just not loaded into every conversation.
+Archived entries move to `archive/memory-archive.md`.
+
+> [!IMPORTANT]
+> **Archived memories are NOT lost.** The AI loads the archive file at the start of every conversation alongside `memory.md`. You don't need to do anything — old decisions and completed projects are still recalled automatically.
+
+### How Recall Works
+
+```text
+Conversation starts
+  │
+  ├─ 1. Read memory.md                  ← active memory (always loaded)
+  ├─ 2. Read session.md                 ← last session recap (always loaded)
+  └─ 3. Read archive/memory-archive.md  ← archived history (loaded if exists)
+```
+
+| Memory type | Stored in | Loaded automatically? | Purpose |
+| --- | --- | --- | --- |
+| **Active** | `memory.md` | Yes, always | Current identity, patterns, active projects |
+| **Archived** | `archive/memory-archive.md` | Yes, if file exists | Past decisions, completed projects |
+| **Session** | `session.md` | Yes, always | Previous session recap, working notes |
+| **Diary** | `diary/YYYY-MM-DD.md` | On demand | Detailed daily logs (AI checks when asked) |
+
+Archiving keeps `memory.md` lean (under 200 lines) while the AI still has full historical context through the archive file. Think of it like moving old emails to a folder — they're organized separately but still searchable.
 
 ### Automatic (during "save")
 
