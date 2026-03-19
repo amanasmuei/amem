@@ -173,35 +173,39 @@ Here's what happens behind the scenes during each conversation:
 ### Conversation Lifecycle
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│                    SESSION START                         │
-│  ┌──────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │ Load     │───▶│ Reset        │───▶│ Ready         │  │
-│  │ memory   │    │ session      │    │ to work       │  │
-│  └──────────┘    └──────────────┘    └───────┬───────┘  │
-│                                              │          │
-│                    DURING SESSION             ▼          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  AI updates Working Notes as you make progress   │   │
-│  │  You say "save" for intelligent save (optional)  │   │
-│  └──────────────────────────────────┬───────────────┘   │
-│                                     │                   │
-│                    SESSION END      ▼                   │
-│  ┌──────────────┐    ┌──────────────────────────────┐   │
-│  │ Auto-save    │───▶│ Working Notes → Summary      │   │
-│  │ (mechanical) │    │ Ready for next session       │   │
-│  └──────────────┘    └──────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      SESSION START                            │
+│  ┌─────────────┐   ┌────────────────┐   ┌────────────────┐  │
+│  │ Load memory │──▶│ Reset session  │──▶│ Ready to work  │  │
+│  │ + archive   │   │ + inject time  │   │ (time-aware)   │  │
+│  └─────────────┘   │ + archive diary│   └───────┬────────┘  │
+│                     └────────────────┘           │           │
+│                      DURING SESSION              ▼           │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │  AI updates Working Notes as you make progress        │   │
+│  │  AI can recall past context from diary and archive    │   │
+│  │  You say "save" for intelligent save (optional)       │   │
+│  │  You say "plan" to create a tracked work plan         │   │
+│  └───────────────────────────────────┬───────────────────┘   │
+│                                      │                       │
+│                      SESSION END     ▼                       │
+│  ┌──────────────┐   ┌────────────────────────────────────┐   │
+│  │ Auto-save    │──▶│ Working Notes → Summary            │   │
+│  │ (mechanical) │   │ Ready for next session             │   │
+│  └──────────────┘   └────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 | Step | When | What Happens |
 | --- | --- | --- |
-| **Load** | Conversation starts | AI reads `memory.md` + `session.md` |
-| **Reset** | Conversation starts | Session resets, carries over previous summary |
-| **Work** | During conversation | AI updates Working Notes in `session.md` |
-| **Save** | User says "save" | AI does intelligent save — patterns, decisions, projects |
+| **Load** | Conversation starts | AI reads `memory.md` + `session.md` + `archive/memory-archive.md` |
+| **Reset** | Conversation starts | Session resets, injects current time, archives old diary months |
+| **Adapt** | Conversation starts | AI adapts tone to time of day (morning/afternoon/evening/night) |
+| **Work** | During conversation | AI updates Working Notes, can recall from diary and archive |
+| **Plan** | User says "plan" | AI creates or updates `plans.md` with tracked checkboxes |
+| **Save** | User says "save" | AI saves patterns, decisions, projects (max 10), archives old entries |
 | **Auto-save** | Conversation ends | Working Notes copied to summary mechanically |
-| **Validate** | After every edit | Checks structure, size, and append-only rules |
+| **Validate** | After every edit | Checks structure, size limits (200/500 lines), and append-only rules |
 
 ---
 
