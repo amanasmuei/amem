@@ -13,9 +13,9 @@ if git rev-parse --show-toplevel > /dev/null 2>&1; then
 else
   PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
   echo "Not a git repo. Assuming project root: $PROJECT_ROOT"
-  read -p "Correct? (y/n): " confirm
+  read -rp "Correct? (y/n): " confirm
   if [ "$confirm" != "y" ]; then
-    read -p "Enter project root path: " PROJECT_ROOT
+    read -rp "Enter project root path: " PROJECT_ROOT
     PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
   fi
 fi

@@ -15,15 +15,15 @@ fi
 echo "=== AI Memory Template Setup ==="
 echo ""
 
-read -p "AI name (e.g., Atlas, Nova): " ai_name
-read -p "AI role (e.g., coding partner, study buddy): " ai_role
-read -p "AI tone (e.g., direct and technical, warm and casual): " ai_tone
-read -p "AI traits (e.g., pragmatic, curious, honest): " ai_traits
+read -rp "AI name (e.g., Atlas, Nova): " ai_name
+read -rp "AI role (e.g., coding partner, study buddy): " ai_role
+read -rp "AI tone (e.g., direct and technical, warm and casual): " ai_tone
+read -rp "AI traits (e.g., pragmatic, curious, honest): " ai_traits
 echo ""
-read -p "Your name: " user_name
-read -p "Your focus areas (e.g., web dev, ML): " user_focus
-read -p "Your skill level (e.g., senior Python, beginner Rust): " user_level
-read -p "Preferred response style (e.g., concise, show code first): " user_style
+read -rp "Your name: " user_name
+read -rp "Your focus areas (e.g., web dev, ML): " user_focus
+read -rp "Your skill level (e.g., senior Python, beginner Rust): " user_level
+read -rp "Preferred response style (e.g., concise, show code first): " user_style
 
 # Export as env vars — ENVIRON[] in awk does NOT interpret backslash escapes
 # (unlike -v which converts \n to newline, \t to tab, etc.)
