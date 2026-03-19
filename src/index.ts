@@ -16,7 +16,7 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = createDatabase(DB_PATH);
 
 const server = new McpServer({
-  name: "engram",
+  name: "engram-dev",
   version: "0.1.0",
 });
 
@@ -69,6 +69,88 @@ Call memory_extract with an array of memories. Each memory should be:
       },
     }],
   }),
+);
+
+// Register MCP resources — proactive context that clients can read automatically
+server.resource(
+  "corrections",
+  "engram://corrections",
+  { mimeType: "text/plain", description: "All active corrections — hard constraints that should always be followed" },
+  () => {
+    const corrections = db.searchByType("correction" as any);
+    if (corrections.length === 0) {
+      return { contents: [{ uri: "engram://corrections", mimeType: "text/plain", text: "No corrections stored." }] };
+    }
+    const text = corrections
+      .sort((a, b) => b.confidence - a.confidence)
+      .map(c => `- ${c.content} (${(c.confidence * 100).toFixed(0)}% confidence)`)
+      .join("\n");
+    return {
+      contents: [{ uri: "engram://corrections", mimeType: "text/plain", text: `# Corrections (${corrections.length})\n\n${text}` }],
+    };
+  },
+);
+
+server.resource(
+  "decisions",
+  "engram://decisions",
+  { mimeType: "text/plain", description: "Active architectural decisions and their rationale" },
+  () => {
+    const decisions = db.searchByType("decision" as any);
+    if (decisions.length === 0) {
+      return { contents: [{ uri: "engram://decisions", mimeType: "text/plain", text: "No decisions stored." }] };
+    }
+    const text = decisions
+      .sort((a, b) => b.confidence - a.confidence)
+      .map(d => `- ${d.content} (${(d.confidence * 100).toFixed(0)}% confidence)`)
+      .join("\n");
+    return {
+      contents: [{ uri: "engram://decisions", mimeType: "text/plain", text: `# Decisions (${decisions.length})\n\n${text}` }],
+    };
+  },
+);
+
+server.resource(
+  "profile",
+  "engram://profile",
+  { mimeType: "text/plain", description: "Developer profile — preferences, patterns, and tool choices" },
+  () => {
+    const preferences = db.searchByType("preference" as any);
+    const patterns = db.searchByType("pattern" as any);
+    const all = [...preferences, ...patterns].sort((a, b) => b.confidence - a.confidence);
+    if (all.length === 0) {
+      return { contents: [{ uri: "engram://profile", mimeType: "text/plain", text: "No profile data stored." }] };
+    }
+    const prefText = preferences.length > 0
+      ? "## Preferences\n\n" + preferences.map(p => `- ${p.content}`).join("\n")
+      : "";
+    const patText = patterns.length > 0
+      ? "## Patterns\n\n" + patterns.map(p => `- ${p.content}`).join("\n")
+      : "";
+    return {
+      contents: [{ uri: "engram://profile", mimeType: "text/plain", text: [prefText, patText].filter(Boolean).join("\n\n") }],
+    };
+  },
+);
+
+server.resource(
+  "summary",
+  "engram://summary",
+  { mimeType: "text/plain", description: "Quick summary of all stored memories" },
+  () => {
+    const stats = db.getStats();
+    if (stats.total === 0) {
+      return { contents: [{ uri: "engram://summary", mimeType: "text/plain", text: "No memories stored yet." }] };
+    }
+    const typeOrder = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+    const lines = typeOrder
+      .filter(t => (stats.byType[t] || 0) > 0)
+      .map(t => `  ${t}: ${stats.byType[t]}`);
+    const text = `Engram: ${stats.total} memories\n\n${lines.join("\n")}`;
+    return {
+      contents: [{ uri: "engram://summary", mimeType: "text/plain", text }],
+    };
+  },
 );
 
 server.prompt(

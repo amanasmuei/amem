@@ -1,5 +1,5 @@
 {
-  "name": "engram",
+  "name": "engram-dev",
   "version": "0.1.0",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
