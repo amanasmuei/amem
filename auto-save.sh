@@ -24,8 +24,9 @@ NOTES=$(awk '
   found { print }
 ' "$SESSION" | sed '/^[[:space:]]*$/d')
 
-# Nothing to save
-if [ -z "$NOTES" ] || echo "$NOTES" | grep -qF '[empty]'; then
+# Nothing to save — match only if the ENTIRE content is "[empty]"
+trimmed=$(echo "$NOTES" | tr -d '[:space:]')
+if [ -z "$NOTES" ] || [ "$trimmed" = "[empty]" ]; then
   echo '{"suppressOutput": true}'
   exit 0
 fi

@@ -72,7 +72,7 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${RELPATH}/reset-session.sh",
+            "command": "bash '${RELPATH}/reset-session.sh'",
             "timeout": 5,
             "statusMessage": "Resetting session..."
           }
@@ -85,7 +85,7 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // \"\"' | { read -r f; if echo \"\$f\" | grep -q 'memory\\.md\$'; then bash ${RELPATH}/validate-memory.sh memory; elif echo \"\$f\" | grep -q 'session\\.md\$'; then bash ${RELPATH}/validate-memory.sh session; elif echo \"\$f\" | grep -q 'diary/.*\\.md\$'; then bash ${RELPATH}/validate-memory.sh diary \"\$f\"; else echo '{\"suppressOutput\": true}'; fi; }",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // \"\"' | { read -r f; if echo \"\$f\" | grep -q 'memory\\.md\$'; then bash '${RELPATH}/validate-memory.sh' memory; elif echo \"\$f\" | grep -q 'session\\.md\$'; then bash '${RELPATH}/validate-memory.sh' session; elif echo \"\$f\" | grep -q 'diary/.*\\.md\$'; then bash '${RELPATH}/validate-memory.sh' diary \"\$f\"; else echo '{\"suppressOutput\": true}'; fi; }",
             "timeout": 10,
             "statusMessage": "Validating memory..."
           }
@@ -97,7 +97,7 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${RELPATH}/auto-save.sh",
+            "command": "bash '${RELPATH}/auto-save.sh'",
             "timeout": 5,
             "statusMessage": "Auto-saving session..."
           }

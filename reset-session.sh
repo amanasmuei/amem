@@ -29,14 +29,16 @@ RECAP=$(awk '
 ' "$SESSION" | sed '/^[[:space:]]*$/d' | head -10)
 
 # If no summary was written, preserve Working Notes as fallback
-if [ -z "$RECAP" ] || echo "$RECAP" | grep -qF '[pending]'; then
+trimmed_recap=$(echo "$RECAP" | tr -d '[:space:]')
+if [ -z "$RECAP" ] || [ "$trimmed_recap" = "[pending]" ]; then
   NOTES=$(awk '
     /^## Working Notes$/ { found=1; next }
     found && /^## / { exit }
     found { print }
   ' "$SESSION" | sed '/^[[:space:]]*$/d' | head -10)
 
-  if [ -n "$NOTES" ] && ! echo "$NOTES" | grep -qF '[empty]'; then
+  trimmed_notes=$(echo "$NOTES" | tr -d '[:space:]')
+  if [ -n "$NOTES" ] && [ "$trimmed_notes" != "[empty]" ]; then
     RECAP="(No summary written — working notes from previous session)
 $NOTES"
   else

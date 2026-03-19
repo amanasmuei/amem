@@ -126,7 +126,9 @@ if [ ${#ERRORS[@]} -eq 0 ]; then
 else
   msg="Memory validation failed:\\n"
   for err in "${ERRORS[@]}"; do
-    msg+="  - ${err}\\n"
+    # Escape backslashes and quotes for valid JSON
+    safe_err=$(printf '%s' "$err" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    msg+="  - ${safe_err}\\n"
   done
   msg+="\\nFix these issues before continuing."
   echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"${msg}\"}}"
