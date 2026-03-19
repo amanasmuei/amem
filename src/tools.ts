@@ -250,6 +250,90 @@ export function registerTools(server: McpServer, db: EngramDatabase): void {
     },
   );
 
+  // ── memory_extract ─────────────────────────────────────────
+  server.registerTool(
+    "memory_extract",
+    {
+      title: "Extract Memories from Conversation",
+      description: `Extract and store multiple memories from the current conversation in one call. Use this PROACTIVELY:
+
+WHEN to extract:
+- User corrects your approach → correction (confidence: 1.0)
+- An architectural decision is made → decision (confidence: 0.9)
+- You notice a coding pattern the user prefers → pattern (confidence: 0.7)
+- User expresses a tool/style preference → preference (confidence: 0.8)
+- You learn where something is in the codebase → topology (confidence: 0.7)
+- A project fact is established → fact (confidence: 0.6)
+
+HOW OFTEN: Every ~10 exchanges, or when the conversation is ending, or after any significant decision/correction.
+
+Each memory should be a specific, self-contained statement that would be useful in a future conversation without additional context.`,
+      inputSchema: z.object({
+        memories: z.array(z.object({
+          content: z.string().describe("Specific, self-contained memory statement"),
+          type: z.enum(MEMORY_TYPES as [string, ...string[]]).describe("Memory type"),
+          tags: z.array(z.string()).default([]).describe("Relevant tags"),
+          confidence: z.number().min(0).max(1).default(0.8).describe("Confidence level"),
+        })).describe("Array of memories to extract and store"),
+        source: z.string().default("conversation").describe("Source identifier"),
+      }),
+    },
+    async ({ memories: memoryInputs, source }) => {
+      let stored = 0;
+      let skipped = 0;
+      let reinforced = 0;
+      const details: string[] = [];
+
+      for (const input of memoryInputs) {
+        const embedding = await generateEmbedding(input.content);
+
+        // Check for duplicates/conflicts
+        let isDuplicate = false;
+        if (embedding) {
+          const existing = db.getAllWithEmbeddings();
+          for (const mem of existing) {
+            if (!mem.embedding) continue;
+            const sim = cosineSimilarity(embedding, mem.embedding);
+            if (sim > 0.85) {
+              // Near-duplicate — reinforce existing
+              db.updateConfidence(mem.id, Math.min(1.0, mem.confidence + 0.1));
+              db.touchAccess(mem.id);
+              reinforced++;
+              details.push(`  ~ Reinforced: "${mem.content}" (${(sim * 100).toFixed(0)}% match)`);
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+
+        if (!isDuplicate) {
+          const id = db.insertMemory({
+            content: input.content,
+            type: input.type as MemoryTypeValue,
+            tags: input.tags,
+            confidence: input.confidence,
+            source,
+            embedding,
+          });
+          stored++;
+          details.push(`  + Stored [${input.type}]: "${input.content}" (${id.slice(0, 8)})`);
+        }
+      }
+
+      const stats = db.getStats();
+      const summary = [
+        `Extraction complete: ${stored} stored, ${reinforced} reinforced, ${skipped} skipped.`,
+        `Total memories: ${stats.total}.`,
+        "",
+        ...details,
+      ].join("\n");
+
+      return {
+        content: [{ type: "text" as const, text: summary }],
+      };
+    },
+  );
+
   // ── memory_stats ──────────────────────────────────────────
   server.registerTool(
     "memory_stats",
