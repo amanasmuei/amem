@@ -7,6 +7,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MEMORY_PATH="${SCRIPT_DIR}/memory.md"
 
+# Resolve symlink for multi-user profile support
+if [ -L "$MEMORY_PATH" ]; then
+  TARGET="$(readlink "$MEMORY_PATH")"
+  case "$TARGET" in /*) MEMORY_PATH="$TARGET" ;; *) MEMORY_PATH="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+
 if [ ! -f "$MEMORY_PATH" ]; then
   echo "Error: memory.md not found at $SCRIPT_DIR"
   exit 1

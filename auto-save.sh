@@ -12,6 +12,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SESSION="${SCRIPT_DIR}/session.md"
 MEMORY="${SCRIPT_DIR}/memory.md"
 
+# Resolve symlinks for multi-user profile support
+if [ -L "$SESSION" ]; then
+  TARGET="$(readlink "$SESSION")"
+  case "$TARGET" in /*) SESSION="$TARGET" ;; *) SESSION="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+if [ -L "$MEMORY" ]; then
+  TARGET="$(readlink "$MEMORY")"
+  case "$TARGET" in /*) MEMORY="$TARGET" ;; *) MEMORY="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+
 if [ ! -f "$SESSION" ]; then
   echo '{"suppressOutput": true}'
   exit 0

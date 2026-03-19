@@ -90,6 +90,34 @@ fi
 
 print_header
 
+# ─── Mode Selection ───
+
+echo "  How will this be used?"
+echo ""
+prompt_choice "Pick one" "1" setup_mode \
+  "Just me — single user" \
+  "Multiple people — shared project"
+
+MULTI_USER=false
+if [ "$setup_mode" = "Multiple people — shared project" ]; then
+  MULTI_USER=true
+  echo ""
+  prompt_with_default "Your profile name" "$(whoami)" profile_name
+
+  # Sanitize name
+  profile_name=$(echo "$profile_name" | tr -cd '[:alnum:]-_')
+
+  PROFILE_DIR="$SCRIPT_DIR/profiles/$profile_name"
+  mkdir -p "$PROFILE_DIR/diary"
+  cp "$SCRIPT_DIR/memory.md" "$PROFILE_DIR/memory.md"
+  cp "$SCRIPT_DIR/session.md" "$PROFILE_DIR/session.md"
+
+  # Setup will write to profile's memory.md directly
+  MEMORY_PATH="$PROFILE_DIR/memory.md"
+
+  printf "\n  ${GREEN}✓${RESET} Profile '${profile_name}' created\n"
+fi
+
 TOTAL_STEPS=3
 
 # ─── Step 1: Your Profile ───
@@ -229,6 +257,26 @@ if [ "$IS_SUBFOLDER" = true ]; then
     echo "  Skipped. You can run ./install.sh later."
   fi
 else
+  # Multi-user: set up symlinks before git init
+  if [ "$MULTI_USER" = true ]; then
+    echo "  Setting up multi-user profile..."
+    cd "$SCRIPT_DIR"
+
+    # Replace root files with symlinks to active profile
+    rm -f memory.md session.md
+    rm -rf diary
+    ln -s "profiles/$profile_name/memory.md" memory.md
+    ln -s "profiles/$profile_name/session.md" session.md
+    ln -s "profiles/$profile_name/diary" diary
+
+    # Gitignore the symlinks (actual files tracked in profiles/)
+    for entry in "memory.md" "session.md" "diary"; do
+      grep -qxF "$entry" .gitignore 2>/dev/null || echo "$entry" >> .gitignore
+    done
+
+    printf "  ${GREEN}✓${RESET} Profile symlinks activated\n"
+  fi
+
   # Standalone project — ensure a fresh git repo
   NEEDS_INIT=false
 
@@ -245,7 +293,9 @@ else
     rm -rf "$SCRIPT_DIR/.git"
     git -C "$SCRIPT_DIR" init -q
     git -C "$SCRIPT_DIR" add -A
-    git -C "$SCRIPT_DIR" commit -q -m "Initialize AI memory for ${user_name}"
+    COMMIT_MSG="Initialize AI memory for ${user_name}"
+    [ "$MULTI_USER" = true ] && COMMIT_MSG="Initialize AI memory for ${user_name} (profile: ${profile_name})"
+    git -C "$SCRIPT_DIR" commit -q -m "$COMMIT_MSG"
     printf "  ${GREEN}✓${RESET} Fresh git repo created (clean history)\n"
   else
     echo "  Detected: standalone project with existing git history."

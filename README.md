@@ -2,7 +2,7 @@
 
 # Aman AI Memory
 
-**Persistent AI memory in 3 markdown files.**
+**Persistent AI memory in markdown files. Multi-user ready.**
 **Works with any AI. Auto-integrates with Claude Code.**
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-6C5CE7?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==)](https://claude.ai/claude-code)
@@ -86,7 +86,17 @@ aman-ai-memory/
 ├── install.sh             Install hooks into host project (advanced)
 ├── auto-save.sh           Mechanical save on exit
 ├── reset-session.sh       Session reset on start
-└── validate-memory.sh     Structure and integrity checks
+├── validate-memory.sh     Structure and integrity checks
+├── archive.sh             Archive old entries from memory.md
+├── add-user.sh            Add a new user profile
+├── switch-user.sh         Switch active user profile
+│
+├── profiles/              Per-user data (multi-user mode only)
+│   └── <name>/
+│       ├── memory.md
+│       ├── session.md
+│       └── diary/
+└── archive/               Archived entries (created by archive.sh)
 ```
 
 ---
@@ -185,9 +195,11 @@ curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.
 
 The installer downloads everything and launches the guided wizard. It handles:
 
+- Single-user or multi-user mode selection
 - Friendly questions with numbered choices (pick 1, 2, 3...)
 - Sensible defaults (press Enter to skip)
 - Auto-detects if you're in a subfolder and offers to install hooks
+- Initializes a fresh git repo (no template history carried over)
 - Shows a summary when done
 
 ### Adding to an Existing Project
@@ -237,6 +249,9 @@ No automation, but the memory files work the same way.
 | Save important context | Say **"save"** |
 | Write a diary entry | Say **"write diary entry"** |
 | Exit without saving | Just exit — Working Notes are auto-saved |
+| Archive old entries | Run **`./archive.sh`** or say "save" (AI archives automatically) |
+| Add a team member | Run **`./add-user.sh <name>`** |
+| Switch user profile | Run **`./switch-user.sh <name>`** |
 
 ### Tips for Best Results
 
@@ -247,7 +262,7 @@ No automation, but the memory files work the same way.
 
 2. **Review `memory.md` occasionally.** Check that learned patterns and decisions are accurate. Delete anything wrong.
 
-3. **Keep it under 200 lines.** If `memory.md` grows too large, archive old decisions and completed projects.
+3. **Keep it under 200 lines.** Run `./archive.sh` when it grows, or just say "save" — the AI archives automatically when approaching the limit.
 
 ---
 
@@ -305,6 +320,135 @@ Archive monthly to `diary/archive/YYYY-MM/` if desired.
 
 ---
 
+## Multi-User
+
+For teams or shared machines where multiple people need their own AI memory.
+
+### Getting Started
+
+**During initial setup** — the wizard asks "Just me" or "Multiple people":
+
+```text
+  How will this be used?
+
+  1) Just me — single user
+  2) Multiple people — shared project
+
+  Pick one [1]: 2
+  Your profile name [aman]:
+```
+
+Each user gets an isolated profile with their own `memory.md`, `session.md`, and `diary/`.
+
+### Adding Users Later
+
+Already running single-user? No problem — `add-user.sh` migrates your data automatically:
+
+```bash
+./add-user.sh alice
+```
+
+> [!NOTE]
+> The first time you add a user, the script asks for a name for your **existing** profile so your data is preserved. After that, it simply creates a new empty profile.
+
+### Switching Profiles
+
+```bash
+./switch-user.sh            # Interactive — lists all profiles, pick one
+./switch-user.sh alice      # Switch directly
+```
+
+After switching, all scripts, hooks, and AI instructions work with the new profile — no reconfiguration needed.
+
+### How It Works
+
+Root files (`memory.md`, `session.md`, `diary/`) become **symlinks** to the active profile. This means zero changes to CLAUDE.md, hooks, or AI workflows.
+
+```text
+aman-ai-memory/
+├── memory.md → profiles/aman/memory.md    (symlink)
+├── session.md → profiles/aman/session.md  (symlink)
+├── diary → profiles/aman/diary            (symlink)
+│
+└── profiles/
+    ├── aman/
+    │   ├── memory.md        ← AI reads/writes here when aman is active
+    │   ├── session.md
+    │   ├── diary/
+    │   └── archive/
+    └── alice/
+        ├── memory.md
+        ├── session.md
+        ├── diary/
+        └── archive/
+```
+
+### Multi-User Commands
+
+| Command | What It Does |
+| --- | --- |
+| `./add-user.sh <name>` | Create a new profile (migrates single-user data if needed) |
+| `./switch-user.sh` | List profiles and switch interactively |
+| `./switch-user.sh <name>` | Switch to a specific profile directly |
+| `./setup.sh` | Reconfigure the **active** profile's identity and preferences |
+
+---
+
+## Archiving
+
+AI context windows have limits. When `memory.md` exceeds ~200 lines, details in the middle get lost. The archiving system keeps your memory lean while preserving history.
+
+### What Gets Archived
+
+| Entry Type | Trigger | Example |
+| --- | --- | --- |
+| **Completed projects** | Status is *done*, *completed*, *shipped*, *cancelled*, or *closed* | `API rewrite — Completed — shipped to prod` |
+| **Old decisions** | Date older than 90 days (configurable) | `2024-11-01 — Chose PostgreSQL over MongoDB` |
+
+Archived entries move to `archive/memory-archive.md` — still accessible, just not loaded into every conversation.
+
+### Automatic (during "save")
+
+When you say **"save"**, the AI checks the line count. If `memory.md` is approaching 200 lines, it automatically archives eligible entries before saving new ones.
+
+### Manual
+
+```bash
+./archive.sh                # Interactive — previews what can be archived, asks to confirm
+./archive.sh --days 60      # Archive decisions older than 60 days instead of the default 90
+```
+
+Example output:
+
+```text
+Memory Archive
+
+  Current size: 187 lines (approaching 200 limit)
+
+  Completed projects: 2
+    → API rewrite
+    → Auth migration
+
+  Decisions older than 90 days: 3
+    → 2024-09-15: Chose PostgreSQL over MongoDB
+    → 2024-10-01: Adopted trunk-based branching
+    → 2024-11-20: Moved CI to GitHub Actions
+
+  Archive these entries? [Y/n]: y
+
+  ✓ Archived 12 lines
+  ✓ memory.md: 187 → 175 lines
+  ✓ Archive: archive/memory-archive.md
+```
+
+### Accessing Archived Context
+
+The AI can read `archive/memory-archive.md` when historical context is needed. Just ask:
+
+> *"Check the archive — what database did we decide on last year?"*
+
+---
+
 ## Known Limitations
 
 | Limitation | Impact | Workaround |
@@ -312,8 +456,7 @@ Archive monthly to `diary/archive/YYYY-MM/` if desired.
 | AI might not update Working Notes | Auto-save has nothing to copy | Say "save" manually for important sessions |
 | No cross-project memory | Each project has its own memory | Share `memory.md` manually if needed |
 | No semantic search | Can't query *"what did we discuss about X?"* | Use `grep` in diary folder |
-| Context window cap | `memory.md` over ~200 lines loses detail | Archive old entries periodically |
-| Single user only | No multi-user support | Each user needs their own copy |
+| Context window cap | `memory.md` over ~200 lines loses detail | Run `./archive.sh` — see [Archiving](#archiving) |
 
 ---
 

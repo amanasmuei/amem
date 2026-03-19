@@ -6,6 +6,17 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MEMORY="${SCRIPT_DIR}/memory.md"
 SESSION="${SCRIPT_DIR}/session.md"
+
+# Resolve symlinks for multi-user profile support
+if [ -L "$MEMORY" ]; then
+  TARGET="$(readlink "$MEMORY")"
+  case "$TARGET" in /*) MEMORY="$TARGET" ;; *) MEMORY="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+if [ -L "$SESSION" ]; then
+  TARGET="$(readlink "$SESSION")"
+  case "$TARGET" in /*) SESSION="$TARGET" ;; *) SESSION="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+
 SNAPSHOT_DIR="${SCRIPT_DIR}/.claude"
 SNAPSHOT="${SNAPSHOT_DIR}/.memory-snapshot"
 ERRORS=()
@@ -52,7 +63,7 @@ if [ "$TARGET" = "memory" ] && [ -f "$MEMORY" ]; then
   # Size checks
   line_count=$(wc -l < "$MEMORY" | tr -d ' ')
   if [ "$line_count" -gt 200 ]; then
-    ERRORS+=("memory.md is ${line_count} lines (max 200) — archive old entries")
+    ERRORS+=("memory.md is ${line_count} lines (max 200) — run ./archive.sh or archive entries manually")
   fi
   if [ "$line_count" -lt 10 ]; then
     ERRORS+=("memory.md is only ${line_count} lines — content may have been accidentally deleted")

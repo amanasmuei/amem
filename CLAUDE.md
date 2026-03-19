@@ -41,8 +41,34 @@ This is the intelligent save. You have full conversation context — use it.
 
 ## Rules
 
-- **Append-only**: Never delete Learned Patterns or Decision Log entries.
-- **Size limit**: Keep memory.md under 200 lines. Archive stale entries if it grows.
+- **Append-only**: Never delete Learned Patterns or Decision Log entries (unless archiving — see below).
+- **Size limit**: Keep memory.md under 200 lines. Archive old entries if it grows.
 - **Diary immutability**: Never edit past diary entries.
+
+## Archiving
+
+When memory.md approaches 200 lines during a "save":
+
+1. Move **completed projects** (status: done/completed/shipped/cancelled) to `archive/memory-archive.md`.
+2. Move **decisions older than ~90 days** to the archive.
+3. Optionally retire learned patterns that are no longer actively relevant.
+4. After archiving, run `bash validate-memory.sh memory` to update the snapshot.
+
+Archive by appending dated blocks to `archive/memory-archive.md`:
+
+    ## Completed Projects — YYYY-MM-DD
+
+    | Project | Status | Notes |
+    |---------|--------|-------|
+    | ... | ... | ... |
+
+    ## Archived Decisions — YYYY-MM-DD
+
+    | Date | Decision | Context |
+    |------|----------|---------|
+    | ... | ... | ... |
+
+The user can also run `./archive.sh` for manual bulk cleanup.
+When historical context is needed, read `archive/memory-archive.md`.
 
 > **If this project already has a CLAUDE.md**: Run `install.sh` — it merges these instructions automatically.
