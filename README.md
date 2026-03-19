@@ -26,10 +26,10 @@
 curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash
 ```
 
-Downloads everything and launches the guided setup wizard. Just answer a few questions — pick from numbered choices or press Enter for defaults.
+Downloads everything, initializes a fresh git repo, and launches the guided setup wizard. Just answer a few questions — pick from numbered choices or press Enter for defaults.
 
 > [!TIP]
-> No terminal experience needed. No git required. The wizard walks you through everything.
+> No terminal experience needed. Git is installed automatically as part of setup. Each install gets its own clean git history — no template commits carried over.
 
 <details>
 <summary><strong>Install into a specific folder</strong></summary>
@@ -40,7 +40,7 @@ Downloads everything and launches the guided setup wizard. Just answer a few que
 # Custom folder name
 curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
 
-# Or clone and run the wizard manually
+# Or clone and run the wizard (init.sh replaces template history with a fresh repo)
 git clone https://github.com/amanasmuei/aman-ai-memory.git
 cd aman-ai-memory && ./init.sh
 ```

@@ -2,7 +2,7 @@
 
 ## Previous Session Recap
 
-[No previous session]
+No summary from previous session.
 
 ## Goals
 

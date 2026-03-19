@@ -116,6 +116,23 @@ chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
 
 ok "Scripts ready"
 
+# ─── Initialize fresh git repo ───
+
+info "Initializing git repository..."
+
+(
+  cd "$INSTALL_DIR"
+
+  # Remove any template git history (shouldn't exist from tarball, but just in case)
+  rm -rf .git
+
+  git init -q
+  git add -A
+  git commit -q -m "Initialize AI memory from aman-ai-memory template"
+)
+
+ok "Git repository initialized (clean history)"
+
 # ─── Summary ───
 
 echo ""

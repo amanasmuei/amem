@@ -229,8 +229,28 @@ if [ "$IS_SUBFOLDER" = true ]; then
     echo "  Skipped. You can run ./install.sh later."
   fi
 else
-  echo "  Detected: standalone project (template is at project root)."
-  echo "  Hooks are already configured — no installation needed."
+  # Standalone project — ensure a fresh git repo
+  NEEDS_INIT=false
+
+  if [ ! -d "$SCRIPT_DIR/.git" ]; then
+    # No git repo at all
+    NEEDS_INIT=true
+  elif git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null | grep -q "aman-ai-memory"; then
+    # Cloned from template — strip the template history
+    NEEDS_INIT=true
+  fi
+
+  if [ "$NEEDS_INIT" = true ]; then
+    echo "  Creating a fresh git repository for your memory..."
+    rm -rf "$SCRIPT_DIR/.git"
+    git -C "$SCRIPT_DIR" init -q
+    git -C "$SCRIPT_DIR" add -A
+    git -C "$SCRIPT_DIR" commit -q -m "Initialize AI memory for ${user_name}"
+    printf "  ${GREEN}✓${RESET} Fresh git repo created (clean history)\n"
+  else
+    echo "  Detected: standalone project with existing git history."
+    echo "  Hooks are already configured — no installation needed."
+  fi
 fi
 
 # ─── Summary ───
