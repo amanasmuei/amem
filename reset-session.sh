@@ -11,15 +11,14 @@ if [ ! -f "$SESSION" ]; then
   exit 0
 fi
 
-# Wait for Stop hook agent to finish writing (lock file polling)
+# If the Stop hook's lock file exists, the previous save may not have finished.
+# Don't reset — the AI will read whatever state session.md is in.
+# Clean up the stale lock so it doesn't persist forever.
 LOCKFILE="${SCRIPT_DIR}/.claude/.session-lock"
 if [ -f "$LOCKFILE" ]; then
-  waited=0
-  while [ -f "$LOCKFILE" ] && [ "$waited" -lt 65 ]; do
-    sleep 1
-    waited=$((waited + 1))
-  done
   rm -f "$LOCKFILE"
+  echo '{"suppressOutput": true}'
+  exit 0
 fi
 
 # Extract End-of-Session Summary using awk (exact heading match)

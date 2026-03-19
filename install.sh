@@ -73,7 +73,7 @@ else
           {
             "type": "command",
             "command": "bash ${RELPATH}/reset-session.sh",
-            "timeout": 10,
+            "timeout": 5,
             "statusMessage": "Resetting session..."
           }
         ]
@@ -96,14 +96,8 @@ else
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "if [ -f ${RELPATH}/session.md ] && grep -qF '[empty]' ${RELPATH}/session.md && grep -qF '[pending]' ${RELPATH}/session.md; then rm -f ${RELPATH}/.claude/.session-lock; echo '{\"continue\": false, \"suppressOutput\": true}'; else mkdir -p ${RELPATH}/.claude && touch ${RELPATH}/.claude/.session-lock; echo '{\"suppressOutput\": true}'; fi",
-            "timeout": 3,
-            "statusMessage": "Checking if save needed..."
-          },
-          {
             "type": "agent",
-            "prompt": "The conversation is ending. Auto-save memory.\\n\\n1. Read ${RELPATH}/session.md — check Working Notes for context.\\n2. Read ${RELPATH}/memory.md — note current content.\\n3. Update ${RELPATH}/memory.md:\\n   - Append new learned patterns (never delete existing)\\n   - Update Active Projects table\\n   - Append decisions to Decision Log with today's date\\n   - Update Last updated date\\n   - Do NOT modify Identity or User sections\\n4. Update ${RELPATH}/session.md: write End-of-Session Summary (2-3 sentences)\\n5. Remove lock file: delete ${RELPATH}/.claude/.session-lock\\n\\nCRITICAL: Only append to Learned Patterns and Decision Log. Never remove entries.",
+            "prompt": "The conversation is ending. Check if anything needs saving.\\n\\n1. Read ${RELPATH}/session.md FIRST. Look at the Working Notes section.\\n2. If Working Notes still says [empty], there is nothing to save. Just respond 'Nothing to save' and stop.\\n3. If Working Notes has real content, then:\\n   a. Read ${RELPATH}/memory.md\\n   b. Append any new learned patterns (never delete existing)\\n   c. Update Active Projects table\\n   d. Append decisions to Decision Log with today's date\\n   e. Update Last updated date\\n   f. Do NOT modify Identity or User sections\\n   g. Write End-of-Session Summary in ${RELPATH}/session.md (2-3 sentences)\\n\\nCRITICAL: Only append to Learned Patterns and Decision Log. Never remove entries.",
             "timeout": 60,
             "statusMessage": "Auto-saving memory..."
           }
