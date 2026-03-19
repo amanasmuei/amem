@@ -105,4 +105,51 @@ cat >> "$SESSION" << 'EOF'
 [pending]
 EOF
 
+# ─── First-run check ───
+# If memory.md still has placeholders, override session with setup prompt
+
+MEMORY="${SCRIPT_DIR}/memory.md"
+if [ -L "$MEMORY" ]; then
+  TARGET="$(readlink "$MEMORY")"
+  case "$TARGET" in /*) MEMORY="$TARGET" ;; *) MEMORY="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+
+if [ -f "$MEMORY" ] && grep -qF '[AI_NAME]' "$MEMORY" 2>/dev/null; then
+  HOUR=$(date +%H)
+  if [ "$HOUR" -ge 6 ] && [ "$HOUR" -lt 12 ]; then
+    TIME_PERIOD="morning"
+  elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 18 ]; then
+    TIME_PERIOD="afternoon"
+  elif [ "$HOUR" -ge 18 ] && [ "$HOUR" -lt 22 ]; then
+    TIME_PERIOD="evening"
+  else
+    TIME_PERIOD="night"
+  fi
+
+  cat > "$SESSION" << SETUPEOF
+# Session
+
+## Previous Session Recap
+
+Welcome! This is your first conversation. Memory setup has not been completed yet.
+
+## Context
+
+- **Time**: $(date '+%A, %B %d, %Y at %H:%M') (${TIME_PERIOD})
+- **Status**: First run — setup required
+
+## Goals
+
+- [ ] Complete first-time memory setup
+
+## Working Notes
+
+[empty]
+
+## End-of-Session Summary
+
+[pending]
+SETUPEOF
+fi
+
 echo '{"suppressOutput": true}'

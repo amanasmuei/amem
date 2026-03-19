@@ -83,13 +83,30 @@ Or run the steps separately:
 
 ## Your First Conversation
 
-After running the setup wizard, here's what to expect:
+There are two ways to get started — pick whichever feels more comfortable:
 
-1. **Start a conversation** with Claude Code (just open it in your project folder)
-2. **The AI introduces itself** using the name and personality you chose
-3. **Chat normally** — the AI quietly takes notes as you work together
-4. **Say "save"** before ending important sessions — this tells the AI to remember what it learned
-5. **Next time**, the AI greets you by name and remembers everything from before
+### Option A: Just start talking (recommended for beginners)
+
+1. **Open Claude Code** in your project folder
+2. **Say hello** — the AI detects this is your first time and walks you through setup
+3. **Answer a few questions** — your name, what you work on, what to call the AI
+4. **Done!** The AI remembers you from now on
+
+The AI asks questions conversationally, 2-3 at a time. No forms, no commands — just a friendly chat.
+
+### Option B: Run the setup wizard first
+
+```bash
+./init.sh
+```
+
+The wizard asks the same questions with numbered choices. Good if you prefer filling things in quickly before your first conversation.
+
+### After Setup
+
+1. **Chat normally** — the AI quietly takes notes as you work together
+2. **Say "save"** before ending important sessions — this tells the AI to remember what it learned
+3. **Next time**, the AI greets you by name and remembers everything from before
 
 That's it. No commands to memorize. Just talk naturally and say "save" when it matters.
 
@@ -275,6 +292,9 @@ The installer downloads everything and launches the guided wizard. It handles:
 - Initializes a fresh git repo (no template history carried over)
 - Shows a summary when done
 
+> [!TIP]
+> **You can skip the wizard entirely.** If you prefer, just open Claude Code and start talking — the AI will walk you through setup conversationally on your first conversation. See [Your First Conversation](#your-first-conversation).
+
 ### Adding to an Existing Project
 
 ```bash
@@ -297,7 +317,7 @@ cd my-project/ai-memory && ./init.sh
 
 The auto-save and validation hooks are Claude Code specific. For other platforms:
 
-1. Run `./init.sh` to fill in `memory.md`
+1. Run `./init.sh` to fill in `memory.md` (or edit `memory.md` directly — replace the `[AI_NAME]` and `[YOUR_NAME]` placeholders with your details)
 2. At the **start** of each conversation, paste:
 
 > Read memory.md and session.md, then follow the instructions in CLAUDE.md for how to manage memory during our session.
@@ -368,7 +388,7 @@ Every edit to memory files is automatically checked in the background. You don't
 | --- | --- |
 | Required sections | AI accidentally deleted a section heading |
 | Table format | Decision Log or Active Projects lost their table structure |
-| Placeholder check | `[AI_NAME]` still present — setup wasn't run |
+| Placeholder check | `[AI_NAME]` still present — setup not complete (AI will guide you through it) |
 | Size guard | `memory.md` over 200 lines or `session.md` over 500 lines |
 | Append-only integrity | Learned Patterns or Decision Log entries were deleted |
 | Session structure | `session.md` missing required sections |
@@ -653,7 +673,7 @@ Archived diary entries are still searchable via `./recall.sh` and by the AI duri
 
 <br>
 
-No. The setup wizard asks simple questions with numbered choices — just pick 1, 2, or 3 and press Enter. After setup, you just talk to the AI normally. The only "technical" thing is running the install command once.
+No. You don't even need to run the setup wizard — just start a conversation and the AI will ask you a few friendly questions to get set up. After that, you just talk normally. The only "technical" thing is running the install command once to download the files.
 
 </details>
 
@@ -734,9 +754,9 @@ Think of it like this:
 
 | Problem | Solution |
 | --- | --- |
-| AI doesn't remember me | Make sure you're in the right folder. Open `memory.md` — does it have your name? If not, run `./setup.sh`. |
-| "memory.md not found" error | Run `./init.sh` to set up, or make sure you're inside the ai-memory folder. |
-| AI keeps asking my name | Setup wasn't completed. Run `./setup.sh` to fill in your details. |
+| AI doesn't remember me | Make sure you're in the right folder. Open `memory.md` — does it have your name? If not, just start a new conversation and the AI will guide you through setup. |
+| "memory.md not found" error | Make sure you're inside the ai-memory folder. If the file is missing, run `./init.sh` to create it. |
+| AI keeps asking my name | Setup wasn't completed. Start a new conversation — the AI will detect this and walk you through it. Or run `./setup.sh` manually. |
 | Memory feels incomplete | Say **"save"** more often. Auto-save only captures working notes, not learned patterns. |
 | "memory.md is over 200 lines" | Run `./archive.sh` to move old entries to the archive. Nothing is lost. |
 | Session feels slow or repetitive | Session might be too long. Say **"save"**, then start a new conversation. |

@@ -12,12 +12,29 @@ This project uses a file-based memory system. Follow these rules in every conver
 | `diary/YYYY-MM-DD.md` | Daily session logs | On demand (during recall) |
 | `plans.md` | Active work plans with checkboxes | When user asks to plan |
 
+## First Run
+
+If `memory.md` still contains `[AI_NAME]` placeholders, setup is incomplete. Before doing anything else, guide the user through a friendly conversational setup:
+
+1. **Welcome** them warmly. Explain this is a quick one-time setup (about a minute).
+2. **Ask their name.**
+3. **Ask what they work on** — suggest options: web dev, mobile, data science, DevOps, writing, general coding, research.
+4. **Ask their experience level** — beginner (explain everything), intermediate (skip basics), experienced (just the details), expert (concise and technical).
+5. **Ask how they like answers** — concise, detailed, step-by-step, or code first then explain.
+6. **Ask what to name the AI** — suggest a few (Atlas, Nova, Sage) or let them pick.
+7. **Ask the AI's personality** — direct & technical, warm & friendly, casual, or professional.
+8. **Update `memory.md`** — replace ALL placeholders with their answers. Update the `Last updated` date.
+9. **Confirm** with a friendly summary: *"All set! I'm [name], your [role]. I'll remember you as [user_name]. Say 'save' anytime to capture what we learn together."*
+
+Keep it conversational — ask 2-3 questions at a time, not all at once. Use the time of day from session.md to set the right tone for the welcome.
+
 ## On conversation start
 
 1. Read `memory.md` — restore the AI identity, user profile, and all context.
 2. Read `session.md` — check the Previous Session Recap and Context (time of day).
-3. If `archive/memory-archive.md` exists, read it — restore historical context.
-4. Adapt your tone to the time of day shown in session.md → Context:
+3. If `memory.md` has `[AI_NAME]` placeholders, follow the **First Run** steps above instead.
+4. If `archive/memory-archive.md` exists, read it — restore historical context.
+5. Adapt your tone to the time of day shown in session.md → Context:
    - **Morning (6–12)**: Fresh, energetic, proactive.
    - **Afternoon (12–18)**: Focused, productive, direct.
    - **Evening (18–22)**: Relaxed, reflective, thorough.
