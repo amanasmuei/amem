@@ -1,0 +1,47 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash reset-session.sh",
+            "timeout": 10,
+            "statusMessage": "Resetting session..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // \"\"' | { read -r f; if echo \"$f\" | grep -q 'memory\\.md$'; then bash validate-memory.sh memory; elif echo \"$f\" | grep -q 'session\\.md$'; then bash validate-memory.sh session; elif echo \"$f\" | grep -q 'diary/.*\\.md$'; then bash validate-memory.sh diary \"$f\"; else echo '{\"suppressOutput\": true}'; fi; }",
+            "timeout": 10,
+            "statusMessage": "Validating memory..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f session.md ] && grep -qF '[empty]' session.md && grep -qF '[pending]' session.md; then rm -f .claude/.session-lock; echo '{\"continue\": false, \"suppressOutput\": true}'; else mkdir -p .claude && touch .claude/.session-lock; echo '{\"suppressOutput\": true}'; fi",
+            "timeout": 3,
+            "statusMessage": "Checking if save needed..."
+          },
+          {
+            "type": "agent",
+            "prompt": "The conversation is ending. Auto-save memory.\n\n1. Read session.md — check Working Notes for context.\n2. Read memory.md — note current content.\n3. Update memory.md:\n   - Append new learned patterns (never delete existing)\n   - Update Active Projects table\n   - Append decisions to Decision Log with today's date\n   - Update Last updated date\n   - Do NOT modify Identity or User sections\n4. Update session.md: write End-of-Session Summary (2-3 sentences)\n5. Remove lock file: delete .claude/.session-lock\n\nCRITICAL: Only append to Learned Patterns and Decision Log. Never remove entries.",
+            "timeout": 60,
+            "statusMessage": "Auto-saving memory..."
+          }
+        ]
+      }
+    ]
+  }
+}
