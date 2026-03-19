@@ -18,6 +18,15 @@
   },
   "keywords": ["mcp", "memory", "ai", "developer-tools", "context", "sqlite", "embeddings"],
   "license": "MIT",
+  "author": "Aman Asmuei",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amanasmuei/aman-ai-memory.git"
+  },
+  "homepage": "https://github.com/amanasmuei/aman-ai-memory#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
     "better-sqlite3": "^12.0.0",
