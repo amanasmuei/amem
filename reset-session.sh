@@ -21,6 +21,26 @@ if [ -f "$LOCKFILE" ]; then
   exit 0
 fi
 
+# ─── Auto-archive old diary months ───
+
+DIARY_DIR="${SCRIPT_DIR}/diary"
+if [ -L "$DIARY_DIR" ]; then
+  TARGET="$(readlink "$DIARY_DIR")"
+  case "$TARGET" in /*) DIARY_DIR="$TARGET" ;; *) DIARY_DIR="$SCRIPT_DIR/$TARGET" ;; esac
+fi
+
+CURRENT_MONTH=$(date +%Y-%m)
+if [ -d "$DIARY_DIR" ]; then
+  for file in "$DIARY_DIR"/????-??-??.md; do
+    [ -f "$file" ] || continue
+    FILE_MONTH=$(basename "$file" | cut -c1-7)
+    if [ "$FILE_MONTH" != "$CURRENT_MONTH" ]; then
+      mkdir -p "${DIARY_DIR}/archive/${FILE_MONTH}"
+      mv "$file" "${DIARY_DIR}/archive/${FILE_MONTH}/"
+    fi
+  done
+fi
+
 # Extract End-of-Session Summary using awk (exact heading match)
 RECAP=$(awk '
   /^## End-of-Session Summary$/ { found=1; next }
@@ -56,6 +76,19 @@ EOF
 
 # Append recap outside heredoc to avoid special char interpretation
 printf '%s\n' "$RECAP" >> "$SESSION"
+
+# Inject time-of-day context
+HOUR=$(date +%H)
+if [ "$HOUR" -ge 6 ] && [ "$HOUR" -lt 12 ]; then
+  TIME_PERIOD="morning"
+elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 18 ]; then
+  TIME_PERIOD="afternoon"
+elif [ "$HOUR" -ge 18 ] && [ "$HOUR" -lt 22 ]; then
+  TIME_PERIOD="evening"
+else
+  TIME_PERIOD="night"
+fi
+printf '\n## Context\n\n- **Time**: %s (%s)\n' "$(date '+%A, %B %d, %Y at %H:%M')" "$TIME_PERIOD" >> "$SESSION"
 
 cat >> "$SESSION" << 'EOF'
 

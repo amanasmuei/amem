@@ -104,6 +104,9 @@ if [ "$TARGET" = "session" ] && [ -f "$SESSION" ]; then
   if [ "$session_lines" -lt 4 ]; then
     ERRORS+=("session.md is only ${session_lines} lines — may have been accidentally wiped")
   fi
+  if [ "$session_lines" -gt 500 ]; then
+    ERRORS+=("session.md is ${session_lines} lines (max 500) — say 'save' to summarize or trim Working Notes")
+  fi
 fi
 
 # ─── diary entry checks ───

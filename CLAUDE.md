@@ -2,17 +2,50 @@
 
 This project uses a file-based memory system. Follow these rules in every conversation.
 
+## Memory Map
+
+| File | Purpose | Loaded |
+|------|---------|--------|
+| `memory.md` | Identity, patterns, decisions, active projects | Always |
+| `session.md` | Session recap, context, goals, working notes | Always |
+| `archive/memory-archive.md` | Past decisions and completed projects | Always (if exists) |
+| `diary/YYYY-MM-DD.md` | Daily session logs | On demand (during recall) |
+| `plans.md` | Active work plans with checkboxes | When user asks to plan |
+
 ## On conversation start
 
 1. Read `memory.md` — restore the AI identity, user profile, and all context.
-2. Read `session.md` — check the Previous Session Recap for continuity.
-3. If `archive/memory-archive.md` exists, read it — restore historical context (past decisions, completed projects).
+2. Read `session.md` — check the Previous Session Recap and Context (time of day).
+3. If `archive/memory-archive.md` exists, read it — restore historical context.
+4. Adapt your tone to the time of day shown in session.md → Context:
+   - **Morning (6–12)**: Fresh, energetic, proactive.
+   - **Afternoon (12–18)**: Focused, productive, direct.
+   - **Evening (18–22)**: Relaxed, reflective, thorough.
+   - **Night (22–6)**: Calm, concise, gentle.
 
 ## During conversation
 
 - When you make progress or discover something important, update `session.md` → Working Notes.
 - This is critical — Working Notes is what gets auto-saved if the user exits without saying "save".
-- If the user asks about a past project, decision, or pattern that isn't in `memory.md`, check `archive/memory-archive.md` and `diary/` for historical context.
+
+### Recall
+
+If the user asks about something not in active memory:
+
+1. **Search memory + archive** — check `memory.md` and `archive/memory-archive.md`.
+2. **Search diary** — look through `diary/` files (including `diary/archive/`) for matching entries.
+3. **Uncertainty guard** — if nothing is found, say so honestly. **Never fabricate past events.**
+
+The user can also run `./recall.sh <keyword>` manually to search all sources.
+
+### Work Plans
+
+When the user says "plan" or asks to create a work plan:
+
+1. Create or update `plans.md` with a checkbox task list.
+2. Track progress — check off items as they're completed during the session.
+3. On "save", update `plans.md` and note progress in Working Notes.
+4. Move fully completed plans to the archive.
 
 ## When user says "save"
 
@@ -20,13 +53,14 @@ This is the intelligent save. You have full conversation context — use it.
 
 1. Update `memory.md`:
    - **Append** new learned patterns (never delete existing ones).
-   - Update the Active Projects table.
+   - Update the Active Projects table. **Keep max 10 projects** — if more than 10, archive the least recently active ones.
    - **Append** important decisions to the Decision Log with today's date.
    - Update the `Last updated` date.
    - Do NOT modify the Identity or User sections.
 2. Update `session.md`:
    - Write the End-of-Session Summary (2-3 sentences).
-3. *(Optional)* If the session was significant, append a diary entry to `diary/YYYY-MM-DD.md`:
+3. If `plans.md` exists, update checkbox progress.
+4. *(Optional)* If the session was significant, append a diary entry to `diary/YYYY-MM-DD.md`:
    ```markdown
    ## Session — HH:MM
    **Topics**: [comma-separated]
@@ -40,12 +74,17 @@ This is the intelligent save. You have full conversation context — use it.
 
 - **On exit**: Working Notes are copied into End-of-Session Summary mechanically.
 - **On next start**: Session resets, carrying over the summary as Previous Session Recap.
+- **On next start**: Current time is injected into session.md for time-aware behavior.
+- **On next start**: Diary entries from previous months are archived to `diary/archive/YYYY-MM/`.
 
 ## Rules
 
 - **Append-only**: Never delete Learned Patterns or Decision Log entries (unless archiving — see below).
 - **Size limit**: Keep memory.md under 200 lines. Archive old entries if it grows.
+- **Project limit**: Max 10 active projects. Archive the rest during "save".
+- **Session limit**: Keep session.md under 500 lines. Trim or summarize Working Notes if needed.
 - **Diary immutability**: Never edit past diary entries.
+- **No fabrication**: During recall, never invent past events. Search first, then admit uncertainty.
 
 ## Archiving
 
@@ -53,8 +92,9 @@ When memory.md approaches 200 lines during a "save":
 
 1. Move **completed projects** (status: done/completed/shipped/cancelled) to `archive/memory-archive.md`.
 2. Move **decisions older than ~90 days** to the archive.
-3. Optionally retire learned patterns that are no longer actively relevant.
-4. After archiving, run `bash validate-memory.sh memory` to update the snapshot.
+3. Move **projects not active in 30+ days** to the archive if more than 10 projects.
+4. Optionally retire learned patterns that are no longer actively relevant.
+5. After archiving, run `bash validate-memory.sh memory` to update the snapshot.
 
 Archive by appending dated blocks to `archive/memory-archive.md`:
 

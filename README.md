@@ -88,6 +88,7 @@ aman-ai-memory/
 ├── reset-session.sh       Session reset on start
 ├── validate-memory.sh     Structure and integrity checks
 ├── archive.sh             Archive old entries from memory.md
+├── recall.sh              Search diary and archive for past context
 ├── add-user.sh            Add a new user profile
 ├── switch-user.sh         Switch active user profile
 │
@@ -179,9 +180,11 @@ aman-ai-memory/
 
 | File | What Goes Here | Who Updates It | Resets? |
 | --- | --- | --- | --- |
-| `memory.md` | AI identity, user profile, learned patterns, decision log, projects | You (setup) + AI (save) | Never — grows over time |
-| `session.md` | Previous recap, current goals, working notes, session summary | AI during conversation | Every conversation |
+| `memory.md` | AI identity, user profile, learned patterns, decision log, projects (max 10) | You (setup) + AI (save) | Never — grows over time |
+| `session.md` | Previous recap, time context, goals, working notes, session summary | AI during conversation | Every conversation |
 | `diary/YYYY-MM-DD.md` | Daily session logs | AI when you ask | Never — append-only |
+| `archive/memory-archive.md` | Archived decisions and completed projects | AI (during archive) | Never — append-only |
+| `plans.md` | Active work plans with checkboxes | AI when you say "plan" | When plans complete |
 
 ---
 
@@ -248,6 +251,8 @@ No automation, but the memory files work the same way.
 | Start a conversation | Just start — AI loads memory automatically |
 | Save important context | Say **"save"** |
 | Write a diary entry | Say **"write diary entry"** |
+| Create a work plan | Say **"plan"** — AI creates `plans.md` with checkboxes |
+| Search past context | Run **`./recall.sh <keyword>`** or ask the AI |
 | Exit without saving | Just exit — Working Notes are auto-saved |
 | Archive old entries | Run **`./archive.sh`** or say "save" (AI archives automatically) |
 | Add a team member | Run **`./add-user.sh <name>`** |
@@ -471,14 +476,107 @@ The AI can read `archive/memory-archive.md` when historical context is needed. J
 
 ---
 
+## Advanced Features
+
+### Time-Aware Behavior
+
+The AI adapts its communication style based on the time of day. The current time is automatically injected into `session.md` at the start of each conversation — no configuration needed.
+
+| Time | Tone |
+| --- | --- |
+| **Morning** (6–12) | Fresh, energetic, proactive |
+| **Afternoon** (12–18) | Focused, productive, direct |
+| **Evening** (18–22) | Relaxed, reflective, thorough |
+| **Night** (22–6) | Calm, concise, gentle |
+
+### Memory Recall
+
+Can't remember when you made a decision? The recall system searches across all memory sources:
+
+```bash
+./recall.sh PostgreSQL       # Search for a keyword
+./recall.sh "API rewrite"    # Search for a phrase
+./recall.sh auth migration   # Multiple keywords (OR)
+```
+
+The AI also does this automatically — if you ask about something not in active memory, it searches diary entries and the archive before responding. It will **never fabricate past events** — it searches for evidence first, and says "I'm not sure" if nothing is found.
+
+```text
+Memory Recall — searching for: PostgreSQL
+
+Diary entries:
+
+  2026-03-15
+    L5: **Decisions**: Chose PostgreSQL over MongoDB for relational data
+    L8: Discussed migration plan from SQLite
+
+Archive (memory-archive.md):
+  L12: | 2025-12-01 | Chose PostgreSQL over MongoDB | relational data needs |
+
+Current memory (memory.md):
+  L28: - User prefers PostgreSQL for relational workloads
+```
+
+### Work Plans
+
+Say **"plan"** to create a tracked work plan:
+
+```markdown
+# Plans
+
+## API Migration — started 2026-03-19
+
+- [x] Design new schema
+- [x] Write migration script
+- [ ] Test with staging data
+- [ ] Deploy to production
+- [ ] Monitor for 48 hours
+```
+
+Plans persist in `plans.md` across sessions. Progress is updated when you say "save". Completed plans are moved to the archive.
+
+### Smart Project Management (LRU)
+
+Active projects are capped at **10** in `memory.md`. The AI manages this automatically during "save":
+
+- Projects not mentioned in 30+ days are archived
+- Completed projects are always archived
+- Archived projects are still searchable via recall
+
+This prevents `memory.md` from growing unbounded while keeping recent work front and center.
+
+### Diary Auto-Archiving
+
+Diary entries from previous months are automatically moved to `diary/archive/YYYY-MM/` at the start of each conversation. Current month entries stay in `diary/` for quick access.
+
+```text
+diary/
+  2026-03-15.md        ← current month, stays here
+  2026-03-18.md
+  archive/
+    2026-01/           ← previous months, auto-archived
+      2026-01-05.md
+      2026-01-12.md
+    2026-02/
+      2026-02-03.md
+```
+
+Archived diary entries are still searchable via `./recall.sh` and by the AI during recall.
+
+### Session Size Guard
+
+`session.md` is capped at **500 lines**. If Working Notes grow past this, the validation system warns you to save or trim. This prevents session bloat that degrades AI performance.
+
+---
+
 ## Known Limitations
 
 | Limitation | Impact | Workaround |
 | --- | --- | --- |
 | AI might not update Working Notes | Auto-save has nothing to copy | Say "save" manually for important sessions |
 | No cross-project memory | Each project has its own memory | Share `memory.md` manually if needed |
-| No semantic search | Can't query *"what did we discuss about X?"* | Use `grep` in diary folder |
-| Context window cap | `memory.md` over ~200 lines loses detail | Run `./archive.sh` — see [Archiving](#archiving) |
+| Keyword search only | Recall uses keyword matching, not semantic search | Use specific keywords with `./recall.sh` |
+| Context window cap | Very large archives may exceed AI context | Keep `memory.md` lean via archiving; archive is loaded but prioritized lower |
 
 ---
 
