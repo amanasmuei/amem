@@ -1,25 +1,34 @@
-# Amem
+# amem
 
 The memory layer for AI coding tools. Local-first. Developer-specific. Works everywhere.
 
-> Your AI forgets everything between conversations. Amem fixes that.
+[![npm version](https://img.shields.io/npm/v/@aman_asmuei/amem.svg)](https://www.npmjs.com/package/@aman_asmuei/amem)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> Your AI forgets everything between conversations. amem fixes that.
+
+## Install
+
+```bash
+npx @aman_asmuei/amem
+```
 
 ## What it does
 
-Amem is an MCP server that gives any AI assistant persistent memory about:
+amem is an MCP server that gives any AI assistant persistent memory about:
 
-- **Corrections** — "Don't mock the database in integration tests" (highest priority, always surfaced)
+- **Corrections** — "Don't mock the database in integration tests" *(highest priority, always surfaced)*
 - **Decisions** — "Chose Postgres over MongoDB because of ACID requirements"
 - **Patterns** — "User prefers early returns over nested conditionals"
 - **Preferences** — "Uses pnpm, not npm"
 - **Topology** — "Auth module lives in src/auth/, uses JWT"
 - **Facts** — "Project started in January 2025"
 
-Memories are ranked by **relevance x recency x confidence x importance**. Corrections always surface first. Old memories decay. Contradictions are detected.
+Memories are ranked by **relevance x recency x confidence x importance**. Corrections always surface first. Old memories decay. Contradictions are detected. Related memories evolve together.
 
 ## Quick start
 
-### Connect to Claude Code
+### Claude Code
 
 Add to `~/.claude/settings.json`:
 
@@ -27,14 +36,14 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "amem": {
-      "command": "node",
-      "args": ["/path/to/amem/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@aman_asmuei/amem"]
     }
   }
 }
 ```
 
-### Connect to Cursor
+### Cursor
 
 Add to `.cursor/mcp.json`:
 
@@ -42,16 +51,16 @@ Add to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "amem": {
-      "command": "node",
-      "args": ["/path/to/amem/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@aman_asmuei/amem"]
     }
   }
 }
 ```
 
-### Connect to any MCP client
+### Any MCP client
 
-Amem speaks standard MCP over stdio. Any client that supports MCP can connect.
+amem speaks standard MCP over stdio. Any client that supports MCP can connect.
 
 ## Tools
 
@@ -79,7 +88,7 @@ memory_recall({
 })
 ```
 
-Results:
+Returns:
 ```
 1. [correction] Never use 'any' type — always define proper interfaces
    Score: 0.892 | Confidence: 100% | Age: 2d ago
@@ -99,7 +108,7 @@ memory_context({
 })
 ```
 
-Returns structured context:
+Returns:
 ```markdown
 ## Context for: authentication system
 
@@ -113,6 +122,21 @@ Returns structured context:
 - Auth module is in src/auth/, middleware in src/middleware/auth.ts (85% confidence)
 ```
 
+### `memory_extract`
+
+Batch-extract memories from a conversation. The AI calls this proactively.
+
+```
+memory_extract({
+  memories: [
+    { content: "Don't mock the DB in integration tests", type: "correction", confidence: 1.0, tags: ["testing"] },
+    { content: "Chose event sourcing for audit trail", type: "decision", confidence: 0.9, tags: ["architecture"] }
+  ]
+})
+```
+
+Automatically deduplicates — if a memory is >85% similar to an existing one, it reinforces the existing memory instead of creating a duplicate.
+
 ### `memory_forget`
 
 Delete specific memories or search-and-delete with confirmation.
@@ -121,6 +145,32 @@ Delete specific memories or search-and-delete with confirmation.
 memory_forget({ id: "abc12345" })
 memory_forget({ query: "old project", confirm: true })
 ```
+
+### `memory_stats`
+
+Show memory statistics: total count, breakdown by type, confidence distribution.
+
+### `memory_export`
+
+Export all memories as formatted markdown, grouped by type.
+
+## MCP Prompts
+
+amem includes two prompts that teach AI clients how to use it effectively:
+
+- **`extraction-guide`** — When and what to extract from conversations
+- **`session-start`** — How to load relevant context at conversation start
+
+## MCP Resources
+
+Proactive context that clients can read automatically:
+
+| Resource | Description |
+|----------|-------------|
+| `amem://corrections` | All active corrections — hard constraints |
+| `amem://decisions` | Architectural decisions and rationale |
+| `amem://profile` | Developer preferences and patterns |
+| `amem://summary` | Quick overview of all stored memories |
 
 ## CLI
 
@@ -141,24 +191,24 @@ amem-cli forget abc12345            # Delete a memory
 └──────────┬──────────────────────┘
            │ MCP Protocol (stdio)
 ┌──────────▼──────────────────────┐
-│         Amem Server           │
+│         amem server             │
 │                                 │
-│  ┌───────────┐  ┌────────────┐ │
-│  │  Scoring   │  │  Conflict  │ │
-│  │  Engine    │  │  Detection │ │
-│  └─────┬─────┘  └─────┬──────┘ │
-│        │              │        │
-│  ┌─────▼──────────────▼──────┐ │
-│  │    SQLite + Embeddings    │ │
-│  │    ~/.amem/memory.db    │ │
-│  └───────────────────────────┘ │
+│  ┌───────────┐  ┌────────────┐  │
+│  │  Scoring   │  │  Conflict  │  │
+│  │  Engine    │  │  Detection │  │
+│  └─────┬─────┘  └─────┬──────┘  │
+│        │              │         │
+│  ┌─────▼──────────────▼──────┐  │
+│  │    SQLite + Embeddings    │  │
+│  │    ~/.amem/memory.db      │  │
+│  └───────────────────────────┘  │
 └─────────────────────────────────┘
 ```
 
 ### Scoring formula
 
 ```
-score = relevance × recency × confidence × importance
+score = relevance x recency x confidence x importance
 ```
 
 | Factor | How it works |
@@ -170,10 +220,14 @@ score = relevance × recency × confidence × importance
 
 ### Conflict detection
 
-When storing a new memory, Amem checks for conflicts:
+When storing a new memory, amem checks for conflicts:
 - **>85% similarity** with different content — conflict detected, existing memory updated
 - **>80% similarity** with same intent — existing memory reinforced (confidence +0.1)
 - **No match** — new memory stored
+
+### Memory evolution
+
+When a new memory is stored, related existing memories (0.6-0.8 similarity) are reinforced — their access timestamps update, keeping them active and relevant.
 
 ### Local-first
 
@@ -186,16 +240,23 @@ When storing a new memory, Amem checks for conflicts:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENGRAM_DIR` | `~/.amem` | Directory for Amem data |
-| `ENGRAM_DB` | `~/.amem/memory.db` | Database file path |
+| `AMEM_DIR` | `~/.amem` | Directory for amem data |
+| `AMEM_DB` | `~/.amem/memory.db` | Database file path |
 
 ## Roadmap
 
-- [ ] Automatic memory extraction from conversations
-- [ ] Memory evolution (related memories update when new ones are stored)
-- [ ] Proactive context (surface relevant memories mid-conversation)
-- [ ] Team memory (shared project context)
-- [ ] npm publish (`npx amem`)
+- [x] 7 MCP tools (store, recall, context, forget, extract, stats, export)
+- [x] 2 MCP prompts (extraction guide, session start)
+- [x] 4 MCP resources (corrections, decisions, profile, summary)
+- [x] CLI with 5 commands
+- [x] Local embeddings via HuggingFace transformers
+- [x] Memory evolution (related memories reinforce each other)
+- [x] Conflict detection and deduplication
+- [x] Published on npm
+- [ ] Memory verification (check code-related memories against filesystem)
+- [ ] Knowledge graph (entity + relation tables)
+- [ ] Team memory (shared project context via git-synced SQLite)
+- [ ] Proactive mid-conversation context injection
 
 ## License
 
