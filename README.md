@@ -18,6 +18,20 @@
 
 ---
 
+## What Is This?
+
+Every time you start a new conversation with an AI (ChatGPT, Claude, Gemini), it forgets everything about you. Your name, your projects, your preferences — gone.
+
+**Aman AI Memory fixes this.** It gives your AI a set of files where it stores what it learns about you. Next conversation, it reads those files and picks up right where you left off.
+
+- **It remembers your name** and how you like to work
+- **It tracks your projects** and decisions you've made
+- **It learns your style** over time, adapting to your preferences
+- **It works with any AI** — Claude Code has full automation, others work with copy-paste
+- **Your data stays on your computer** — no cloud, no accounts, just plain text files
+
+---
+
 ## Quick Start
 
 ### Install (one-liner)
@@ -67,30 +81,78 @@ Or run the steps separately:
 
 ---
 
+## Your First Conversation
+
+After running the setup wizard, here's what to expect:
+
+1. **Start a conversation** with Claude Code (just open it in your project folder)
+2. **The AI introduces itself** using the name and personality you chose
+3. **Chat normally** — the AI quietly takes notes as you work together
+4. **Say "save"** before ending important sessions — this tells the AI to remember what it learned
+5. **Next time**, the AI greets you by name and remembers everything from before
+
+That's it. No commands to memorize. Just talk naturally and say "save" when it matters.
+
+> [!TIP]
+> **Using ChatGPT, Gemini, or another AI?** At the start of each conversation, paste: *"Read memory.md and session.md, then follow the instructions in CLAUDE.md."* At the end, say: *"Save progress."*
+
+---
+
+## Quick Reference
+
+**Things you can say to the AI:**
+
+| Say this | What happens |
+| --- | --- |
+| *(just start talking)* | AI loads your memory and continues where you left off |
+| **"save"** | AI saves what it learned — patterns, decisions, projects |
+| **"write diary entry"** | AI creates a dated log of today's session |
+| **"plan"** | AI creates a work plan with checkboxes to track |
+| *"what did we decide about X?"* | AI searches its memory and diary for past context |
+
+**Scripts you can run in the terminal (optional — the AI handles most of this):**
+
+| Command | What it does |
+| --- | --- |
+| `./recall.sh <word>` | Search all memory files for a keyword |
+| `./archive.sh` | Clean up old entries when memory gets full |
+| `./add-user.sh <name>` | Add another person's profile |
+| `./switch-user.sh` | Switch between profiles |
+| `./setup.sh` | Reconfigure your AI's name and personality |
+
+---
+
 ## Project Structure
+
+<details>
+<summary>Click to view all files</summary>
+
+<br>
 
 ```text
 aman-ai-memory/
 │
-├── memory.md              Persistent — identity, patterns, decisions
-├── session.md             Ephemeral — resets each conversation
-├── diary/                 Optional — append-only session logs
+├── memory.md              Your AI's long-term memory (identity, patterns, decisions)
+├── session.md             Current conversation notes (resets each time)
+├── plans.md               Work plans with checkboxes (created when you say "plan")
+├── diary/                 Daily session logs (optional)
+├── archive/               Old entries moved here to keep memory lean
 │
-├── CLAUDE.md              Auto-instructions for Claude Code
+├── CLAUDE.md              Instructions the AI follows automatically
 ├── .claude/
-│   └── settings.json      Hook configuration
+│   └── settings.json      Automation hooks (runs behind the scenes)
 │
-├── get.sh                 Remote installer (curl one-liner)
-├── init.sh                Guided wizard (start here)
-├── setup.sh               Fill in memory.md (advanced)
-├── install.sh             Install hooks into host project (advanced)
-├── auto-save.sh           Mechanical save on exit
-├── reset-session.sh       Session reset on start
-├── validate-memory.sh     Structure and integrity checks
-├── archive.sh             Archive old entries from memory.md
-├── recall.sh              Search diary and archive for past context
-├── add-user.sh            Add a new user profile
-├── switch-user.sh         Switch active user profile
+├── get.sh                 Remote installer (the curl one-liner)
+├── init.sh                Setup wizard (start here)
+├── setup.sh               Configure your AI's identity
+├── install.sh             Install into an existing project
+├── auto-save.sh           Saves your notes when conversation ends
+├── reset-session.sh       Prepares a fresh session on start
+├── validate-memory.sh     Checks memory files aren't corrupted
+├── archive.sh             Moves old entries to archive
+├── recall.sh              Searches memory for past context
+├── add-user.sh            Adds a new user profile
+├── switch-user.sh         Switches between user profiles
 │
 ├── profiles/              Per-user data (multi-user mode only)
 │   └── <name>/
@@ -100,9 +162,13 @@ aman-ai-memory/
 └── archive/               Archived entries (created by archive.sh)
 ```
 
+</details>
+
 ---
 
 ## How It Works
+
+Here's what happens behind the scenes during each conversation:
 
 ### Conversation Lifecycle
 
@@ -188,7 +254,7 @@ aman-ai-memory/
 
 ---
 
-## Setup Guide
+## Detailed Setup Guide
 
 ### All-in-One (Recommended)
 
@@ -287,17 +353,24 @@ This context is loaded at the start of every conversation, so the AI picks up wh
 
 ## Validation
 
-Every edit to `memory.md`, `session.md`, or diary files is automatically validated.
+Every edit to memory files is automatically checked in the background. You don't need to do anything — if something goes wrong, the AI is told to fix it.
+
+<details>
+<summary>View all validation checks</summary>
+
+<br>
 
 | Check | What It Catches |
 | --- | --- |
 | Required sections | AI accidentally deleted a section heading |
 | Table format | Decision Log or Active Projects lost their table structure |
 | Placeholder check | `[AI_NAME]` still present — setup wasn't run |
-| Size guard | File grew past 200 lines or shrank below 10 |
+| Size guard | `memory.md` over 200 lines or `session.md` over 500 lines |
 | Append-only integrity | Learned Patterns or Decision Log entries were deleted |
 | Session structure | `session.md` missing required sections |
 | Diary format | Wrong filename, missing fields, missing session header |
+
+</details>
 
 ---
 
@@ -319,7 +392,7 @@ One file per day (`diary/YYYY-MM-DD.md`), multiple entries appended. Never edit 
 ---
 ```
 
-Archive monthly to `diary/archive/YYYY-MM/` if desired.
+Previous months are automatically archived to `diary/archive/YYYY-MM/` at the start of each conversation.
 
 </details>
 
@@ -566,6 +639,105 @@ Archived diary entries are still searchable via `./recall.sh` and by the AI duri
 ### Session Size Guard
 
 `session.md` is capped at **500 lines**. If Working Notes grow past this, the validation system warns you to save or trim. This prevents session bloat that degrades AI performance.
+
+---
+
+## FAQ
+
+<details>
+<summary><strong>Do I need to know how to code?</strong></summary>
+
+<br>
+
+No. The setup wizard asks simple questions with numbered choices — just pick 1, 2, or 3 and press Enter. After setup, you just talk to the AI normally. The only "technical" thing is running the install command once.
+
+</details>
+
+<details>
+<summary><strong>What if I forget to say "save"?</strong></summary>
+
+<br>
+
+Your working notes are automatically saved when the conversation ends. But only a manual "save" captures learned patterns and decisions intelligently. For casual conversations, auto-save is fine. For important sessions where you made decisions, say "save" before leaving.
+
+</details>
+
+<details>
+<summary><strong>Can I use this with ChatGPT, Gemini, or other AIs?</strong></summary>
+
+<br>
+
+Yes! The automation (auto-save, validation) is Claude Code specific, but the memory files work with any AI. At the start of each conversation, paste:
+
+> *"Read memory.md and session.md, then follow the instructions in CLAUDE.md for how to manage memory during our session."*
+
+At the end, say: *"Save progress to memory.md and session.md."*
+
+</details>
+
+<details>
+<summary><strong>What if memory gets too big?</strong></summary>
+
+<br>
+
+The AI handles this automatically during "save" by archiving old entries. You can also run `./archive.sh` manually. **Archived memories are NOT lost** — they're moved to a separate file that the AI still reads at the start of every conversation.
+
+</details>
+
+<details>
+<summary><strong>Can multiple people use this on the same project?</strong></summary>
+
+<br>
+
+Yes! Run `./add-user.sh alice` to add a new profile. Each person gets their own separate memory, diary, and session. Switch between people with `./switch-user.sh`. See the [Multi-User](#multi-user) section for details.
+
+</details>
+
+<details>
+<summary><strong>Is my data sent anywhere?</strong></summary>
+
+<br>
+
+No. Everything stays in plain text files on your computer. The AI reads these files during your conversation — they're never uploaded to any external service. You own and control your data completely.
+
+</details>
+
+<details>
+<summary><strong>Can I edit the memory files manually?</strong></summary>
+
+<br>
+
+Yes! They're plain text (markdown) files. Open them in any text editor to review, correct, or delete entries. Just keep the section headings (lines starting with `##`) intact.
+
+</details>
+
+<details>
+<summary><strong>What's the difference between memory, session, and diary?</strong></summary>
+
+<br>
+
+Think of it like this:
+
+- **Memory** (`memory.md`) = your AI's brain — who you are, what you prefer, what you're working on. Persists forever.
+- **Session** (`session.md`) = a sticky note for the current conversation. Thrown away and replaced each time.
+- **Diary** (`diary/`) = a journal. One entry per day, never edited. Good for looking back at what happened.
+
+</details>
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+| --- | --- |
+| AI doesn't remember me | Make sure you're in the right folder. Open `memory.md` — does it have your name? If not, run `./setup.sh`. |
+| "memory.md not found" error | Run `./init.sh` to set up, or make sure you're inside the ai-memory folder. |
+| AI keeps asking my name | Setup wasn't completed. Run `./setup.sh` to fill in your details. |
+| Memory feels incomplete | Say **"save"** more often. Auto-save only captures working notes, not learned patterns. |
+| "memory.md is over 200 lines" | Run `./archive.sh` to move old entries to the archive. Nothing is lost. |
+| Session feels slow or repetitive | Session might be too long. Say **"save"**, then start a new conversation. |
+| Wrong user profile active | Run `./switch-user.sh` to see who's active and switch if needed. |
+| AI invents things that didn't happen | Say *"check the archive"* or *"search for X"* — the AI is instructed to search, not fabricate. |
 
 ---
 
