@@ -56,11 +56,28 @@ export function registerTools(server: McpServer, db: EngramDatabase): void {
         embedding,
       });
 
+      // Memory evolution: find related memories and enrich them
+      let evolved = 0;
+      if (embedding) {
+        const related = db.getAllWithEmbeddings().filter(m => m.id !== id);
+        for (const mem of related) {
+          if (!mem.embedding) continue;
+          const sim = cosineSimilarity(embedding, mem.embedding);
+          // Related but not duplicate (0.6-0.8 similarity range)
+          if (sim > 0.6 && sim <= 0.8) {
+            // Reinforce related memory — it's still relevant
+            db.touchAccess(mem.id);
+            evolved++;
+          }
+        }
+      }
+
       const stats = db.getStats();
+      const evolvedNote = evolved > 0 ? ` Reinforced ${evolved} related memories.` : "";
       return {
         content: [{
           type: "text" as const,
-          text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.`,
+          text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}`,
         }],
       };
     },
@@ -229,6 +246,97 @@ export function registerTools(server: McpServer, db: EngramDatabase): void {
 
       return {
         content: [{ type: "text" as const, text: "Provide either an id or a query to delete memories." }],
+      };
+    },
+  );
+
+  // ── memory_stats ──────────────────────────────────────────
+  server.registerTool(
+    "memory_stats",
+    {
+      title: "Memory Statistics",
+      description: "Show memory statistics: total count, breakdown by type, confidence distribution, embedding coverage.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const stats = db.getStats();
+      const all = db.getAll();
+
+      if (stats.total === 0) {
+        return {
+          content: [{ type: "text" as const, text: "No memories stored yet." }],
+        };
+      }
+
+      const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+      const typeLines = typeOrder
+        .filter(t => (stats.byType[t] || 0) > 0)
+        .map(t => `  ${t}: ${stats.byType[t]}`);
+
+      const highConf = all.filter(m => m.confidence >= 0.8).length;
+      const medConf = all.filter(m => m.confidence >= 0.5 && m.confidence < 0.8).length;
+      const lowConf = all.filter(m => m.confidence < 0.5).length;
+      const withEmbeddings = db.getAllWithEmbeddings().length;
+
+      const text = [
+        `Total memories: ${stats.total}`,
+        "",
+        "By type:",
+        ...typeLines,
+        "",
+        "Confidence:",
+        `  High (≥80%): ${highConf}`,
+        `  Medium (50-79%): ${medConf}`,
+        `  Low (<50%): ${lowConf}`,
+        "",
+        `Embeddings: ${withEmbeddings}/${stats.total}`,
+      ].join("\n");
+
+      return {
+        content: [{ type: "text" as const, text }],
+      };
+    },
+  );
+
+  // ── memory_export ─────────────────────────────────────────
+  server.registerTool(
+    "memory_export",
+    {
+      title: "Export Memories",
+      description: "Export all memories as formatted markdown, grouped by type. Useful for backup, review, or sharing.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const all = db.getAll();
+
+      if (all.length === 0) {
+        return {
+          content: [{ type: "text" as const, text: "No memories to export." }],
+        };
+      }
+
+      const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+      let md = `# Engram Memory Export\n\n`;
+      md += `*Exported: ${new Date().toISOString()}*\n`;
+      md += `*Total: ${all.length} memories*\n\n`;
+
+      for (const t of typeOrder) {
+        const memories = all.filter(m => m.type === t);
+        if (memories.length === 0) continue;
+
+        md += `## ${t.charAt(0).toUpperCase() + t.slice(1)}s\n\n`;
+        for (const m of memories) {
+          const conf = (m.confidence * 100).toFixed(0);
+          md += `- **${m.content}** (${conf}% confidence)\n`;
+          if (m.tags.length > 0) {
+            md += `  Tags: ${m.tags.join(", ")}\n`;
+          }
+          md += "\n";
+        }
+      }
+
+      return {
+        content: [{ type: "text" as const, text: md.trim() }],
       };
     },
   );
