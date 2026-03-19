@@ -23,7 +23,7 @@
 ### Install (one-liner)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash
 ```
 
 Downloads everything and launches the guided setup wizard. Just answer a few questions — pick from numbered choices or press Enter for defaults.
@@ -38,10 +38,10 @@ Downloads everything and launches the guided setup wizard. Just answer a few que
 
 ```bash
 # Custom folder name
-curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
+curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
 
 # Or clone and run the wizard manually
-git clone https://github.com/aman-asmuei/aman-ai-memory.git
+git clone https://github.com/amanasmuei/aman-ai-memory.git
 cd aman-ai-memory && ./init.sh
 ```
 
@@ -180,7 +180,7 @@ aman-ai-memory/
 ### All-in-One (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash
 ```
 
 The installer downloads everything and launches the guided wizard. It handles:
@@ -194,7 +194,7 @@ The installer downloads everything and launches the guided wizard. It handles:
 
 ```bash
 # Download into your project
-curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
+curl -fsSL https://raw.githubusercontent.com/amanasmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
 
 # Run the wizard
 cd my-project/ai-memory && ./init.sh
