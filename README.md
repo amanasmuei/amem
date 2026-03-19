@@ -20,16 +20,50 @@
 
 ## Quick Start
 
-```bash
-# Step 1 — Fill in your AI identity and user profile
-./setup.sh
+### Install (one-liner)
 
-# Step 2 — If this is inside another project, install hooks
-./install.sh
+```bash
+curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash
 ```
 
+Downloads everything and launches the guided setup wizard. Just answer a few questions — pick from numbered choices or press Enter for defaults.
+
 > [!TIP]
-> That's it. Start a conversation and the memory system is active.
+> No terminal experience needed. No git required. The wizard walks you through everything.
+
+<details>
+<summary><strong>Install into a specific folder</strong></summary>
+
+<br>
+
+```bash
+# Custom folder name
+curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
+
+# Or clone and run the wizard manually
+git clone https://github.com/aman-asmuei/aman-ai-memory.git
+cd aman-ai-memory && ./init.sh
+```
+
+</details>
+
+<details>
+<summary><strong>Already have the files?</strong> — just run the wizard</summary>
+
+<br>
+
+```bash
+./init.sh
+```
+
+Or run the steps separately:
+
+```bash
+./setup.sh       # Fill in memory.md only
+./install.sh     # Install hooks into host project only
+```
+
+</details>
 
 ---
 
@@ -46,8 +80,10 @@ aman-ai-memory/
 ├── .claude/
 │   └── settings.json      Hook configuration
 │
-├── setup.sh               Interactive setup
-├── install.sh             Install hooks into host project
+├── get.sh                 Remote installer (curl one-liner)
+├── init.sh                Guided wizard (start here)
+├── setup.sh               Fill in memory.md (advanced)
+├── install.sh             Install hooks into host project (advanced)
 ├── auto-save.sh           Mechanical save on exit
 ├── reset-session.sh       Session reset on start
 └── validate-memory.sh     Structure and integrity checks
@@ -141,52 +177,42 @@ aman-ai-memory/
 
 ## Setup Guide
 
-<details>
-<summary><strong>Option 1 — Standalone (this IS your project)</strong></summary>
-
-<br>
+### All-in-One (Recommended)
 
 ```bash
-./setup.sh
+curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash
 ```
 
-Hooks work out of the box via `.claude/settings.json`. Start chatting.
+The installer downloads everything and launches the guided wizard. It handles:
 
-</details>
+- Friendly questions with numbered choices (pick 1, 2, 3...)
+- Sensible defaults (press Enter to skip)
+- Auto-detects if you're in a subfolder and offers to install hooks
+- Shows a summary when done
 
-<details>
-<summary><strong>Option 2 — Subfolder (inside another project)</strong></summary>
-
-<br>
+### Adding to an Existing Project
 
 ```bash
-# Copy into your project
-cp -r aman-ai-memory/ my-project/aman-ai-memory/
+# Download into your project
+curl -fsSL https://raw.githubusercontent.com/aman-asmuei/aman-ai-memory/main/get.sh | bash -s -- my-project/ai-memory
 
-# Configure
-cd my-project/aman-ai-memory/
-./setup.sh       # Fill in AI identity + your profile
-./install.sh     # Install hooks + CLAUDE.md into host project
+# Run the wizard
+cd my-project/ai-memory && ./init.sh
 ```
-
-`install.sh` handles:
-- Copying or merging `CLAUDE.md` to your project root
-- Creating `.claude/settings.json` with correct paths
-- Updating `.gitignore`
 
 > [!NOTE]
-> If your project already has a `CLAUDE.md` or `.claude/settings.json`, the installer will warn you and give instructions for manual merge.
+> The wizard auto-detects that you're inside another project and offers to install hooks for you.
 
-</details>
+### Other AI Platforms (ChatGPT, Gemini, etc.)
 
 <details>
-<summary><strong>Option 3 — Other AI Platforms (ChatGPT, Gemini, etc.)</strong></summary>
+<summary>Click to expand</summary>
 
 <br>
 
 The auto-save and validation hooks are Claude Code specific. For other platforms:
 
-1. Run `./setup.sh` to fill in `memory.md`
+1. Run `./init.sh` to fill in `memory.md`
 2. At the **start** of each conversation, paste:
 
 > Read memory.md and session.md, then follow the instructions in CLAUDE.md for how to manage memory during our session.
