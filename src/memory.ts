@@ -1,3 +1,6 @@
+import type { EngramDatabase } from "./database.js";
+import { cosineSimilarity } from "./embeddings.js";
+
 export const MemoryType = {
   CORRECTION: "correction",
   DECISION: "decision",
@@ -62,4 +65,60 @@ export function detectConflict(
     isConflict: similarity > 0.85,
     similarity,
   };
+}
+
+export interface RecallOptions {
+  query: string | null;
+  queryEmbedding?: Float32Array | null;
+  limit: number;
+  type?: MemoryTypeValue;
+  tag?: string;
+  minConfidence?: number;
+}
+
+export interface RecalledMemory extends Memory {
+  score: number;
+}
+
+export function recallMemories(
+  db: EngramDatabase,
+  options: RecallOptions,
+): RecalledMemory[] {
+  const { query, queryEmbedding, limit, type, tag, minConfidence } = options;
+  const now = Date.now();
+
+  let candidates: Memory[];
+  if (type) {
+    candidates = db.searchByType(type);
+  } else if (tag) {
+    candidates = db.searchByTag(tag);
+  } else {
+    candidates = db.getAll();
+  }
+
+  if (minConfidence) {
+    candidates = candidates.filter((m) => m.confidence >= minConfidence);
+  }
+
+  const scored: RecalledMemory[] = candidates.map((memory) => {
+    let relevance = 0.5;
+    if (queryEmbedding && memory.embedding) {
+      relevance = Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding));
+    } else if (query && memory.content.toLowerCase().includes(query.toLowerCase())) {
+      relevance = 0.75;
+    }
+
+    const score = computeScore({
+      relevance,
+      confidence: memory.confidence,
+      lastAccessed: memory.lastAccessed,
+      importance: IMPORTANCE_WEIGHTS[memory.type] ?? 0.4,
+      now,
+    });
+
+    return { ...memory, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
 }

@@ -1,11 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   MemoryType,
   IMPORTANCE_WEIGHTS,
   computeScore,
   detectConflict,
+  recallMemories,
   type Memory,
 } from "../src/memory.js";
+import { createDatabase } from "../src/database.js";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
 
 describe("MemoryType", () => {
   it("has all developer-specific types", () => {
@@ -95,5 +100,55 @@ describe("detectConflict", () => {
       0.92,
     );
     expect(result.isConflict).toBe(true);
+  });
+});
+
+describe("recallMemories", () => {
+  let db: ReturnType<typeof createDatabase>;
+  let dbPath: string;
+
+  beforeEach(() => {
+    dbPath = path.join(os.tmpdir(), `engram-recall-test-${Date.now()}.db`);
+    db = createDatabase(dbPath);
+  });
+
+  afterEach(() => {
+    db.close();
+    try { fs.unlinkSync(dbPath); } catch {}
+  });
+
+  it("returns memories sorted by composite score", () => {
+    db.insertMemory({ content: "never use var", type: MemoryType.CORRECTION, tags: ["js"], confidence: 1.0, source: "s", embedding: null });
+    db.insertMemory({ content: "project uses webpack", type: MemoryType.FACT, tags: ["build"], confidence: 0.5, source: "s", embedding: null });
+
+    const results = recallMemories(db, { query: null, limit: 10 });
+    expect(results.length).toBe(2);
+    expect(results[0].content).toBe("never use var");
+  });
+
+  it("filters by type", () => {
+    db.insertMemory({ content: "a", type: MemoryType.CORRECTION, tags: [], confidence: 1, source: "s", embedding: null });
+    db.insertMemory({ content: "b", type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null });
+
+    const results = recallMemories(db, { query: null, limit: 10, type: MemoryType.CORRECTION });
+    expect(results).toHaveLength(1);
+    expect(results[0].content).toBe("a");
+  });
+
+  it("filters by tag", () => {
+    db.insertMemory({ content: "uses react", type: MemoryType.FACT, tags: ["frontend"], confidence: 1, source: "s", embedding: null });
+    db.insertMemory({ content: "uses postgres", type: MemoryType.FACT, tags: ["database"], confidence: 1, source: "s", embedding: null });
+
+    const results = recallMemories(db, { query: null, limit: 10, tag: "frontend" });
+    expect(results).toHaveLength(1);
+    expect(results[0].content).toBe("uses react");
+  });
+
+  it("respects limit", () => {
+    for (let i = 0; i < 20; i++) {
+      db.insertMemory({ content: `memory ${i}`, type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null });
+    }
+    const results = recallMemories(db, { query: null, limit: 5 });
+    expect(results).toHaveLength(5);
   });
 });
