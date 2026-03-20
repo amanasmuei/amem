@@ -1,13 +1,15 @@
 {
   "name": "@aman_asmuei/amem",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "bin": {
     "amem": "dist/index.js",
     "amem-cli": "dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -16,7 +18,15 @@
     "prepare": "npm run build",
     "start": "node dist/index.js"
   },
-  "keywords": ["mcp", "memory", "ai", "developer-tools", "context", "sqlite", "embeddings"],
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "developer-tools",
+    "context",
+    "sqlite",
+    "embeddings"
+  ],
   "license": "MIT",
   "author": "Aman Asmuei",
   "repository": {
