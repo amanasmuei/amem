@@ -1,5 +1,5 @@
-.claude/.memory-snapshot
-.claude/.session-lock
-*.bak
+.claude/
+docs/
 node_modules/
 dist/
+*.bak
