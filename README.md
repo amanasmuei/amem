@@ -89,7 +89,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-Restart Claude Code. You'll see 7 memory tools, 4 resources, and 2 prompts available.
+Restart Claude Code. You'll see 8 memory tools, 4 resources, and 2 prompts available.
 
 </details>
 
@@ -167,7 +167,7 @@ It knows.
 ┌──────────▼───────────────────────┐
 │       amem-mcp-server            │
 │                                  │
-│  7 Tools · 4 Resources · 2 Prompts
+│  8 Tools · 4 Resources · 2 Prompts
 │                                  │
 │   Store → Score → Deduplicate    │
 │   Recall → Rank → Surface       │
@@ -211,7 +211,7 @@ When you store a new memory, related existing memories (60-80% similarity) get r
 
 ## Tools
 
-amem gives your AI **7 tools** it can use during conversation. All tools include:
+amem gives your AI **8 tools** it can use during conversation. All tools include:
 
 - **Strict input validation** with Zod schemas (invalid inputs are rejected with clear error messages)
 - **Tool annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so clients understand tool behavior
@@ -226,6 +226,7 @@ amem gives your AI **7 tools** it can use during conversation. All tools include
 | `memory_context` | Load all relevant context for a topic, organized by type | read-only, idempotent |
 | `memory_extract` | Batch-save multiple memories from a conversation | write, non-destructive |
 | `memory_forget` | Delete outdated or incorrect memories (with confirmation) | write, destructive |
+| `memory_inject` | Proactively inject corrections + decisions for a topic (use before coding) | read-only, idempotent |
 
 ### Utility tools
 
@@ -233,6 +234,8 @@ amem gives your AI **7 tools** it can use during conversation. All tools include
 |------|-------------|-------------|
 | `memory_stats` | Memory count, type breakdown, confidence distribution, embedding coverage | read-only, idempotent |
 | `memory_export` | Export all memories as markdown (truncates at 50K chars) | read-only, idempotent |
+
+All tools return both human-readable text (`content`) and machine-readable JSON (`structuredContent`) with validated `outputSchema`.
 
 ### Example: Storing a memory
 
@@ -396,7 +399,7 @@ AMEM_DB=./project-memories.db amem
 
 amem follows the [MCP best practices](https://modelcontextprotocol.io/) checklist:
 
-- All 7 tools use `server.registerTool()` with `title`, `description`, `inputSchema`, and `annotations`
+- All 8 tools use `server.registerTool()` with `title`, `description`, `inputSchema`, `outputSchema`, and `annotations`
 - All tool handlers wrapped in `try-catch` with `isError: true` on failures
 - All Zod schemas use `.strict()` to reject unknown fields
 - All error messages are actionable (suggest next steps)
@@ -410,7 +413,8 @@ amem follows the [MCP best practices](https://modelcontextprotocol.io/) checklis
 ```
 src/
 ├── index.ts        Entry point — server, prompts, resources, transport
-├── tools.ts        7 MCP tools with annotations, validation, error handling
+├── tools.ts        8 MCP tools with annotations, validation, structured output
+├── schemas.ts      Zod output schemas for structuredContent responses
 ├── memory.ts       Scoring engine, conflict detection, recall algorithm
 ├── database.ts     SQLite schema, prepared statements, CRUD interface
 ├── embeddings.ts   Local embedding pipeline + cosine similarity
@@ -575,19 +579,19 @@ Found a bug or have a feature idea?
 
 ## Roadmap
 
-- [x] 7 MCP tools with full annotations, validation, and error handling
+- [x] 8 MCP tools with full annotations, validation, and error handling
 - [x] Semantic search with local embeddings (graceful fallback to keywords)
 - [x] Smart conflict detection and deduplication
 - [x] Memory evolution (related memories reinforce each other)
 - [x] CLI for direct memory management
 - [x] MCP prompts and resources for proactive context
 - [x] Published on npm
-- [ ] `outputSchema` + `structuredContent` for machine-readable tool responses
+- [x] `outputSchema` + `structuredContent` for machine-readable tool responses
+- [x] Proactive context injection (`memory_inject` tool)
+- [x] Evaluation suite (10 standardized eval questions)
 - [ ] Memory verification against filesystem
 - [ ] Knowledge graph with entity relationships
 - [ ] Team memory (shared context across developers)
-- [ ] Proactive mid-conversation context injection
-- [ ] Evaluation suite (10 standardized eval questions)
 
 ---
 

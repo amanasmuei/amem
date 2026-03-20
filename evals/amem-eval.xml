@@ -1,0 +1,51 @@
+<evaluation>
+  <qa_pair>
+    <question>Store a correction "Never use var in JavaScript" with tags ["javascript", "es6"] and confidence 1.0, then recall it with query "javascript variables". What is the memory type of the first result?</question>
+    <answer>correction</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store three memories: a correction "Don't use any type" (confidence 1.0), a decision "Use PostgreSQL" (confidence 0.9), and a fact "API uses REST" (confidence 0.6). Then call memory_stats. How many total memories are stored?</question>
+    <answer>3</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store a correction "Never mock the database in integration tests" with tags ["testing", "database"]. Then call memory_inject with topic "writing database tests". How many corrections are in the structured response?</question>
+    <answer>1</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Use memory_extract to store two memories: "User prefers TypeScript" (preference, confidence 0.8) and "Chose Next.js for the frontend" (decision, confidence 0.9). What is the "stored" count in the structured response?</question>
+    <answer>2</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store a decision "Use event sourcing for audit trail" with tags ["architecture"]. Then call memory_context with topic "audit system design". What is the name of the first group type in the structured response?</question>
+    <answer>decision</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store a memory "Auth module is in src/auth/" as type "topology" with tag "auth". Then call memory_recall with query "where is authentication code" and type filter "topology". How many memories are returned?</question>
+    <answer>1</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store a correction "Always use prepared statements for SQL queries". Then call memory_forget with the memory's ID. What is the "action" field in the structured response?</question>
+    <answer>deleted</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store a pattern "Prefers early returns over nested conditionals" and then store the exact same content again. The second store should detect a conflict. What is the "action" field in the structured response of the second store?</question>
+    <answer>conflict_resolved</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Call memory_export when no memories are stored. Does the text response indicate there are no memories to export? Answer yes or no.</question>
+    <answer>yes</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Store 5 corrections with confidence 1.0 and 3 facts with confidence 0.5. Then call memory_stats. What is the "high" confidence count in the structured response?</question>
+    <answer>5</answer>
+  </qa_pair>
+</evaluation>
