@@ -66,10 +66,10 @@ Corrections always surface first. They're the "never do this" rules your AI shou
 You need [Node.js](https://nodejs.org) 18 or higher. Then:
 
 ```bash
-npx @aman_asmuei/amem
+npm install -g @aman_asmuei/amem
 ```
 
-That's it. amem runs as a local server on your machine.
+That's it. amem is now installed on your machine.
 
 ### Step 2: Connect your AI tool
 
@@ -82,8 +82,7 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "amem": {
-      "command": "npx",
-      "args": ["-y", "@aman_asmuei/amem"]
+      "command": "amem"
     }
   }
 }
@@ -102,8 +101,7 @@ Add to `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "amem": {
-      "command": "npx",
-      "args": ["-y", "@aman_asmuei/amem"]
+      "command": "amem"
     }
   }
 }
@@ -122,8 +120,7 @@ Add to your MCP configuration:
 {
   "mcpServers": {
     "amem": {
-      "command": "npx",
-      "args": ["-y", "@aman_asmuei/amem"]
+      "command": "amem"
     }
   }
 }
