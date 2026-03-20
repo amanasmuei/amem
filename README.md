@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="amem logo" width="200" />
+
 # amem
 
 ### Give your AI a memory it never forgets
