@@ -139,8 +139,7 @@ function handleStats() {
   }
 
   console.log("  By type:");
-  const typeOrder = TYPE_ORDER;
-  for (const t of typeOrder) {
+  for (const t of TYPE_ORDER) {
     const count = stats.byType[t] || 0;
     if (count > 0) {
       const bar = "\u2588".repeat(Math.min(count, 40));
@@ -189,12 +188,11 @@ function handleExport(args: string[]) {
     return;
   }
 
-  const typeOrder = TYPE_ORDER;
   let md = `# Amem Memory Export\n\n`;
   md += `*Exported: ${new Date().toISOString()}*\n`;
   md += `*Total: ${all.length} memories*\n\n`;
 
-  for (const t of typeOrder) {
+  for (const t of TYPE_ORDER) {
     const memories = all.filter(m => m.type === t);
     if (memories.length === 0) continue;
 
