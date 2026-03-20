@@ -13,7 +13,7 @@ Your AI assistant forgets everything the moment a conversation ends.<br/>
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-8A2BE2?style=flat-square)](https://modelcontextprotocol.io)
 
-[Get Started](#-get-started) · [How It Works](#-how-it-works) · [Tools Reference](#-tools) · [Resources & Prompts](#-resources--prompts) · [CLI](#-cli) · [FAQ](#-faq)
+[Get Started](#get-started) · [How It Works](#how-it-works) · [Tools](#tools) · [Resources & Prompts](#resources--prompts) · [CLI](#cli) · [FAQ](#faq) · [Contributing](#contributing)
 
 </div>
 
@@ -495,6 +495,84 @@ When you store a new memory, amem computes cosine similarity against all existin
 
 ---
 
+## Contributing
+
+Contributions are welcome! Here's how to get involved.
+
+### Development setup
+
+```bash
+git clone https://github.com/amanasmuei/amem.git
+cd amem
+npm install
+npm run build
+npm test
+```
+
+### Scripts
+
+| Script | What it does |
+|--------|-------------|
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm run dev` | Watch mode — recompile on save |
+| `npm test` | Run all 33 tests with Vitest |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm start` | Start the MCP server (`node dist/index.js`) |
+
+### Project structure
+
+```
+amem/
+├── src/
+│   ├── index.ts        # MCP server entry point, prompts, resources
+│   ├── tools.ts        # 7 tool definitions with validation & error handling
+│   ├── memory.ts       # Scoring engine, conflict detection, recall
+│   ├── database.ts     # SQLite schema, prepared statements, CRUD
+│   ├── embeddings.ts   # Local embedding pipeline + cosine similarity
+│   └── cli.ts          # Standalone CLI
+├── tests/
+│   ├── database.test.ts
+│   ├── embeddings.test.ts
+│   ├── memory.test.ts
+│   └── tools.test.ts
+├── .github/
+│   └── workflows/
+│       ├── ci.yml      # Test on push/PR (Node 18/20/22)
+│       └── publish.yml # Publish to npm on GitHub Release
+├── package.json
+├── tsconfig.json
+└── vitest.config.ts
+```
+
+### Making changes
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Make your changes
+4. Ensure the build is clean: `npm run build`
+5. Ensure all tests pass: `npm test`
+6. Commit and push your branch
+7. Open a Pull Request against `main`
+
+### CI/CD
+
+**GitHub Actions** runs automatically on every push and pull request:
+
+- **CI workflow** (`ci.yml`) — builds and tests against Node.js 18, 20, and 22 on Ubuntu
+- **Publish workflow** (`publish.yml`) — triggered on GitHub Release, builds, tests, and publishes to npm with `--access public`
+
+All PRs must pass the CI pipeline before merging.
+
+### Reporting issues
+
+Found a bug or have a feature idea?
+
+- **Bug reports**: [Open an issue](https://github.com/amanasmuei/amem/issues/new) with steps to reproduce, expected vs. actual behavior, and your Node.js version
+- **Feature requests**: [Open an issue](https://github.com/amanasmuei/amem/issues/new) describing the use case and how it would improve the memory system
+- **Questions**: [Start a discussion](https://github.com/amanasmuei/amem/discussions) (or open an issue)
+
+---
+
 ## Roadmap
 
 - [x] 7 MCP tools with full annotations, validation, and error handling
@@ -517,7 +595,7 @@ When you store a new memory, amem computes cosine similarity against all existin
 
 **Built by [Aman Asmuei](https://github.com/amanasmuei)**
 
-[Report Bug](https://github.com/amanasmuei/amem/issues) · [Request Feature](https://github.com/amanasmuei/amem/issues) · [npm](https://www.npmjs.com/package/@aman_asmuei/amem)
+[GitHub](https://github.com/amanasmuei/amem) · [npm](https://www.npmjs.com/package/@aman_asmuei/amem) · [Report Bug](https://github.com/amanasmuei/amem/issues) · [Request Feature](https://github.com/amanasmuei/amem/issues)
 
 MIT License
 
