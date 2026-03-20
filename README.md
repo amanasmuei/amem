@@ -2,8 +2,6 @@
 
 <img src="assets/logo.png" alt="amem logo" width="200" />
 
-# amem
-
 ### Give your AI a memory it never forgets
 
 Your AI assistant forgets everything the moment a conversation ends.<br/>
