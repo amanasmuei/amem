@@ -89,7 +89,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-Restart Claude Code. You'll see 8 memory tools, 4 resources, and 2 prompts available.
+Restart Claude Code. You'll see 9 memory tools, 4 resources, and 2 prompts available.
 
 </details>
 
@@ -167,7 +167,7 @@ It knows.
 ┌──────────▼───────────────────────┐
 │       amem-mcp-server            │
 │                                  │
-│  8 Tools · 4 Resources · 2 Prompts
+│  9 Tools · 4 Resources · 2 Prompts
 │                                  │
 │   Store → Score → Deduplicate    │
 │   Recall → Rank → Surface       │
@@ -207,11 +207,31 @@ Store a memory that contradicts an existing one? amem catches it:
 
 When you store a new memory, related existing memories (60-80% similarity) get reinforced automatically — their access timestamps update, keeping your knowledge base connected and current.
 
+### Memory consolidation
+
+Over time, memories accumulate — duplicates, stale facts, forgotten preferences. amem is the first MCP memory server with built-in consolidation:
+
+- **Merge** — Near-duplicate memories (>85% similarity) are combined. The higher-confidence version is kept and boosted.
+- **Prune** — Stale memories (>60 days inactive, low confidence, rarely accessed) are removed. Corrections are **never** pruned.
+- **Promote** — Memories accessed 5+ times with low confidence get promoted to 90% confidence.
+- **Health score** — After consolidation, you get a 0-100 health score (signal-to-noise ratio).
+
+Use `memory_consolidate` with `confirm: false` to preview, then `confirm: true` to execute.
+
+### Project scoping
+
+Memories know where they apply:
+
+- **Global** — Corrections, preferences, and patterns follow you everywhere (e.g., "Don't use `any` in TypeScript")
+- **Project-scoped** — Decisions, topology, and facts stay with their project (e.g., "Auth module is in src/auth/")
+
+Project is auto-detected from `AMEM_PROJECT` env var or your git repo name. When recalling, amem returns global memories + current project memories — never leaking another project's context.
+
 ---
 
 ## Tools
 
-amem gives your AI **8 tools** it can use during conversation. All tools include:
+amem gives your AI **9 tools** it can use during conversation. All tools include:
 
 - **Strict input validation** with Zod schemas (invalid inputs are rejected with clear error messages)
 - **Tool annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so clients understand tool behavior
@@ -228,12 +248,13 @@ amem gives your AI **8 tools** it can use during conversation. All tools include
 | `memory_forget` | Delete outdated or incorrect memories (with confirmation) | write, destructive |
 | `memory_inject` | Proactively inject corrections + decisions for a topic (use before coding) | read-only, idempotent |
 
-### Utility tools
+### Maintenance tools
 
 | Tool | What it does | Annotations |
 |------|-------------|-------------|
 | `memory_stats` | Memory count, type breakdown, confidence distribution, embedding coverage | read-only, idempotent |
 | `memory_export` | Export all memories as markdown (truncates at 50K chars) | read-only, idempotent |
+| `memory_consolidate` | Merge duplicates, prune stale memories, promote frequent ones (preview or execute) | write, destructive |
 
 All tools return both human-readable text (`content`) and machine-readable JSON (`structuredContent`) with validated `outputSchema`.
 
@@ -372,11 +393,19 @@ amem works out of the box with zero configuration. For advanced use:
 |---------------------|---------|-------------|
 | `AMEM_DIR` | `~/.amem` | Where amem stores data |
 | `AMEM_DB` | `~/.amem/memory.db` | Database file path |
+| `AMEM_PROJECT` | *(auto-detected from git)* | Project name for scoping (e.g., `my-app`) |
 
-Set `AMEM_DB` per-project for isolated memories:
+Project scoping is automatic — amem detects your git repo name. Override with `AMEM_PROJECT`:
 
-```bash
-AMEM_DB=./project-memories.db amem
+```json
+{
+  "mcpServers": {
+    "amem": {
+      "command": "amem",
+      "env": { "AMEM_PROJECT": "my-project" }
+    }
+  }
+}
 ```
 
 ---
@@ -399,7 +428,7 @@ AMEM_DB=./project-memories.db amem
 
 amem follows the [MCP best practices](https://modelcontextprotocol.io/) checklist:
 
-- All 8 tools use `server.registerTool()` with `title`, `description`, `inputSchema`, `outputSchema`, and `annotations`
+- All 9 tools use `server.registerTool()` with `title`, `description`, `inputSchema`, `outputSchema`, and `annotations`
 - All tool handlers wrapped in `try-catch` with `isError: true` on failures
 - All Zod schemas use `.strict()` to reject unknown fields
 - All error messages are actionable (suggest next steps)
@@ -413,7 +442,7 @@ amem follows the [MCP best practices](https://modelcontextprotocol.io/) checklis
 ```
 src/
 ├── index.ts        Entry point — server, prompts, resources, transport
-├── tools.ts        8 MCP tools with annotations, validation, structured output
+├── tools.ts        10 MCP tools with annotations, validation, structured output
 ├── schemas.ts      Zod output schemas for structuredContent responses
 ├── memory.ts       Scoring engine, conflict detection, recall algorithm
 ├── database.ts     SQLite schema, prepared statements, CRUD interface
@@ -589,6 +618,8 @@ Found a bug or have a feature idea?
 - [x] `outputSchema` + `structuredContent` for machine-readable tool responses
 - [x] Proactive context injection (`memory_inject` tool)
 - [x] Evaluation suite (10 standardized eval questions)
+- [x] Memory consolidation — merge, prune, promote (the first MCP memory server with this)
+- [x] Project scoping — auto-detect project, scope memories global vs project
 - [ ] Memory verification against filesystem
 - [ ] Knowledge graph with entity relationships
 - [ ] Team memory (shared context across developers)
