@@ -38,10 +38,15 @@ export function findTopK<T>(
   return scored.slice(0, k);
 }
 
-let pipelineInstance: any = null;
-let pipelineLoading: Promise<any> | null = null;
+// HuggingFace pipeline type is complex and varies by version — use structural type for the subset we need
+interface FeatureExtractor {
+  (text: string, options: { pooling: "mean"; normalize: boolean }): Promise<{ data: ArrayLike<number> }>;
+}
 
-async function getEmbeddingPipeline(): Promise<any> {
+let pipelineInstance: FeatureExtractor | null = null;
+let pipelineLoading: Promise<FeatureExtractor | null> | null = null;
+
+async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
   if (pipelineInstance) return pipelineInstance;
   if (pipelineLoading) return pipelineLoading;
 
@@ -51,7 +56,7 @@ async function getEmbeddingPipeline(): Promise<any> {
       pipelineInstance = await mod.pipeline(
         "feature-extraction",
         "Xenova/all-MiniLM-L6-v2",
-      );
+      ) as unknown as FeatureExtractor;
       return pipelineInstance;
     } catch {
       return null;

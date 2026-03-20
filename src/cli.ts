@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { createDatabase } from "./database.js";
-import { recallMemories, MemoryType, IMPORTANCE_WEIGHTS, type MemoryTypeValue } from "./memory.js";
+import { recallMemories, MemoryType, type MemoryTypeValue } from "./memory.js";
 import { generateEmbedding } from "./embeddings.js";
+import { formatAge, TYPE_ORDER } from "./tools.js";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -138,7 +139,7 @@ function handleStats() {
   }
 
   console.log("  By type:");
-  const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+  const typeOrder = TYPE_ORDER;
   for (const t of typeOrder) {
     const count = stats.byType[t] || 0;
     if (count > 0) {
@@ -188,7 +189,7 @@ function handleExport(args: string[]) {
     return;
   }
 
-  const typeOrder: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+  const typeOrder = TYPE_ORDER;
   let md = `# Amem Memory Export\n\n`;
   md += `*Exported: ${new Date().toISOString()}*\n`;
   md += `*Total: ${all.length} memories*\n\n`;
@@ -226,7 +227,7 @@ function handleList(args: string[]) {
   let memories;
   if (typeFilter) {
     const validTypes = Object.values(MemoryType);
-    if (!validTypes.includes(typeFilter as any)) {
+    if (!validTypes.includes(typeFilter as MemoryTypeValue)) {
       console.error(`Invalid type: ${typeFilter}. Valid types: ${validTypes.join(", ")}`);
       process.exit(1);
     }
@@ -269,14 +270,3 @@ function handleForget(args: string[]) {
   console.log(`Deleted: "${match.content}" (${match.type})`);
 }
 
-function formatAge(timestamp: number): string {
-  const ms = Date.now() - timestamp;
-  const minutes = Math.floor(ms / 60000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
