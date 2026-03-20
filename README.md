@@ -4,8 +4,7 @@
 
 ### Give your AI a memory it never forgets
 
-Your AI assistant forgets everything the moment a conversation ends.<br/>
-**amem** gives it persistent memory — so it remembers your preferences, decisions, and corrections forever.
+**amem** (**A**man's **Mem**ory) gives your AI persistent memory — so it remembers your preferences, decisions, and corrections forever.<br/>No more repeating yourself. Every conversation starts where the last one left off.
 
 [![npm version](https://img.shields.io/npm/v/@aman_asmuei/amem.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/@aman_asmuei/amem)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
