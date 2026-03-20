@@ -118,8 +118,8 @@ describe("recallMemories", () => {
   });
 
   it("returns memories sorted by composite score", () => {
-    db.insertMemory({ content: "never use var", type: MemoryType.CORRECTION, tags: ["js"], confidence: 1.0, source: "s", embedding: null });
-    db.insertMemory({ content: "project uses webpack", type: MemoryType.FACT, tags: ["build"], confidence: 0.5, source: "s", embedding: null });
+    db.insertMemory({ content: "never use var", type: MemoryType.CORRECTION, tags: ["js"], confidence: 1.0, source: "s", embedding: null, scope: "global" });
+    db.insertMemory({ content: "project uses webpack", type: MemoryType.FACT, tags: ["build"], confidence: 0.5, source: "s", embedding: null, scope: "global" });
 
     const results = recallMemories(db, { query: null, limit: 10 });
     expect(results.length).toBe(2);
@@ -127,8 +127,8 @@ describe("recallMemories", () => {
   });
 
   it("filters by type", () => {
-    db.insertMemory({ content: "a", type: MemoryType.CORRECTION, tags: [], confidence: 1, source: "s", embedding: null });
-    db.insertMemory({ content: "b", type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null });
+    db.insertMemory({ content: "a", type: MemoryType.CORRECTION, tags: [], confidence: 1, source: "s", embedding: null, scope: "global" });
+    db.insertMemory({ content: "b", type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null, scope: "global" });
 
     const results = recallMemories(db, { query: null, limit: 10, type: MemoryType.CORRECTION });
     expect(results).toHaveLength(1);
@@ -136,8 +136,8 @@ describe("recallMemories", () => {
   });
 
   it("filters by tag", () => {
-    db.insertMemory({ content: "uses react", type: MemoryType.FACT, tags: ["frontend"], confidence: 1, source: "s", embedding: null });
-    db.insertMemory({ content: "uses postgres", type: MemoryType.FACT, tags: ["database"], confidence: 1, source: "s", embedding: null });
+    db.insertMemory({ content: "uses react", type: MemoryType.FACT, tags: ["frontend"], confidence: 1, source: "s", embedding: null, scope: "global" });
+    db.insertMemory({ content: "uses postgres", type: MemoryType.FACT, tags: ["database"], confidence: 1, source: "s", embedding: null, scope: "global" });
 
     const results = recallMemories(db, { query: null, limit: 10, tag: "frontend" });
     expect(results).toHaveLength(1);
@@ -146,7 +146,7 @@ describe("recallMemories", () => {
 
   it("respects limit", () => {
     for (let i = 0; i < 20; i++) {
-      db.insertMemory({ content: `memory ${i}`, type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null });
+      db.insertMemory({ content: `memory ${i}`, type: MemoryType.FACT, tags: [], confidence: 1, source: "s", embedding: null, scope: "global" });
     }
     const results = recallMemories(db, { query: null, limit: 5 });
     expect(results).toHaveLength(5);

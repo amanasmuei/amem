@@ -96,7 +96,7 @@ Returns:
             }
           }
 
-          const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding });
+          const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: "global" });
 
           // Reinforce related memories (0.6-0.8 range) using already-loaded embeddings
           let evolved = 0;
@@ -129,7 +129,7 @@ Returns:
         }
 
         // No embeddings available — store directly
-        const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding });
+        const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: "global" });
         const stats = db.getStats();
         return {
           content: [{
@@ -553,6 +553,7 @@ Returns:
               confidence: input.confidence,
               source,
               embedding,
+              scope: "global",
             });
             stored++;
             details.push(`  + Stored [${input.type}]: "${input.content}" (${id.slice(0, 8)})`);

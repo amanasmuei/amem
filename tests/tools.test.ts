@@ -28,7 +28,7 @@ describe("Tool Integration", () => {
       tags: ["typescript", "types"],
       confidence: 1.0,
       source: "test",
-      embedding: null,
+      embedding: null, scope: "global",
     });
     expect(id).toBeTruthy();
 
@@ -51,7 +51,7 @@ describe("Tool Integration", () => {
       tags: ["code-style"],
       confidence: 0.6,
       source: "test",
-      embedding: null,
+      embedding: null, scope: "global",
     });
 
     db.updateConfidence(id, 0.9);
@@ -67,7 +67,7 @@ describe("Tool Integration", () => {
       tags: [],
       confidence: 1,
       source: "s",
-      embedding: null,
+      embedding: null, scope: "global",
     });
     db.insertMemory({
       content: "b",
@@ -75,7 +75,7 @@ describe("Tool Integration", () => {
       tags: [],
       confidence: 1,
       source: "s",
-      embedding: null,
+      embedding: null, scope: "global",
     });
     db.insertMemory({
       content: "c",
@@ -83,7 +83,7 @@ describe("Tool Integration", () => {
       tags: [],
       confidence: 1,
       source: "s",
-      embedding: null,
+      embedding: null, scope: "global",
     });
 
     const stats = db.getStats();
@@ -102,7 +102,7 @@ describe("Tool Integration", () => {
       ];
 
       for (const input of inputs) {
-        db.insertMemory({ ...input, embedding: null });
+        db.insertMemory({ ...input, embedding: null, scope: "global" });
       }
 
       const stats = db.getStats();
@@ -121,7 +121,7 @@ describe("Tool Integration", () => {
         tags: ["code-style"],
         confidence: 0.7,
         source: "conv-1",
-        embedding: emb1,
+        embedding: emb1, scope: "global",
       });
 
       // Attempt to store near-duplicate
@@ -160,7 +160,7 @@ describe("Tool Integration", () => {
         tags: [],
         confidence: 0.8,
         source: "s",
-        embedding: emb1,
+        embedding: emb1, scope: "global",
       });
 
       // Completely different memory
@@ -171,7 +171,7 @@ describe("Tool Integration", () => {
         tags: [],
         confidence: 0.6,
         source: "s",
-        embedding: emb2,
+        embedding: emb2, scope: "global",
       });
 
       expect(db.getAll()).toHaveLength(2);
@@ -186,7 +186,7 @@ describe("Tool Integration", () => {
         tags: ["auth", "security"],
         confidence: 1.0,
         source: "test",
-        embedding: null,
+        embedding: null, scope: "global",
       });
       db.insertMemory({
         content: "Use OAuth2 + PKCE for auth flow",
@@ -194,7 +194,7 @@ describe("Tool Integration", () => {
         tags: ["auth"],
         confidence: 0.9,
         source: "test",
-        embedding: null,
+        embedding: null, scope: "global",
       });
       db.insertMemory({
         content: "API uses REST",
@@ -202,7 +202,7 @@ describe("Tool Integration", () => {
         tags: ["api"],
         confidence: 0.6,
         source: "test",
-        embedding: null,
+        embedding: null, scope: "global",
       });
 
       const corrections = db.searchByType(MemoryType.CORRECTION);

@@ -32,6 +32,7 @@ export interface Memory {
   lastAccessed: number;
   source: string;
   embedding: Float32Array | null;
+  scope: string;
 }
 
 export interface ScoreInput {

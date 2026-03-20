@@ -9,6 +9,7 @@ export interface MemoryInput {
   confidence: number;
   source: string;
   embedding: Float32Array | null;
+  scope: string;
 }
 
 export interface MemoryStats {
@@ -28,6 +29,8 @@ export interface AmemDatabase {
   touchAccess(id: string): void;
   deleteMemory(id: string): void;
   getStats(): MemoryStats;
+  searchByScope(scope: string): Memory[];
+  getAllForProject(project: string): Memory[];
   listTables(): string[];
   close(): void;
 }
@@ -43,6 +46,7 @@ interface MemoryRow {
   last_accessed: number;
   source: string;
   embedding: Buffer | null;
+  scope: string;
 }
 
 function rowToMemory(row: MemoryRow): Memory {
@@ -63,6 +67,7 @@ function rowToMemory(row: MemoryRow): Memory {
           row.embedding.byteLength / 4,
         )
       : null,
+    scope: row.scope,
   };
 }
 
@@ -82,7 +87,8 @@ export function createDatabase(dbPath: string): AmemDatabase {
       created_at INTEGER NOT NULL,
       last_accessed INTEGER NOT NULL,
       source TEXT NOT NULL,
-      embedding BLOB
+      embedding BLOB,
+      scope TEXT NOT NULL DEFAULT 'global'
     );
 
     CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
@@ -90,10 +96,18 @@ export function createDatabase(dbPath: string): AmemDatabase {
     CREATE INDEX IF NOT EXISTS idx_memories_confidence ON memories(confidence);
   `);
 
+  // Migration: add scope column if not present
+  const columns = db.pragma('table_info(memories)') as { name: string }[];
+  const hasScope = columns.some(c => c.name === 'scope');
+  if (!hasScope) {
+    db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)`);
+
   const stmts = {
     insert: db.prepare(`
-      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding, scope)
+      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare(`SELECT * FROM memories WHERE id = ?`),
     searchByType: db.prepare(`SELECT * FROM memories WHERE type = ? ORDER BY last_accessed DESC`),
@@ -111,6 +125,8 @@ export function createDatabase(dbPath: string): AmemDatabase {
     countAll: db.prepare(`SELECT COUNT(*) as count FROM memories`),
     countByType: db.prepare(`SELECT type, COUNT(*) as count FROM memories GROUP BY type`),
     listTables: db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`),
+    searchByScope: db.prepare(`SELECT * FROM memories WHERE scope = ? ORDER BY last_accessed DESC`),
+    getAllForProject: db.prepare(`SELECT * FROM memories WHERE scope = 'global' OR scope = ? ORDER BY last_accessed DESC`),
   };
 
   return {
@@ -130,6 +146,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
         now,
         input.source,
         embeddingBuffer,
+        input.scope,
       );
       return id;
     },
@@ -185,6 +202,16 @@ export function createDatabase(dbPath: string): AmemDatabase {
         byType[row.type] = row.count;
       }
       return { total, byType };
+    },
+
+    searchByScope(scope: string): Memory[] {
+      const rows = stmts.searchByScope.all(scope) as MemoryRow[];
+      return rows.map(rowToMemory);
+    },
+
+    getAllForProject(project: string): Memory[] {
+      const rows = stmts.getAllForProject.all(project) as MemoryRow[];
+      return rows.map(rowToMemory);
     },
 
     listTables(): string[] {
