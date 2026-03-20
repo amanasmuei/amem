@@ -3,6 +3,16 @@ import { z } from "zod";
 import type { AmemDatabase } from "./database.js";
 import { MemoryType, type MemoryTypeValue, recallMemories, detectConflict } from "./memory.js";
 import { generateEmbedding, cosineSimilarity } from "./embeddings.js";
+import {
+  StoreResultSchema,
+  RecallResultSchema,
+  ContextResultSchema,
+  ForgetResultSchema,
+  ExtractResultSchema,
+  StatsResultSchema,
+  ExportResultSchema,
+  InjectResultSchema,
+} from "./schemas.js";
 
 const MEMORY_TYPES = Object.values(MemoryType);
 const CHARACTER_LIMIT = 50_000;
@@ -46,6 +56,7 @@ Returns:
         confidence: z.number().min(0).max(1).default(0.8).describe("How confident is this memory (0-1). Corrections from user = 1.0"),
         source: z.string().default("conversation").describe("Where this memory came from"),
       }).strict(),
+      outputSchema: StoreResultSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -72,6 +83,12 @@ Returns:
                   type: "text" as const,
                   text: `Memory conflict detected. Similar memory exists (${(sim * 100).toFixed(0)}% match): "${mem.content}" — updated its confidence instead of creating duplicate.\n\nIf these are genuinely different memories, rephrase to be more distinct.`,
                 }],
+                structuredContent: {
+                  action: "conflict_resolved" as const,
+                  existingId: mem.id,
+                  similarity: Number((sim * 100).toFixed(0)),
+                  existingContent: mem.content,
+                },
               };
             }
             if (sim > 0.8) {
@@ -99,6 +116,15 @@ Returns:
               type: "text" as const,
               text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}`,
             }],
+            structuredContent: {
+              action: "stored" as const,
+              id,
+              type,
+              confidence,
+              tags,
+              total: stats.total,
+              reinforced: evolved,
+            },
           };
         }
 
@@ -110,6 +136,15 @@ Returns:
             type: "text" as const,
             text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.`,
           }],
+          structuredContent: {
+            action: "stored" as const,
+            id,
+            type,
+            confidence,
+            tags,
+            total: stats.total,
+            reinforced: 0,
+          },
         };
       } catch (error) {
         return {
@@ -146,6 +181,7 @@ Returns:
         tag: z.string().optional().describe("Filter by tag"),
         min_confidence: z.number().min(0).max(1).optional().describe("Minimum confidence threshold"),
       }).strict(),
+      outputSchema: RecallResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -176,6 +212,16 @@ Returns:
           };
         }
 
+        const memoriesData = results.map((r) => ({
+          id: r.id,
+          content: r.content,
+          type: r.type,
+          score: Number(r.score.toFixed(3)),
+          confidence: r.confidence,
+          tags: r.tags,
+          age: formatAge(r.createdAt),
+        }));
+
         const lines = results.map((r, i) => {
           const age = formatAge(r.createdAt);
           const conf = (r.confidence * 100).toFixed(0);
@@ -187,6 +233,11 @@ Returns:
             type: "text" as const,
             text: `Found ${results.length} memories for "${query}":\n\n${lines.join("\n\n")}`,
           }],
+          structuredContent: {
+            query,
+            total: results.length,
+            memories: memoriesData,
+          },
         };
       } catch (error) {
         return {
@@ -217,6 +268,7 @@ Returns:
         topic: z.string().min(1, "Topic is required").describe("The topic or task you need context for"),
         max_tokens: z.number().int().min(100).max(10000).default(2000).describe("Approximate token budget for context"),
       }).strict(),
+      outputSchema: ContextResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -271,8 +323,23 @@ Returns:
 
         for (const r of results) db.touchAccess(r.id);
 
+        const groups = TYPE_ORDER
+          .filter(t => grouped[t] && grouped[t].length > 0)
+          .map(t => ({
+            type: t,
+            memories: grouped[t].map(m => ({
+              content: m.content,
+              confidence: m.confidence,
+            })),
+          }));
+
         return {
           content: [{ type: "text" as const, text: output.trim() }],
+          structuredContent: {
+            topic,
+            groups,
+            memoriesUsed: results.length,
+          },
         };
       } catch (error) {
         return {
@@ -309,6 +376,7 @@ Error Handling:
         query: z.string().optional().describe("Delete all memories matching this query (requires confirmation)"),
         confirm: z.boolean().default(false).describe("Must be true to actually delete when using query-based deletion"),
       }).strict(),
+      outputSchema: ForgetResultSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -329,6 +397,12 @@ Error Handling:
           db.deleteMemory(id);
           return {
             content: [{ type: "text" as const, text: `Deleted memory: "${memory.content}" (${memory.type})` }],
+            structuredContent: {
+              action: "deleted" as const,
+              id,
+              content: memory.content,
+              type: memory.type,
+            },
           };
         }
 
@@ -351,12 +425,23 @@ Error Handling:
                 type: "text" as const,
                 text: `Found ${matches.length} memories matching "${query}". Preview:\n${preview}\n\nCall again with confirm=true to delete these.`,
               }],
+              structuredContent: {
+                action: "preview" as const,
+                query,
+                total: matches.length,
+                previewed: matches.slice(0, 5).map(m => ({ id: m.id.slice(0, 8), content: m.content })),
+              },
             };
           }
 
           for (const m of matches) db.deleteMemory(m.id);
           return {
             content: [{ type: "text" as const, text: `Deleted ${matches.length} memories matching "${query}".` }],
+            structuredContent: {
+              action: "bulk_deleted" as const,
+              query,
+              deleted: matches.length,
+            },
           };
         }
 
@@ -410,6 +495,7 @@ Returns:
         }).strict()).min(1, "At least one memory is required").describe("Array of memories to extract and store"),
         source: z.string().default("conversation").describe("Source identifier"),
       }).strict(),
+      outputSchema: ExtractResultSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -422,6 +508,14 @@ Returns:
         let stored = 0;
         let reinforced = 0;
         const details: string[] = [];
+        const structuredDetails: Array<{
+          action: "stored" | "reinforced";
+          content: string;
+          type?: string;
+          id?: string;
+          matchedContent?: string;
+          similarity?: number;
+        }> = [];
 
         for (const input of memoryInputs) {
           const embedding = await generateEmbedding(input.content);
@@ -439,6 +533,12 @@ Returns:
                 db.touchAccess(mem.id);
                 reinforced++;
                 details.push(`  ~ Reinforced: "${mem.content}" (${(sim * 100).toFixed(0)}% match)`);
+                structuredDetails.push({
+                  action: "reinforced",
+                  content: input.content,
+                  matchedContent: mem.content,
+                  similarity: Number((sim * 100).toFixed(0)),
+                });
                 isDuplicate = true;
                 break;
               }
@@ -456,6 +556,12 @@ Returns:
             });
             stored++;
             details.push(`  + Stored [${input.type}]: "${input.content}" (${id.slice(0, 8)})`);
+            structuredDetails.push({
+              action: "stored",
+              content: input.content,
+              type: input.type,
+              id: id.slice(0, 8),
+            });
           }
         }
 
@@ -469,6 +575,12 @@ Returns:
 
         return {
           content: [{ type: "text" as const, text: summary }],
+          structuredContent: {
+            stored,
+            reinforced,
+            total: stats.total,
+            details: structuredDetails,
+          },
         };
       } catch (error) {
         return {
@@ -494,6 +606,7 @@ Args: None
 Returns:
   Formatted statistics including total count, per-type breakdown, confidence distribution, and embedding coverage.`,
       inputSchema: z.object({}).strict(),
+      outputSchema: StatsResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -537,6 +650,12 @@ Returns:
 
         return {
           content: [{ type: "text" as const, text }],
+          structuredContent: {
+            total: stats.total,
+            byType: stats.byType,
+            confidence: { high: highConf, medium: medConf, low: lowConf },
+            embeddingCoverage: { withEmbeddings, total: stats.total },
+          },
         };
       } catch (error) {
         return {
@@ -562,6 +681,7 @@ Args: None
 Returns:
   Markdown document with all memories grouped by type, including confidence, tags, and metadata.`,
       inputSchema: z.object({}).strict(),
+      outputSchema: ExportResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -599,13 +719,21 @@ Returns:
         }
 
         // Truncate if exceeding character limit
+        let truncated = false;
         if (md.length > CHARACTER_LIMIT) {
           md = md.slice(0, CHARACTER_LIMIT);
           md += `\n\n---\n*Output truncated at ${CHARACTER_LIMIT} characters. Use memory_recall with filters to view specific memories.*`;
+          truncated = true;
         }
 
         return {
           content: [{ type: "text" as const, text: md.trim() }],
+          structuredContent: {
+            exportedAt: new Date().toISOString(),
+            total: all.length,
+            markdown: md.trim(),
+            truncated,
+          },
         };
       } catch (error) {
         return {
@@ -613,6 +741,101 @@ Returns:
           content: [{
             type: "text" as const,
             text: `Error exporting memories: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_inject ─────────────────────────────────────────
+  server.registerTool(
+    "memory_inject",
+    {
+      title: "Inject Memory Context",
+      description: `Proactively inject relevant corrections and decisions for a topic. Use this AUTOMATICALLY at the start of any task to ensure hard constraints are respected.
+
+Unlike memory_context (which returns all types), memory_inject focuses on the two most critical types:
+- **Corrections** — hard constraints that MUST be followed (returned as a list)
+- **Decisions** — architectural choices that SHOULD inform the approach (returned as a list)
+
+This is the recommended tool for proactive context injection. Call it before writing any code.
+
+Args:
+  - topic (string): The topic or task about to be worked on
+
+Returns:
+  Structured object with corrections list, decisions list, and formatted context string.`,
+      inputSchema: z.object({
+        topic: z.string().min(1, "Topic is required").describe("The topic or task about to be worked on"),
+      }).strict(),
+      outputSchema: InjectResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ topic }) => {
+      try {
+        const queryEmbedding = await generateEmbedding(topic);
+
+        const results = recallMemories(db, {
+          query: topic,
+          queryEmbedding,
+          limit: 30,
+        });
+
+        const corrections = results
+          .filter(r => r.type === MemoryType.CORRECTION)
+          .map(r => r.content);
+        const decisions = results
+          .filter(r => r.type === MemoryType.DECISION)
+          .map(r => r.content);
+
+        let context = "";
+        if (corrections.length > 0) {
+          context += "## Corrections (MUST follow)\n";
+          context += corrections.map(c => `- ${c}`).join("\n");
+          context += "\n\n";
+        }
+        if (decisions.length > 0) {
+          context += "## Decisions (SHOULD follow)\n";
+          context += decisions.map(d => `- ${d}`).join("\n");
+          context += "\n";
+        }
+
+        if (corrections.length === 0 && decisions.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: `No corrections or decisions found for: "${topic}".` }],
+            structuredContent: {
+              topic,
+              corrections: [],
+              decisions: [],
+              context: "",
+              memoriesUsed: 0,
+            },
+          };
+        }
+
+        for (const r of results) db.touchAccess(r.id);
+
+        return {
+          content: [{ type: "text" as const, text: context.trim() }],
+          structuredContent: {
+            topic,
+            corrections,
+            decisions,
+            context: context.trim(),
+            memoriesUsed: corrections.length + decisions.length,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error injecting context: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }

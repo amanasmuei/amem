@@ -177,4 +177,40 @@ describe("Tool Integration", () => {
       expect(db.getAll()).toHaveLength(2);
     });
   });
+
+  describe("memory_inject data", () => {
+    it("returns corrections and decisions for a topic", () => {
+      db.insertMemory({
+        content: "Never store JWT secrets in env vars",
+        type: MemoryType.CORRECTION,
+        tags: ["auth", "security"],
+        confidence: 1.0,
+        source: "test",
+        embedding: null,
+      });
+      db.insertMemory({
+        content: "Use OAuth2 + PKCE for auth flow",
+        type: MemoryType.DECISION,
+        tags: ["auth"],
+        confidence: 0.9,
+        source: "test",
+        embedding: null,
+      });
+      db.insertMemory({
+        content: "API uses REST",
+        type: MemoryType.FACT,
+        tags: ["api"],
+        confidence: 0.6,
+        source: "test",
+        embedding: null,
+      });
+
+      const corrections = db.searchByType(MemoryType.CORRECTION);
+      const decisions = db.searchByType(MemoryType.DECISION);
+      expect(corrections).toHaveLength(1);
+      expect(corrections[0].content).toContain("JWT");
+      expect(decisions).toHaveLength(1);
+      expect(decisions[0].content).toContain("OAuth2");
+    });
+  });
 });
