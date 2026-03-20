@@ -1,34 +1,80 @@
+<div align="center">
+
 # amem
 
-The memory layer for AI coding tools. Local-first. Developer-specific. Works everywhere.
+### Give your AI a memory it never forgets
 
-[![npm version](https://img.shields.io/npm/v/@aman_asmuei/amem.svg)](https://www.npmjs.com/package/@aman_asmuei/amem)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+Your AI assistant forgets everything the moment a conversation ends.<br/>
+**amem** gives it persistent memory — so it remembers your preferences, decisions, and corrections forever.
 
-> Your AI forgets everything between conversations. amem fixes that.
+[![npm version](https://img.shields.io/npm/v/@aman_asmuei/amem.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/@aman_asmuei/amem)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=flat-square&label=tests)](https://github.com/amanasmuei/amem/actions)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 
-## Install
+[Get Started](#-get-started) · [How It Works](#-how-it-works) · [Tools Reference](#-tools) · [CLI](#-cli) · [FAQ](#-faq)
+
+</div>
+
+---
+
+## The Problem
+
+Every time you start a new conversation with an AI coding assistant, it starts from zero. It doesn't know:
+
+- That you told it **three times** not to use `any` in TypeScript
+- That your team **chose PostgreSQL** over MongoDB last month (and why)
+- That you **prefer** functional style, early returns, and pnpm
+- Where your auth module lives, or how your project is structured
+
+You end up repeating yourself. Every. Single. Time.
+
+## The Solution
+
+**amem** is a memory layer that plugs into any AI tool — Claude Code, Cursor, Windsurf, or anything that speaks MCP. It remembers what matters and surfaces it automatically.
+
+```
+You: "Don't use any type in TypeScript"
+
+  amem saves this as a correction (highest priority).
+  Next conversation — or next month — your AI already knows.
+```
+
+---
+
+## What Gets Remembered
+
+amem organizes memories into six types, ranked by importance:
+
+| Priority | Type | What it captures | Example |
+|:--------:|------|-----------------|---------|
+| 🔴 | **Correction** | Mistakes to never repeat | *"Don't mock the database in integration tests"* |
+| 🟠 | **Decision** | Architectural choices + why | *"Chose Postgres over MongoDB for ACID compliance"* |
+| 🟡 | **Pattern** | Coding style & habits | *"Prefers early returns over nested conditionals"* |
+| 🟢 | **Preference** | Tool & workflow choices | *"Uses pnpm, not npm"* |
+| 🔵 | **Topology** | Where things are | *"Auth module lives in src/auth/, uses JWT"* |
+| ⚪ | **Fact** | General project knowledge | *"API uses REST, launched January 2025"* |
+
+Corrections always surface first. They're the "never do this" rules your AI should always follow.
+
+---
+
+## 🚀 Get Started
+
+### Step 1: Install
+
+You need [Node.js](https://nodejs.org) 18 or higher. Then:
 
 ```bash
 npx @aman_asmuei/amem
 ```
 
-## What it does
+That's it. amem runs as a local server on your machine.
 
-amem is an MCP server that gives any AI assistant persistent memory about:
+### Step 2: Connect your AI tool
 
-- **Corrections** — "Don't mock the database in integration tests" *(highest priority, always surfaced)*
-- **Decisions** — "Chose Postgres over MongoDB because of ACID requirements"
-- **Patterns** — "User prefers early returns over nested conditionals"
-- **Preferences** — "Uses pnpm, not npm"
-- **Topology** — "Auth module lives in src/auth/, uses JWT"
-- **Facts** — "Project started in January 2025"
-
-Memories are ranked by **relevance x recency x confidence x importance**. Corrections always surface first. Old memories decay. Contradictions are detected. Related memories evolve together.
-
-## Quick start
-
-### Claude Code
+<details>
+<summary><strong>Claude Code</strong></summary>
 
 Add to `~/.claude/settings.json`:
 
@@ -43,9 +89,14 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### Cursor
+Restart Claude Code. You'll see 7 memory tools available.
 
-Add to `.cursor/mcp.json`:
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `.cursor/mcp.json` in your project:
 
 ```json
 {
@@ -58,15 +109,127 @@ Add to `.cursor/mcp.json`:
 }
 ```
 
-### Any MCP client
+Restart Cursor.
 
-amem speaks standard MCP over stdio. Any client that supports MCP can connect.
+</details>
 
-## Tools
+<details>
+<summary><strong>Windsurf</strong></summary>
 
-### `memory_store`
+Add to your MCP configuration:
 
-Store a typed memory with tags and confidence scoring.
+```json
+{
+  "mcpServers": {
+    "amem": {
+      "command": "npx",
+      "args": ["-y", "@aman_asmuei/amem"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Any other MCP client</strong></summary>
+
+amem speaks standard [Model Context Protocol](https://modelcontextprotocol.io/) over stdio. Point your client to:
+
+```bash
+npx @aman_asmuei/amem
+```
+
+</details>
+
+### Step 3: Start talking
+
+That's it. Your AI now has memory tools. Ask it to remember something:
+
+> *"Remember that we use Tailwind with a custom theme in this project."*
+
+Next conversation, ask:
+
+> *"What CSS framework do we use?"*
+
+It knows.
+
+---
+
+## 🧠 How It Works
+
+```
+┌──────────────────────────────────┐
+│          Your AI Tool            │
+│   Claude · Cursor · Windsurf     │
+└──────────┬───────────────────────┘
+           │
+     MCP Protocol (local)
+           │
+┌──────────▼───────────────────────┐
+│         amem server              │
+│                                  │
+│   Store → Score → Deduplicate    │
+│   Recall → Rank → Surface       │
+│                                  │
+│   ┌────────────────────────────┐ │
+│   │  SQLite + Local Embeddings │ │
+│   │  ~/.amem/memory.db         │ │
+│   └────────────────────────────┘ │
+└──────────────────────────────────┘
+```
+
+**Everything stays on your machine.** No cloud. No API keys. No data leaving your laptop.
+
+### Smart ranking
+
+Every memory gets a score:
+
+```
+score = relevance × recency × confidence × importance
+```
+
+- **Relevance** — How closely the memory matches what you're working on (semantic similarity)
+- **Recency** — Recent memories score higher; old ones gradually fade
+- **Confidence** — Memories confirmed multiple times score higher
+- **Importance** — Corrections (1.0) > Decisions (0.85) > Patterns (0.7) > Facts (0.4)
+
+### Conflict detection
+
+Store a memory that contradicts an existing one? amem catches it:
+
+- **>85% similar but different** → Flags the conflict, updates the existing memory
+- **>80% similar and agreeing** → Reinforces the existing memory (+confidence)
+- **No match** → Stores as new
+
+### Memory evolution
+
+When you store a new memory, related existing memories get reinforced automatically. Your knowledge base stays connected and current.
+
+---
+
+## 🔧 Tools
+
+amem gives your AI **7 tools** it can use during conversation:
+
+### Core tools
+
+| Tool | What it does |
+|------|-------------|
+| `memory_store` | Save a single memory with type, tags, and confidence |
+| `memory_recall` | Search memories by meaning (not just keywords) |
+| `memory_context` | Load everything relevant to a topic, organized by type |
+| `memory_extract` | Batch-save multiple memories at once from a conversation |
+| `memory_forget` | Delete outdated or incorrect memories |
+
+### Utility tools
+
+| Tool | What it does |
+|------|-------------|
+| `memory_stats` | See how many memories you have, broken down by type |
+| `memory_export` | Export all memories as readable markdown |
+
+### Example: Storing a memory
 
 ```
 memory_store({
@@ -77,18 +240,12 @@ memory_store({
 })
 ```
 
-### `memory_recall`
-
-Semantic search across all memories. Returns results ranked by composite score.
+### Example: Recalling memories
 
 ```
-memory_recall({
-  query: "TypeScript best practices",
-  limit: 5
-})
+memory_recall({ query: "TypeScript best practices", limit: 5 })
 ```
 
-Returns:
 ```
 1. [correction] Never use 'any' type — always define proper interfaces
    Score: 0.892 | Confidence: 100% | Age: 2d ago
@@ -97,18 +254,12 @@ Returns:
    Score: 0.756 | Confidence: 85% | Age: 5d ago
 ```
 
-### `memory_context`
-
-Load full context for a topic. Groups by type with corrections first.
+### Example: Loading context for a task
 
 ```
-memory_context({
-  topic: "authentication system",
-  max_tokens: 2000
-})
+memory_context({ topic: "authentication system" })
 ```
 
-Returns:
 ```markdown
 ## Context for: authentication system
 
@@ -122,142 +273,142 @@ Returns:
 - Auth module is in src/auth/, middleware in src/middleware/auth.ts (85% confidence)
 ```
 
-### `memory_extract`
+### Example: Batch extraction
 
-Batch-extract memories from a conversation. The AI calls this proactively.
+Your AI can extract multiple memories from a single conversation:
 
 ```
 memory_extract({
   memories: [
-    { content: "Don't mock the DB in integration tests", type: "correction", confidence: 1.0, tags: ["testing"] },
-    { content: "Chose event sourcing for audit trail", type: "decision", confidence: 0.9, tags: ["architecture"] }
+    { content: "Don't mock the DB in integration tests", type: "correction", confidence: 1.0 },
+    { content: "Chose event sourcing for audit trail", type: "decision", confidence: 0.9 }
   ]
 })
 ```
 
-Automatically deduplicates — if a memory is >85% similar to an existing one, it reinforces the existing memory instead of creating a duplicate.
+---
 
-### `memory_forget`
+## 💻 CLI
 
-Delete specific memories or search-and-delete with confirmation.
-
-```
-memory_forget({ id: "abc12345" })
-memory_forget({ query: "old project", confirm: true })
-```
-
-### `memory_stats`
-
-Show memory statistics: total count, breakdown by type, confidence distribution.
-
-### `memory_export`
-
-Export all memories as formatted markdown, grouped by type.
-
-## MCP Prompts
-
-amem includes two prompts that teach AI clients how to use it effectively:
-
-- **`extraction-guide`** — When and what to extract from conversations
-- **`session-start`** — How to load relevant context at conversation start
-
-## MCP Resources
-
-Proactive context that clients can read automatically:
-
-| Resource | Description |
-|----------|-------------|
-| `amem://corrections` | All active corrections — hard constraints |
-| `amem://decisions` | Architectural decisions and rationale |
-| `amem://profile` | Developer preferences and patterns |
-| `amem://summary` | Quick overview of all stored memories |
-
-## CLI
+amem also includes a command-line interface for managing memories directly:
 
 ```bash
-amem-cli recall "authentication"    # Search memories
-amem-cli stats                      # Show statistics
-amem-cli list --type correction     # List by type
-amem-cli export --file memories.md  # Export to markdown
-amem-cli forget abc12345            # Delete a memory
+amem-cli recall "authentication"      # Search memories
+amem-cli stats                        # Show statistics
+amem-cli list                         # List all memories
+amem-cli list --type correction       # List by type
+amem-cli export --file memories.md    # Export to markdown
+amem-cli forget abc12345              # Delete by ID
 ```
 
-## How it works
+---
 
-```
-┌─────────────────────────────────┐
-│         AI Client               │
-│  Claude Code · Cursor · Any MCP │
-└──────────┬──────────────────────┘
-           │ MCP Protocol (stdio)
-┌──────────▼──────────────────────┐
-│         amem server             │
-│                                 │
-│  ┌───────────┐  ┌────────────┐  │
-│  │  Scoring   │  │  Conflict  │  │
-│  │  Engine    │  │  Detection │  │
-│  └─────┬─────┘  └─────┬──────┘  │
-│        │              │         │
-│  ┌─────▼──────────────▼──────┐  │
-│  │    SQLite + Embeddings    │  │
-│  │    ~/.amem/memory.db      │  │
-│  └───────────────────────────┘  │
-└─────────────────────────────────┘
-```
+## 📡 MCP Resources
 
-### Scoring formula
+amem exposes **4 resources** that AI clients can read proactively:
 
-```
-score = relevance x recency x confidence x importance
-```
+| Resource | What it provides |
+|----------|-----------------|
+| `amem://corrections` | All active corrections — hard rules the AI should always follow |
+| `amem://decisions` | Past architectural decisions and their rationale |
+| `amem://profile` | Your preferences and coding patterns |
+| `amem://summary` | Quick overview of everything stored |
 
-| Factor | How it works |
-|--------|-------------|
-| **Relevance** | Cosine similarity between query and memory embeddings (0-1) |
-| **Recency** | Exponential decay: `0.995^hours_since_last_access` |
-| **Confidence** | How many times confirmed (0-1, corrections from user = 1.0) |
-| **Importance** | Memory type weight: correction(1.0) > decision(0.85) > pattern(0.7) > preference(0.7) > topology(0.5) > fact(0.4) |
+---
 
-### Conflict detection
+## ⚙️ Configuration
 
-When storing a new memory, amem checks for conflicts:
-- **>85% similarity** with different content — conflict detected, existing memory updated
-- **>80% similarity** with same intent — existing memory reinforced (confidence +0.1)
-- **No match** — new memory stored
+amem works out of the box with zero configuration. For advanced use:
 
-### Memory evolution
-
-When a new memory is stored, related existing memories (0.6-0.8 similarity) are reinforced — their access timestamps update, keeping them active and relevant.
-
-### Local-first
-
-- All data stays on your machine at `~/.amem/memory.db`
-- Embeddings generated locally via `all-MiniLM-L6-v2` (~80MB model, runs on CPU)
-- No cloud, no API keys, no data leaving your laptop
-- Works offline after first model download
-
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AMEM_DIR` | `~/.amem` | Directory for amem data |
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `AMEM_DIR` | `~/.amem` | Where amem stores data |
 | `AMEM_DB` | `~/.amem/memory.db` | Database file path |
 
-## Roadmap
+---
 
-- [x] 7 MCP tools (store, recall, context, forget, extract, stats, export)
-- [x] 2 MCP prompts (extraction guide, session start)
-- [x] 4 MCP resources (corrections, decisions, profile, summary)
-- [x] CLI with 5 commands
-- [x] Local embeddings via HuggingFace transformers
+## ❓ FAQ
+
+<details>
+<summary><strong>Is my data sent to the cloud?</strong></summary>
+
+No. Everything stays on your machine. amem uses a local SQLite database at `~/.amem/memory.db` and generates embeddings locally using an 80MB model that runs on your CPU. No internet connection required after the first model download.
+
+</details>
+
+<details>
+<summary><strong>Does it work offline?</strong></summary>
+
+Yes. After the first run (which downloads the embedding model), amem works completely offline.
+
+</details>
+
+<details>
+<summary><strong>What AI tools does it work with?</strong></summary>
+
+Any tool that supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) — including Claude Code, Cursor, Windsurf, and many others. The list is growing rapidly.
+
+</details>
+
+<details>
+<summary><strong>How much memory/disk does it use?</strong></summary>
+
+The embedding model is ~80MB (downloaded once). The SQLite database grows with your memories — typically a few MB even after months of use. CPU usage is minimal.
+
+</details>
+
+<details>
+<summary><strong>Can I see what's stored?</strong></summary>
+
+Yes! Use `amem-cli list` to see all memories, `amem-cli stats` for an overview, or `amem-cli export --file backup.md` to export everything as readable markdown.
+
+</details>
+
+<details>
+<summary><strong>Can I delete specific memories?</strong></summary>
+
+Yes. Use `amem-cli forget <id>` or ask your AI to call `memory_forget`. You can also search-and-delete: `memory_forget({ query: "old project", confirm: true })`.
+
+</details>
+
+<details>
+<summary><strong>Does it slow down my AI?</strong></summary>
+
+No. Memory operations typically take under 50ms. Embedding generation for new memories takes ~200ms. The server runs as a lightweight background process.
+
+</details>
+
+<details>
+<summary><strong>Can I use it across multiple projects?</strong></summary>
+
+Yes. amem stores memories globally at `~/.amem/memory.db` by default. All your AI conversations across all projects share the same memory. You can also set `AMEM_DB` per-project for isolated memories.
+
+</details>
+
+---
+
+## 🗺️ Roadmap
+
+- [x] 7 MCP tools for storing, recalling, and managing memories
+- [x] Semantic search with local embeddings
+- [x] Smart conflict detection and deduplication
 - [x] Memory evolution (related memories reinforce each other)
-- [x] Conflict detection and deduplication
+- [x] CLI for direct memory management
+- [x] MCP prompts and resources for proactive context
 - [x] Published on npm
-- [ ] Memory verification (check code-related memories against filesystem)
-- [ ] Knowledge graph (entity + relation tables)
-- [ ] Team memory (shared project context via git-synced SQLite)
+- [ ] Memory verification against filesystem
+- [ ] Knowledge graph with entity relationships
+- [ ] Team memory (shared context across developers)
 - [ ] Proactive mid-conversation context injection
 
-## License
+---
 
-MIT
+<div align="center">
+
+**Built by [Aman Asmuei](https://github.com/amanasmuei)**
+
+[Report Bug](https://github.com/amanasmuei/amem/issues) · [Request Feature](https://github.com/amanasmuei/amem/issues) · [npm](https://www.npmjs.com/package/@aman_asmuei/amem)
+
+MIT License
+
+</div>
