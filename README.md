@@ -74,15 +74,22 @@ That's it. amem is now installed on your machine.
 ### Step 2: Connect your AI tool
 
 <details>
-<summary><strong>Claude Code</strong></summary>
+<summary><strong>Claude Code (CLI)</strong></summary>
 
-Add to `~/.claude/settings.json`:
+**One-liner:**
+
+```bash
+claude mcp add amem -- npx -y @aman_asmuei/amem
+```
+
+**Or manually** add to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "amem": {
-      "command": "amem"
+      "command": "npx",
+      "args": ["-y", "@aman_asmuei/amem"]
     }
   }
 }
