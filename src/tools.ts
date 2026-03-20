@@ -217,6 +217,11 @@ Returns:
         if (results.length === 0) {
           return {
             content: [{ type: "text" as const, text: `No memories found for: "${query}". Try broadening your search or using different keywords.` }],
+            structuredContent: {
+              query,
+              total: 0,
+              memories: [],
+            },
           };
         }
 
@@ -298,6 +303,11 @@ Returns:
         if (results.length === 0) {
           return {
             content: [{ type: "text" as const, text: `No context found for: "${topic}". Store some memories first using memory_store or memory_extract.` }],
+            structuredContent: {
+              topic,
+              groups: [],
+              memoriesUsed: 0,
+            },
           };
         }
 
@@ -422,6 +432,12 @@ Error Handling:
           if (matches.length === 0) {
             return {
               content: [{ type: "text" as const, text: `No memories found matching "${query}".` }],
+              structuredContent: {
+                action: "preview" as const,
+                query,
+                total: 0,
+                previewed: [],
+              },
             };
           }
 
@@ -632,6 +648,12 @@ Returns:
         if (stats.total === 0) {
           return {
             content: [{ type: "text" as const, text: "No memories stored yet. Use memory_store or memory_extract to create memories." }],
+            structuredContent: {
+              total: 0,
+              byType: {},
+              confidence: { high: 0, medium: 0, low: 0 },
+              embeddingCoverage: { withEmbeddings: 0, total: 0 },
+            },
           };
         }
 
@@ -706,6 +728,12 @@ Returns:
         if (all.length === 0) {
           return {
             content: [{ type: "text" as const, text: "No memories to export. Use memory_store or memory_extract to create memories." }],
+            structuredContent: {
+              exportedAt: new Date().toISOString(),
+              total: 0,
+              markdown: "",
+              truncated: false,
+            },
           };
         }
 
