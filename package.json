@@ -1,6 +1,6 @@
 {
   "name": "@aman_asmuei/amem",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "bin": {
@@ -31,9 +31,9 @@
   "author": "Aman Asmuei",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amanasmuei/aman-ai-memory.git"
+    "url": "git+https://github.com/amanasmuei/amem.git"
   },
-  "homepage": "https://github.com/amanasmuei/aman-ai-memory#readme",
+  "homepage": "https://github.com/amanasmuei/amem#readme",
   "engines": {
     "node": ">=18.0.0"
   },
