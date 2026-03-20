@@ -144,3 +144,124 @@ export function recallMemories(
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit);
 }
+
+export interface ConsolidationOptions {
+  maxStaleDays: number;
+  minConfidence: number;
+  minAccessCount: number;
+  dryRun: boolean;
+}
+
+export interface ConsolidationAction {
+  action: "merged" | "pruned" | "promoted";
+  memoryIds: string[];
+  description: string;
+}
+
+export interface ConsolidationReport {
+  merged: number;
+  pruned: number;
+  promoted: number;
+  actions: ConsolidationAction[];
+  healthScore: number;
+  before: { total: number };
+  after: { total: number };
+}
+
+export function consolidateMemories(
+  db: AmemDatabase,
+  cosineSim: (a: Float32Array, b: Float32Array) => number,
+  options: ConsolidationOptions,
+): ConsolidationReport {
+  const now = Date.now();
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const allMemories = db.getAllWithEmbeddings();
+  const all = db.getAll();
+  const beforeTotal = all.length;
+
+  const actions: ConsolidationAction[] = [];
+  const toDelete = new Set<string>();
+  let promoted = 0;
+
+  // 1. MERGE: find near-duplicate pairs (>0.85 similarity)
+  for (let i = 0; i < allMemories.length; i++) {
+    if (toDelete.has(allMemories[i].id)) continue;
+    if (!allMemories[i].embedding) continue;
+
+    for (let j = i + 1; j < allMemories.length; j++) {
+      if (toDelete.has(allMemories[j].id)) continue;
+      if (!allMemories[j].embedding) continue;
+
+      const sim = cosineSim(allMemories[i].embedding!, allMemories[j].embedding!);
+      if (sim > 0.85) {
+        const [keep, discard] = allMemories[i].confidence >= allMemories[j].confidence
+          ? [allMemories[i], allMemories[j]]
+          : [allMemories[j], allMemories[i]];
+
+        if (!options.dryRun) {
+          db.updateConfidence(keep.id, Math.min(1.0, keep.confidence + 0.1));
+          db.deleteMemory(discard.id);
+        }
+        toDelete.add(discard.id);
+        actions.push({
+          action: "merged",
+          memoryIds: [keep.id, discard.id],
+          description: `Merged "${discard.content}" into "${keep.content}" (${(sim * 100).toFixed(0)}% similar)`,
+        });
+      }
+    }
+  }
+
+  // 2. PRUNE: stale, low-confidence, rarely-accessed (NEVER corrections)
+  for (const mem of all) {
+    if (toDelete.has(mem.id)) continue;
+    if (mem.type === "correction") continue;
+
+    const daysSinceAccess = (now - mem.lastAccessed) / msPerDay;
+    if (
+      daysSinceAccess > options.maxStaleDays &&
+      mem.confidence < options.minConfidence &&
+      mem.accessCount < options.minAccessCount
+    ) {
+      if (!options.dryRun) {
+        db.deleteMemory(mem.id);
+      }
+      toDelete.add(mem.id);
+      actions.push({
+        action: "pruned",
+        memoryIds: [mem.id],
+        description: `Pruned "${mem.content}" (${daysSinceAccess.toFixed(0)}d stale, ${(mem.confidence * 100).toFixed(0)}% confidence, ${mem.accessCount} accesses)`,
+      });
+    }
+  }
+
+  // 3. PROMOTE: frequently-accessed memories with low confidence
+  for (const mem of all) {
+    if (toDelete.has(mem.id)) continue;
+    if (mem.accessCount >= 5 && mem.confidence < 0.8) {
+      if (!options.dryRun) {
+        db.updateConfidence(mem.id, 0.9);
+      }
+      promoted++;
+      actions.push({
+        action: "promoted",
+        memoryIds: [mem.id],
+        description: `Promoted "${mem.content}" to 90% confidence (accessed ${mem.accessCount} times)`,
+      });
+    }
+  }
+
+  const afterTotal = beforeTotal - toDelete.size;
+  const signalCount = all.filter(m => !toDelete.has(m.id) && (m.confidence >= 0.8 || m.type === "correction")).length;
+  const healthScore = afterTotal === 0 ? 100 : Math.round((signalCount / afterTotal) * 100);
+
+  return {
+    merged: actions.filter(a => a.action === "merged").length,
+    pruned: actions.filter(a => a.action === "pruned").length,
+    promoted,
+    actions,
+    healthScore,
+    before: { total: beforeTotal },
+    after: { total: afterTotal },
+  };
+}

@@ -113,3 +113,17 @@ export const InjectResultSchema = z.object({
   context: z.string(),
   memoriesUsed: z.number(),
 });
+
+export const ConsolidateResultSchema = z.object({
+  merged: z.number(),
+  pruned: z.number(),
+  promoted: z.number(),
+  healthScore: z.number(),
+  before: z.object({ total: z.number() }),
+  after: z.object({ total: z.number() }),
+  actions: z.array(z.object({
+    action: z.enum(["merged", "pruned", "promoted"]),
+    memoryIds: z.array(z.string()),
+    description: z.string(),
+  })),
+});

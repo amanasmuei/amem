@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "./database.js";
-import { MemoryType, type MemoryTypeValue, recallMemories, detectConflict } from "./memory.js";
+import { MemoryType, type MemoryTypeValue, recallMemories, detectConflict, consolidateMemories } from "./memory.js";
 import { generateEmbedding, cosineSimilarity } from "./embeddings.js";
 import {
   StoreResultSchema,
@@ -12,6 +12,7 @@ import {
   StatsResultSchema,
   ExportResultSchema,
   InjectResultSchema,
+  ConsolidateResultSchema,
 } from "./schemas.js";
 
 const MEMORY_TYPES = Object.values(MemoryType);
@@ -846,6 +847,93 @@ Returns:
           content: [{
             type: "text" as const,
             text: `Error injecting context: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_consolidate ──────────────────────────────────
+  server.registerTool(
+    "memory_consolidate",
+    {
+      title: "Consolidate Memories",
+      description: `Analyze and optimize the memory database. Merges near-duplicates, prunes stale low-value memories, and promotes frequently-accessed ones. This keeps your memory system lean and high-signal over months of use.
+
+NEVER auto-prunes corrections (they are always preserved).
+
+Args:
+  - confirm (boolean): false = preview what would change (default), true = execute changes
+  - max_stale_days (number): Days of inactivity before a memory is considered stale (default: 60)
+  - min_confidence (number): Minimum confidence for stale memories to survive (default: 0.3)
+
+Returns:
+  Report with merged/pruned/promoted counts, health score, and detailed action list.`,
+      inputSchema: z.object({
+        confirm: z.boolean().default(false).describe("false = preview (safe), true = execute consolidation"),
+        max_stale_days: z.number().int().min(1).default(60).describe("Days of inactivity before considering a memory stale"),
+        min_confidence: z.number().min(0).max(1).default(0.3).describe("Confidence threshold for stale memory pruning"),
+      }).strict(),
+      outputSchema: ConsolidateResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ confirm, max_stale_days, min_confidence }) => {
+      try {
+        const report = consolidateMemories(db, cosineSimilarity, {
+          dryRun: !confirm,
+          maxStaleDays: max_stale_days,
+          minConfidence: min_confidence,
+          minAccessCount: 2,
+        });
+
+        const mode = confirm ? "EXECUTED" : "PREVIEW (dry run)";
+        const lines = [
+          `Memory Consolidation — ${mode}`,
+          "",
+          `Health Score: ${report.healthScore}/100`,
+          `Before: ${report.before.total} memories`,
+          `After: ${report.after.total} memories`,
+          "",
+          `Merged: ${report.merged} near-duplicates`,
+          `Pruned: ${report.pruned} stale memories`,
+          `Promoted: ${report.promoted} frequently-used memories`,
+        ];
+
+        if (report.actions.length > 0) {
+          lines.push("", "Details:");
+          for (const a of report.actions) {
+            const prefix = a.action === "merged" ? "~" : a.action === "pruned" ? "-" : "+";
+            lines.push(`  ${prefix} ${a.description}`);
+          }
+        }
+
+        if (!confirm && (report.merged > 0 || report.pruned > 0)) {
+          lines.push("", "Call again with confirm=true to execute these changes.");
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          structuredContent: {
+            merged: report.merged,
+            pruned: report.pruned,
+            promoted: report.promoted,
+            healthScore: report.healthScore,
+            before: report.before,
+            after: report.after,
+            actions: report.actions,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error consolidating memories: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }
