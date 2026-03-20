@@ -31,7 +31,12 @@ export function formatAge(timestamp: number): string {
   return `${months}mo ago`;
 }
 
-export function registerTools(server: McpServer, db: AmemDatabase): void {
+export function registerTools(server: McpServer, db: AmemDatabase, project: string): void {
+
+  const GLOBAL_TYPES: MemoryTypeValue[] = ["correction", "preference", "pattern"];
+  function autoScope(type: MemoryTypeValue): string {
+    return GLOBAL_TYPES.includes(type) ? "global" : project;
+  }
 
   // ── memory_store ──────────────────────────────────────────
   server.registerTool(
@@ -55,6 +60,7 @@ Returns:
         tags: z.array(z.string()).default([]).describe("Tags for filtering (e.g., ['typescript', 'auth', 'testing'])"),
         confidence: z.number().min(0).max(1).default(0.8).describe("How confident is this memory (0-1). Corrections from user = 1.0"),
         source: z.string().default("conversation").describe("Where this memory came from"),
+        scope: z.string().optional().describe("Memory scope — 'global' or 'project:<name>'. Auto-detected from type if omitted."),
       }).strict(),
       outputSchema: StoreResultSchema,
       annotations: {
@@ -64,7 +70,7 @@ Returns:
         openWorldHint: false,
       },
     },
-    async ({ content, type, tags, confidence, source }) => {
+    async ({ content, type, tags, confidence, source, scope }) => {
       try {
         const embedding = await generateEmbedding(content);
 
@@ -96,7 +102,7 @@ Returns:
             }
           }
 
-          const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: "global" });
+          const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
 
           // Reinforce related memories (0.6-0.8 range) using already-loaded embeddings
           let evolved = 0;
@@ -129,7 +135,7 @@ Returns:
         }
 
         // No embeddings available — store directly
-        const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: "global" });
+        const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
         const stats = db.getStats();
         return {
           content: [{
@@ -200,6 +206,7 @@ Returns:
           type: type as MemoryTypeValue | undefined,
           tag,
           minConfidence: min_confidence,
+          scope: project,
         });
 
         for (const r of results) {
@@ -284,6 +291,7 @@ Returns:
           query: topic,
           queryEmbedding,
           limit: 50,
+          scope: project,
         });
 
         if (results.length === 0) {
@@ -408,7 +416,7 @@ Error Handling:
 
         if (query) {
           const queryEmbedding = await generateEmbedding(query);
-          const matches = recallMemories(db, { query, queryEmbedding, limit: 20, minConfidence: 0 });
+          const matches = recallMemories(db, { query, queryEmbedding, limit: 20, minConfidence: 0, scope: project });
 
           if (matches.length === 0) {
             return {
@@ -553,7 +561,7 @@ Returns:
               confidence: input.confidence,
               source,
               embedding,
-              scope: "global",
+              scope: autoScope(input.type as MemoryTypeValue),
             });
             stored++;
             details.push(`  + Stored [${input.type}]: "${input.content}" (${id.slice(0, 8)})`);
@@ -785,6 +793,7 @@ Returns:
           query: topic,
           queryEmbedding,
           limit: 30,
+          scope: project,
         });
 
         const corrections = results

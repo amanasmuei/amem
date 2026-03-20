@@ -14,14 +14,29 @@ const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
+function detectProject(): string {
+  if (process.env.AMEM_PROJECT) return `project:${process.env.AMEM_PROJECT}`;
+  try {
+    let dir = process.cwd();
+    while (dir !== path.dirname(dir)) {
+      if (fs.existsSync(path.join(dir, ".git"))) {
+        return `project:${path.basename(dir)}`;
+      }
+      dir = path.dirname(dir);
+    }
+  } catch {}
+  return "global";
+}
+
 const db = createDatabase(DB_PATH);
+const currentProject = detectProject();
 
 const server = new McpServer({
   name: "amem-mcp-server",
   version: "0.2.0",
 });
 
-registerTools(server, db);
+registerTools(server, db, currentProject);
 
 // Register MCP prompts — these teach AI clients how to use Amem effectively
 server.registerPrompt(
@@ -190,4 +205,4 @@ process.on("SIGTERM", () => {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error("Amem running. DB: " + DB_PATH);
+console.error(`Amem running. DB: ${DB_PATH} | Project: ${currentProject}`);

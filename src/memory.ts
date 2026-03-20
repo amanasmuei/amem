@@ -75,6 +75,7 @@ export interface RecallOptions {
   type?: MemoryTypeValue;
   tag?: string;
   minConfidence?: number;
+  scope?: string;
 }
 
 export interface RecalledMemory extends Memory {
@@ -85,14 +86,22 @@ export function recallMemories(
   db: AmemDatabase,
   options: RecallOptions,
 ): RecalledMemory[] {
-  const { query, queryEmbedding, limit, type, tag, minConfidence } = options;
+  const { query, queryEmbedding, limit, type, tag, minConfidence, scope } = options;
   const now = Date.now();
 
   let candidates: Memory[];
   if (type) {
     candidates = db.searchByType(type);
+    if (scope) {
+      candidates = candidates.filter(m => m.scope === "global" || m.scope === scope);
+    }
   } else if (tag) {
     candidates = db.searchByTag(tag);
+    if (scope) {
+      candidates = candidates.filter(m => m.scope === "global" || m.scope === scope);
+    }
+  } else if (scope) {
+    candidates = db.getAllForProject(scope);
   } else {
     candidates = db.getAll();
   }
