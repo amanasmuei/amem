@@ -11,8 +11,9 @@ Your AI assistant forgets everything the moment a conversation ends.<br/>
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=flat-square&label=tests)](https://github.com/amanasmuei/amem/actions)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-compatible-8A2BE2?style=flat-square)](https://modelcontextprotocol.io)
 
-[Get Started](#-get-started) · [How It Works](#-how-it-works) · [Tools Reference](#-tools) · [CLI](#-cli) · [FAQ](#-faq)
+[Get Started](#-get-started) · [How It Works](#-how-it-works) · [Tools Reference](#-tools) · [Resources & Prompts](#-resources--prompts) · [CLI](#-cli) · [FAQ](#-faq)
 
 </div>
 
@@ -48,18 +49,18 @@ amem organizes memories into six types, ranked by importance:
 
 | Priority | Type | What it captures | Example |
 |:--------:|------|-----------------|---------|
-| 🔴 | **Correction** | Mistakes to never repeat | *"Don't mock the database in integration tests"* |
-| 🟠 | **Decision** | Architectural choices + why | *"Chose Postgres over MongoDB for ACID compliance"* |
-| 🟡 | **Pattern** | Coding style & habits | *"Prefers early returns over nested conditionals"* |
-| 🟢 | **Preference** | Tool & workflow choices | *"Uses pnpm, not npm"* |
-| 🔵 | **Topology** | Where things are | *"Auth module lives in src/auth/, uses JWT"* |
-| ⚪ | **Fact** | General project knowledge | *"API uses REST, launched January 2025"* |
+| 1.0 | **Correction** | Mistakes to never repeat | *"Don't mock the database in integration tests"* |
+| 0.85 | **Decision** | Architectural choices + why | *"Chose Postgres over MongoDB for ACID compliance"* |
+| 0.7 | **Pattern** | Coding style & habits | *"Prefers early returns over nested conditionals"* |
+| 0.7 | **Preference** | Tool & workflow choices | *"Uses pnpm, not npm"* |
+| 0.5 | **Topology** | Where things are | *"Auth module lives in src/auth/, uses JWT"* |
+| 0.4 | **Fact** | General project knowledge | *"API uses REST, launched January 2025"* |
 
 Corrections always surface first. They're the "never do this" rules your AI should always follow.
 
 ---
 
-## 🚀 Get Started
+## Get Started
 
 ### Step 1: Install
 
@@ -88,7 +89,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-Restart Claude Code. You'll see 7 memory tools available.
+Restart Claude Code. You'll see 7 memory tools, 4 resources, and 2 prompts available.
 
 </details>
 
@@ -153,7 +154,7 @@ It knows.
 
 ---
 
-## 🧠 How It Works
+## How It Works
 
 ```
 ┌──────────────────────────────────┐
@@ -161,10 +162,12 @@ It knows.
 │   Claude · Cursor · Windsurf     │
 └──────────┬───────────────────────┘
            │
-     MCP Protocol (local)
+     MCP Protocol (stdio)
            │
 ┌──────────▼───────────────────────┐
-│         amem server              │
+│       amem-mcp-server            │
+│                                  │
+│  7 Tools · 4 Resources · 2 Prompts
 │                                  │
 │   Store → Score → Deduplicate    │
 │   Recall → Rank → Surface       │
@@ -180,51 +183,56 @@ It knows.
 
 ### Smart ranking
 
-Every memory gets a score:
+Every memory gets a composite score:
 
 ```
 score = relevance × recency × confidence × importance
 ```
 
-- **Relevance** — How closely the memory matches what you're working on (semantic similarity)
-- **Recency** — Recent memories score higher; old ones gradually fade
-- **Confidence** — Memories confirmed multiple times score higher
-- **Importance** — Corrections (1.0) > Decisions (0.85) > Patterns (0.7) > Facts (0.4)
+- **Relevance** — How closely the memory matches what you're working on (cosine similarity via local embeddings, with keyword fallback)
+- **Recency** — Exponential decay (0.995^hours) — recent memories score higher, old ones gradually fade
+- **Confidence** — Memories confirmed multiple times score higher (0.0 to 1.0)
+- **Importance** — Type-based weight: Corrections (1.0) > Decisions (0.85) > Patterns (0.7) > Facts (0.4)
 
 ### Conflict detection
 
 Store a memory that contradicts an existing one? amem catches it:
 
-- **>85% similar but different** → Flags the conflict, updates the existing memory
-- **>80% similar and agreeing** → Reinforces the existing memory (+confidence)
-- **No match** → Stores as new
+- **>85% similar but different** — Flags the conflict, updates the existing memory's confidence
+- **>80% similar and agreeing** — Reinforces the existing memory (+0.1 confidence)
+- **60-80% related** — Touches related memories to keep them fresh
+- **No match** — Stores as new
 
 ### Memory evolution
 
-When you store a new memory, related existing memories get reinforced automatically. Your knowledge base stays connected and current.
+When you store a new memory, related existing memories (60-80% similarity) get reinforced automatically — their access timestamps update, keeping your knowledge base connected and current.
 
 ---
 
-## 🔧 Tools
+## Tools
 
-amem gives your AI **7 tools** it can use during conversation:
+amem gives your AI **7 tools** it can use during conversation. All tools include:
+
+- **Strict input validation** with Zod schemas (invalid inputs are rejected with clear error messages)
+- **Tool annotations** (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so clients understand tool behavior
+- **Structured error handling** — errors return `isError: true` with actionable suggestions
 
 ### Core tools
 
-| Tool | What it does |
-|------|-------------|
-| `memory_store` | Save a single memory with type, tags, and confidence |
-| `memory_recall` | Search memories by meaning (not just keywords) |
-| `memory_context` | Load everything relevant to a topic, organized by type |
-| `memory_extract` | Batch-save multiple memories at once from a conversation |
-| `memory_forget` | Delete outdated or incorrect memories |
+| Tool | What it does | Annotations |
+|------|-------------|-------------|
+| `memory_store` | Save a single memory with type, tags, and confidence | write, non-destructive |
+| `memory_recall` | Search memories by meaning (semantic + keyword fallback) | read-only, idempotent |
+| `memory_context` | Load all relevant context for a topic, organized by type | read-only, idempotent |
+| `memory_extract` | Batch-save multiple memories from a conversation | write, non-destructive |
+| `memory_forget` | Delete outdated or incorrect memories (with confirmation) | write, destructive |
 
 ### Utility tools
 
-| Tool | What it does |
-|------|-------------|
-| `memory_stats` | See how many memories you have, broken down by type |
-| `memory_export` | Export all memories as readable markdown |
+| Tool | What it does | Annotations |
+|------|-------------|-------------|
+| `memory_stats` | Memory count, type breakdown, confidence distribution, embedding coverage | read-only, idempotent |
+| `memory_export` | Export all memories as markdown (truncates at 50K chars) | read-only, idempotent |
 
 ### Example: Storing a memory
 
@@ -237,6 +245,8 @@ memory_store({
 })
 ```
 
+> Stored correction memory (a1b2c3d4). Confidence: 1. Tags: [typescript, types]. Total memories: 42.
+
 ### Example: Recalling memories
 
 ```
@@ -244,17 +254,19 @@ memory_recall({ query: "TypeScript best practices", limit: 5 })
 ```
 
 ```
+Found 2 memories for "TypeScript best practices":
+
 1. [correction] Never use 'any' type — always define proper interfaces
-   Score: 0.892 | Confidence: 100% | Age: 2d ago
+   Score: 0.892 | Confidence: 100% | Age: 2d ago | Tags: [typescript, types]
 
 2. [pattern] User prefers strict TypeScript with no implicit any
-   Score: 0.756 | Confidence: 85% | Age: 5d ago
+   Score: 0.756 | Confidence: 85% | Age: 5d ago | Tags: [typescript]
 ```
 
 ### Example: Loading context for a task
 
 ```
-memory_context({ topic: "authentication system" })
+memory_context({ topic: "authentication system", max_tokens: 2000 })
 ```
 
 ```markdown
@@ -277,43 +289,79 @@ Your AI can extract multiple memories from a single conversation:
 ```
 memory_extract({
   memories: [
-    { content: "Don't mock the DB in integration tests", type: "correction", confidence: 1.0 },
-    { content: "Chose event sourcing for audit trail", type: "decision", confidence: 0.9 }
+    { content: "Don't mock the DB in integration tests", type: "correction", tags: ["testing"], confidence: 1.0 },
+    { content: "Chose event sourcing for audit trail", type: "decision", tags: ["architecture"], confidence: 0.9 }
   ]
 })
 ```
 
----
+```
+Extraction complete: 2 stored, 0 reinforced.
+Total memories: 44.
 
-## 💻 CLI
+  + Stored [correction]: "Don't mock the DB in integration tests" (a1b2c3d4)
+  + Stored [decision]: "Chose event sourcing for audit trail" (e5f6g7h8)
+```
 
-amem also includes a command-line interface for managing memories directly:
+### Example: Forgetting memories
 
-```bash
-amem-cli recall "authentication"      # Search memories
-amem-cli stats                        # Show statistics
-amem-cli list                         # List all memories
-amem-cli list --type correction       # List by type
-amem-cli export --file memories.md    # Export to markdown
-amem-cli forget abc12345              # Delete by ID
+Delete by ID or by query (with a safety confirmation step):
+
+```
+memory_forget({ query: "old project", confirm: false })
+```
+
+```
+Found 3 memories matching "old project". Preview:
+1. [a1b2c3d4] Old project used Express.js
+2. [e5f6g7h8] Old project had no tests
+
+Call again with confirm=true to delete these.
 ```
 
 ---
 
-## 📡 MCP Resources
+## Resources & Prompts
 
-amem exposes **4 resources** that AI clients can read proactively:
+### MCP Resources
 
-| Resource | What it provides |
-|----------|-----------------|
+amem exposes **4 resources** that AI clients can read proactively at the start of a conversation:
+
+| Resource URI | What it provides |
+|-------------|-----------------|
 | `amem://corrections` | All active corrections — hard rules the AI should always follow |
 | `amem://decisions` | Past architectural decisions and their rationale |
 | `amem://profile` | Your preferences and coding patterns |
-| `amem://summary` | Quick overview of everything stored |
+| `amem://summary` | Quick overview: memory count and breakdown by type |
+
+### MCP Prompts
+
+amem provides **2 prompts** that teach AI clients how to use the memory system effectively:
+
+| Prompt | Purpose |
+|--------|---------|
+| `extraction-guide` | Guidelines for *what* to extract from conversations — when to save corrections vs. decisions vs. facts, how often, and what to avoid |
+| `session-start` | How to load relevant context at the beginning of a conversation — load topic context, apply corrections as hard constraints, reference memories naturally |
 
 ---
 
-## ⚙️ Configuration
+## CLI
+
+amem includes a standalone command-line interface for managing memories directly:
+
+```bash
+amem-cli recall "authentication"      # Search memories semantically
+amem-cli stats                        # Show statistics with visual bars
+amem-cli list                         # List all memories
+amem-cli list --type correction       # Filter by type
+amem-cli export                       # Export to stdout as markdown
+amem-cli export --file memories.md    # Export to file
+amem-cli forget abc12345              # Delete by ID (short IDs supported)
+```
+
+---
+
+## Configuration
 
 amem works out of the box with zero configuration. For advanced use:
 
@@ -322,9 +370,58 @@ amem works out of the box with zero configuration. For advanced use:
 | `AMEM_DIR` | `~/.amem` | Where amem stores data |
 | `AMEM_DB` | `~/.amem/memory.db` | Database file path |
 
+Set `AMEM_DB` per-project for isolated memories:
+
+```bash
+AMEM_DB=./project-memories.db amem
+```
+
 ---
 
-## ❓ FAQ
+## Technical Details
+
+### Stack
+
+| Layer | Technology |
+|-------|------------|
+| Protocol | [MCP](https://modelcontextprotocol.io/) SDK ^1.25 (modern `registerTool`/`registerResource`/`registerPrompt` APIs) |
+| Language | TypeScript 5.6+ (strict mode, ES2022, zero `any` types) |
+| Database | SQLite via better-sqlite3 (WAL mode, prepared statements, indexed) |
+| Embeddings | HuggingFace Transformers — Xenova/all-MiniLM-L6-v2 (384-dim, local, optional) |
+| Validation | Zod 3.25+ (`.strict()` on all schemas, `.min()` constraints, descriptive errors) |
+| Testing | Vitest — 33 tests across 4 suites |
+| CI/CD | GitHub Actions — Node 18/20/22 |
+
+### MCP Best Practices
+
+amem follows the [MCP best practices](https://modelcontextprotocol.io/) checklist:
+
+- All 7 tools use `server.registerTool()` with `title`, `description`, `inputSchema`, and `annotations`
+- All tool handlers wrapped in `try-catch` with `isError: true` on failures
+- All Zod schemas use `.strict()` to reject unknown fields
+- All error messages are actionable (suggest next steps)
+- Server name follows convention: `amem-mcp-server`
+- Transport: stdio (correct for local-first tool)
+- Logging to stderr (not stdout)
+- Graceful shutdown on SIGINT/SIGTERM
+
+### Architecture
+
+```
+src/
+├── index.ts        Entry point — server, prompts, resources, transport
+├── tools.ts        7 MCP tools with annotations, validation, error handling
+├── memory.ts       Scoring engine, conflict detection, recall algorithm
+├── database.ts     SQLite schema, prepared statements, CRUD interface
+├── embeddings.ts   Local embedding pipeline + cosine similarity
+└── cli.ts          Standalone CLI for direct memory management
+```
+
+**~1,300 lines of TypeScript.** Clean separation of concerns, no circular dependencies.
+
+---
+
+## FAQ
 
 <details>
 <summary><strong>Is my data sent to the cloud?</strong></summary>
@@ -336,7 +433,7 @@ No. Everything stays on your machine. amem uses a local SQLite database at `~/.a
 <details>
 <summary><strong>Does it work offline?</strong></summary>
 
-Yes. After the first run (which downloads the embedding model), amem works completely offline.
+Yes. After the first run (which downloads the embedding model), amem works completely offline. If the model isn't available, amem falls back to keyword matching — it never crashes.
 
 </details>
 
@@ -350,53 +447,69 @@ Any tool that supports the [Model Context Protocol (MCP)](https://modelcontextpr
 <details>
 <summary><strong>How much memory/disk does it use?</strong></summary>
 
-The embedding model is ~80MB (downloaded once). The SQLite database grows with your memories — typically a few MB even after months of use. CPU usage is minimal.
+The embedding model is ~80MB (downloaded once, cached locally). The SQLite database grows with your memories — typically a few MB even after months of use. CPU usage is minimal; the server idles at near-zero when not processing requests.
 
 </details>
 
 <details>
 <summary><strong>Can I see what's stored?</strong></summary>
 
-Yes! Use `amem-cli list` to see all memories, `amem-cli stats` for an overview, or `amem-cli export --file backup.md` to export everything as readable markdown.
+Yes! Use `amem-cli list` to see all memories, `amem-cli stats` for a visual overview, or `amem-cli export --file backup.md` to export everything as readable markdown. You can also ask your AI to call `memory_stats` or `memory_export`.
 
 </details>
 
 <details>
 <summary><strong>Can I delete specific memories?</strong></summary>
 
-Yes. Use `amem-cli forget <id>` or ask your AI to call `memory_forget`. You can also search-and-delete: `memory_forget({ query: "old project", confirm: true })`.
+Yes. Use `amem-cli forget <id>` (short IDs work — just the first 8 characters) or ask your AI to call `memory_forget`. Query-based deletion requires a confirmation step to prevent accidents: `memory_forget({ query: "old project", confirm: true })`.
 
 </details>
 
 <details>
 <summary><strong>Does it slow down my AI?</strong></summary>
 
-No. Memory operations typically take under 50ms. Embedding generation for new memories takes ~200ms. The server runs as a lightweight background process.
+No. Memory operations typically take under 50ms. Embedding generation for new memories takes ~200ms. The server runs as a lightweight background process over stdio.
 
 </details>
 
 <details>
 <summary><strong>Can I use it across multiple projects?</strong></summary>
 
-Yes. amem stores memories globally at `~/.amem/memory.db` by default. All your AI conversations across all projects share the same memory. You can also set `AMEM_DB` per-project for isolated memories.
+Yes. By default, amem stores memories globally at `~/.amem/memory.db` — all your AI conversations across all projects share the same memory. Set `AMEM_DB` per-project for isolated memories.
+
+</details>
+
+<details>
+<summary><strong>What happens if the embedding model isn't available?</strong></summary>
+
+amem gracefully falls back to keyword-based matching. Semantic search won't work, but storing, recalling (by keyword), and all other operations continue normally. The server never crashes due to missing embeddings.
+
+</details>
+
+<details>
+<summary><strong>How does conflict detection work?</strong></summary>
+
+When you store a new memory, amem computes cosine similarity against all existing memories. If a match exceeds 85% similarity but the content is different, it flags a conflict and updates the existing memory's confidence instead of creating a duplicate. You get a clear message explaining what happened and how to rephrase if the memories are genuinely different.
 
 </details>
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-- [x] 7 MCP tools for storing, recalling, and managing memories
-- [x] Semantic search with local embeddings
+- [x] 7 MCP tools with full annotations, validation, and error handling
+- [x] Semantic search with local embeddings (graceful fallback to keywords)
 - [x] Smart conflict detection and deduplication
 - [x] Memory evolution (related memories reinforce each other)
 - [x] CLI for direct memory management
 - [x] MCP prompts and resources for proactive context
 - [x] Published on npm
+- [ ] `outputSchema` + `structuredContent` for machine-readable tool responses
 - [ ] Memory verification against filesystem
 - [ ] Knowledge graph with entity relationships
 - [ ] Team memory (shared context across developers)
 - [ ] Proactive mid-conversation context injection
+- [ ] Evaluation suite (10 standardized eval questions)
 
 ---
 
