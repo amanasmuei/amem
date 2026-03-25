@@ -118,6 +118,13 @@ Restart your AI tool — you'll see **19 tools**, **6 resources**, and **2 promp
 
 ## Features
 
+### v0.5.1
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | Progressive disclosure | `memory_recall` with `compact=true` returns ~50-100 token index instead of ~500-1000 tokens. ~10x savings. |
+| **NEW** | On-demand detail | `memory_detail` retrieves full content by ID (supports partial 8-char match) |
+
 ### v0.5.0
 
 | | Feature | Description |
@@ -185,7 +192,8 @@ Memories are scored and prioritized automatically:
 | Tool | Description |
 |---|---|
 | `memory_store` | Store a memory with type, tags, and confidence |
-| `memory_recall` | Semantic search — natural language, ranked by relevance |
+| `memory_recall` | Semantic search — supports `compact` mode for progressive disclosure (~10x token savings) |
+| `memory_detail` | Retrieve full content by ID — use after compact recall for on-demand detail |
 | `memory_context` | Load all relevant context for a topic, organized by type |
 | `memory_extract` | Batch-save multiple memories from a conversation |
 | `memory_forget` | Delete memories by ID or query (confirmation required) |
@@ -225,6 +233,23 @@ Memories are scored and prioritized automatically:
 ## Usage Examples
 
 <details open>
+<summary><strong>Progressive Disclosure (recommended)</strong></summary>
+
+```js
+// Step 1: Compact recall — ~50-100 tokens
+memory_recall({ query: "auth decisions", limit: 5, compact: true })
+// → a1b2c3d4 [decision] Auth service uses JWT tokens... (92%)
+// → e5f6g7h8 [preference] User prefers PostgreSQL... (88%)
+// → i9j0k1l2 [fact] Auth middleware rewrite driven by... (75%)
+
+// Step 2: Get full details only for what you need — ~500 tokens
+memory_detail({ ids: ["a1b2c3d4", "e5f6g7h8"] })
+// → Full content, confidence, age, tags for selected memories
+```
+
+</details>
+
+<details>
 <summary><strong>Store & Recall</strong></summary>
 
 ```js
@@ -358,7 +383,7 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ┌─────────────────▼────────────────────────────┐
 │           amem MCP Server                    │
 │                                              │
-│   19 Tools  ·  6 Resources  ·  2 Prompts     │
+│   20 Tools  ·  6 Resources  ·  2 Prompts     │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │
