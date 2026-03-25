@@ -112,11 +112,17 @@ Or add to `~/.claude/settings.json`:
 
 ### 3. Use
 
-Restart your AI tool — you'll see **15 tools**, **6 resources**, and **2 prompts** ready to go.
+Restart your AI tool — you'll see **19 tools**, **6 resources**, and **2 prompts** ready to go.
 
 ---
 
 ## Features
+
+### v0.5.0
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | Reminders system | `reminder_set` / `reminder_list` / `reminder_check` / `reminder_complete` — persistent cross-session reminders with deadline tracking |
 
 ### v0.4.0
 
@@ -194,6 +200,15 @@ Memories are scored and prioritized automatically:
 | `memory_search` | Exact full-text search via FTS5 |
 | `memory_since` | Temporal query with natural language ranges |
 | `memory_relate` | Build a knowledge graph between memories |
+
+### Reminders
+
+| Tool | Description |
+|---|---|
+| `reminder_set` | Create a reminder with optional due date and scope |
+| `reminder_list` | List active (or all) reminders, filterable by scope |
+| `reminder_check` | Check for overdue, today, and upcoming reminders (next 7 days) |
+| `reminder_complete` | Mark a reminder as done (supports partial ID matching) |
 
 ### Log & Maintenance
 
@@ -293,6 +308,33 @@ memory_since({ since: "2025-03-01", until: "2025-03-15" })  // date range
 </details>
 
 <details>
+<summary><strong>Reminders</strong></summary>
+
+```js
+// Set a reminder with a deadline
+reminder_set({
+  content: "Review PR #42",
+  due_at: 1743033600000,  // Unix timestamp for Thursday
+  scope: "global"
+})
+
+// Check what's due
+reminder_check({})
+// → [OVERDUE] Review PR #42 (3/27/2026) [a1b2c3d4]
+// → [TODAY] Deploy auth service (3/25/2026) [e5f6g7h8]
+// → [upcoming] Write quarterly report (3/31/2026) [i9j0k1l2]
+
+// Mark as done
+reminder_complete({ id: "a1b2c3d4" })
+// → Completed: "Review PR #42"
+
+// List all active reminders
+reminder_list({ include_completed: false })
+```
+
+</details>
+
+<details>
 <summary><strong>Full-text search (FTS5)</strong></summary>
 
 ```js
@@ -316,7 +358,7 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ┌─────────────────▼────────────────────────────┐
 │           amem MCP Server                    │
 │                                              │
-│   15 Tools  ·  6 Resources  ·  2 Prompts     │
+│   19 Tools  ·  6 Resources  ·  2 Prompts     │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │
@@ -326,6 +368,7 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 │   │  conversation_log  (lossless)      │     │
 │   │  memory_versions   (history)       │     │
 │   │  memory_relations  (graph)         │     │
+│   │  reminders         (cross-session) │     │
 │   │  memories_fts      (FTS5 index)    │     │
 │   └────────────────────────────────────┘     │
 │                                              │
