@@ -94,6 +94,11 @@ export interface AmemDatabase {
   getMemoriesSince(timestamp: number): Memory[];
   // Full-text search
   fullTextSearch(query: string, limit?: number, scopeProject?: string): Memory[];
+  // Reminders
+  insertReminder(content: string, dueAt: number | null, scope: string): string;
+  listReminders(includeCompleted?: boolean, scope?: string): Array<{ id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }>;
+  checkReminders(): Array<{ id: string; content: string; dueAt: number | null; status: "overdue" | "today" | "upcoming"; scope: string }>;
+  completeReminder(id: string): boolean;
 }
 
 interface LogRow {
@@ -242,6 +247,18 @@ export function createDatabase(dbPath: string): AmemDatabase {
     );
     CREATE INDEX IF NOT EXISTS idx_relations_from ON memory_relations(from_id);
     CREATE INDEX IF NOT EXISTS idx_relations_to ON memory_relations(to_id);
+
+    -- Reminders
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      due_at INTEGER,
+      completed INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'global'
+    );
+    CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
+    CREATE INDEX IF NOT EXISTS idx_reminders_completed ON reminders(completed);
   `);
 
   // Migration: add scope column if not present
@@ -302,6 +319,12 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getRelationsFrom: db.prepare(`SELECT * FROM memory_relations WHERE from_id = ?`),
     getRelationsTo: db.prepare(`SELECT * FROM memory_relations WHERE to_id = ?`),
     deleteRelation: db.prepare(`DELETE FROM memory_relations WHERE id = ?`),
+    // Reminders
+    insertReminder: db.prepare("INSERT INTO reminders (id, content, due_at, completed, created_at, scope) VALUES (?, ?, ?, 0, ?, ?)"),
+    listReminders: db.prepare("SELECT * FROM reminders WHERE completed = 0 ORDER BY due_at ASC NULLS LAST"),
+    listAllReminders: db.prepare("SELECT * FROM reminders ORDER BY due_at ASC NULLS LAST"),
+    listRemindersByScope: db.prepare("SELECT * FROM reminders WHERE completed = 0 AND (scope = 'global' OR scope = ?) ORDER BY due_at ASC NULLS LAST"),
+    completeReminder: db.prepare("UPDATE reminders SET completed = 1 WHERE id = ?"),
   };
 
   // Keep FTS index in sync via triggers
@@ -576,6 +599,47 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getMemoriesSince(timestamp: number): Memory[] {
       const rows = stmts.getSince.all(timestamp) as MemoryRow[];
       return rows.map(rowToMemory);
+    },
+
+    // ── Reminders ────────────────────────────────────────────
+    insertReminder(content: string, dueAt: number | null, scope: string): string {
+      const id = randomUUID();
+      stmts.insertReminder.run(id, content, dueAt, Date.now(), scope);
+      return id;
+    },
+
+    listReminders(includeCompleted = false, scope?: string): Array<{ id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }> {
+      const rows = (scope
+        ? stmts.listRemindersByScope.all(scope)
+        : (includeCompleted ? stmts.listAllReminders.all() : stmts.listReminders.all())
+      ) as Array<{ id: string; content: string; due_at: number | null; completed: number; created_at: number; scope: string }>;
+      return rows.map(r => ({
+        id: r.id, content: r.content, dueAt: r.due_at,
+        completed: r.completed === 1, createdAt: r.created_at, scope: r.scope,
+      }));
+    },
+
+    checkReminders(): Array<{ id: string; content: string; dueAt: number | null; status: "overdue" | "today" | "upcoming"; scope: string }> {
+      const reminders = this.listReminders();
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const weekFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+      return reminders
+        .filter(r => r.dueAt !== null)
+        .map(r => {
+          let status: "overdue" | "today" | "upcoming";
+          if (r.dueAt! < todayStart.getTime()) status = "overdue";
+          else if (r.dueAt! <= todayEnd.getTime()) status = "today";
+          else status = "upcoming";
+          return { id: r.id, content: r.content, dueAt: r.dueAt, status, scope: r.scope };
+        })
+        .filter(r => r.status === "overdue" || r.status === "today" || r.dueAt! <= weekFromNow);
+    },
+
+    completeReminder(id: string): boolean {
+      const result = stmts.completeReminder.run(id);
+      return result.changes > 0;
     },
 
     // ── Full-text search ─────────────────────────────────────
