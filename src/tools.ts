@@ -13,6 +13,12 @@ import {
   ExportResultSchema,
   InjectResultSchema,
   ConsolidateResultSchema,
+  PatchResultSchema,
+  LogAppendResultSchema,
+  LogRecallResultSchema,
+  RelateResultSchema,
+  VersionResultSchema,
+  TemporalResultSchema,
 } from "./schemas.js";
 
 const MEMORY_TYPES = Object.values(MemoryType);
@@ -967,4 +973,786 @@ Returns:
       }
     },
   );
+
+  // ── memory_patch ──────────────────────────────────────────
+  server.registerTool(
+    "memory_patch",
+    {
+      title: "Patch Memory",
+      description: `Apply a targeted, AI-executable patch to an existing memory. Unlike delete+recreate, patches are surgical — they update a single field while automatically snapshotting the previous state into version history for full reversibility.
+
+Use this when:
+- Correcting a memory that is mostly right but has a wrong detail
+- Updating confidence after validation
+- Retagging a memory for better recall
+- Reclassifying type (e.g. fact → decision)
+
+Every patch creates a version snapshot. Use memory_versions to view history or roll back.
+
+Args:
+  - id (string): Memory ID to patch (short IDs like first 8 chars work)
+  - field (enum): Which field to change — content | confidence | tags | type
+  - value (string | number | string[]): New value for the field
+  - reason (string): Why this patch is being made — stored in version history`,
+      inputSchema: z.object({
+        id: z.string().min(1, "Memory ID is required").describe("Memory ID — full UUID or first 8 characters"),
+        field: z.enum(["content", "confidence", "tags", "type"]).describe("Which field to patch"),
+        value: z.union([
+          z.string(),
+          z.number().min(0).max(1),
+          z.array(z.string()),
+        ]).describe("New value — string for content/type, number 0-1 for confidence, string[] for tags"),
+        reason: z.string().min(1).describe("Why this patch is being made — stored in version history"),
+      }).strict(),
+      outputSchema: PatchResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ id, field, value, reason }) => {
+      try {
+        // Support short IDs: find full ID if 8-char prefix given
+        let fullId = id;
+        if (id.length < 36) {
+          const all = db.getAll();
+          const match = all.find(m => m.id.startsWith(id));
+          if (!match) {
+            return {
+              content: [{ type: "text" as const, text: `No memory found with ID starting with "${id}".` }],
+              structuredContent: { action: "not_found" as const, id },
+            };
+          }
+          fullId = match.id;
+        }
+
+        const mem = db.getById(fullId);
+        if (!mem) {
+          return {
+            content: [{ type: "text" as const, text: `Memory "${fullId}" not found.` }],
+            structuredContent: { action: "not_found" as const, id: fullId },
+          };
+        }
+
+        const previousContent = field === "content" ? mem.content
+          : field === "confidence" ? String(mem.confidence)
+          : field === "tags" ? JSON.stringify(mem.tags)
+          : mem.type;
+
+        const success = db.patchMemory(fullId, { field, value, reason });
+        if (!success) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: `Failed to patch memory "${fullId}". Unknown field or DB error.` }],
+          };
+        }
+
+        // Regenerate embedding if content changed
+        if (field === "content" && typeof value === "string") {
+          const newEmbedding = await generateEmbedding(value);
+          if (newEmbedding) db.updateEmbedding(fullId, newEmbedding);
+        }
+
+        const displayValue = Array.isArray(value) ? `[${(value as string[]).join(", ")}]` : String(value);
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Patched memory (${fullId.slice(0, 8)}): ${field} → ${displayValue}\nReason: ${reason}\nPrevious ${field}: ${previousContent}\nVersion snapshot saved.`,
+          }],
+          structuredContent: {
+            action: "patched" as const,
+            id: fullId,
+            field,
+            previousContent,
+            reason,
+            versionSaved: true,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error patching memory: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_versions ───────────────────────────────────────
+  server.registerTool(
+    "memory_versions",
+    {
+      title: "Memory Version History",
+      description: `View the full edit history of a memory, or restore it to a previous version. Every memory_patch and memory_store conflict resolution creates an immutable snapshot. Nothing is ever truly lost.
+
+Use this to:
+- See how a memory has evolved over time
+- Roll back a bad patch
+- Audit when and why a memory changed
+
+Args:
+  - memory_id (string): Memory to inspect — full or 8-char short ID
+  - restore_version_id (string, optional): If provided, restore this specific version (creates a new patch, keeps history intact)`,
+      inputSchema: z.object({
+        memory_id: z.string().min(1).describe("Memory ID to inspect — full UUID or first 8 chars"),
+        restore_version_id: z.string().optional().describe("Version ID to restore — rolls the memory back to this snapshot"),
+      }).strict(),
+      outputSchema: VersionResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ memory_id, restore_version_id }) => {
+      try {
+        // Resolve short IDs
+        let fullId = memory_id;
+        if (memory_id.length < 36) {
+          const all = db.getAll();
+          const match = all.find(m => m.id.startsWith(memory_id));
+          if (match) fullId = match.id;
+        }
+
+        const mem = db.getById(fullId);
+        if (!mem) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: `Memory "${fullId}" not found.` }],
+          };
+        }
+
+        if (restore_version_id) {
+          const history = db.getVersionHistory(fullId);
+          const target = history.find(v => v.versionId === restore_version_id || v.versionId.startsWith(restore_version_id));
+          if (!target) {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: `Version "${restore_version_id}" not found in history for memory ${fullId.slice(0, 8)}.` }],
+            };
+          }
+
+          db.patchMemory(fullId, { field: "content", value: target.content, reason: `restored from version ${target.versionId.slice(0, 8)}` });
+          db.patchMemory(fullId, { field: "confidence", value: target.confidence, reason: `restored from version ${target.versionId.slice(0, 8)}` });
+
+          const newEmbedding = await generateEmbedding(target.content);
+          if (newEmbedding) db.updateEmbedding(fullId, newEmbedding);
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Restored memory ${fullId.slice(0, 8)} to version ${target.versionId.slice(0, 8)}\nContent: "${target.content}"\nConfidence: ${(target.confidence * 100).toFixed(0)}%\nOriginal age: ${formatAge(target.editedAt)}`,
+            }],
+            structuredContent: {
+              action: "restored" as const,
+              memoryId: fullId,
+              restoredContent: target.content,
+              versionId: target.versionId,
+            },
+          };
+        }
+
+        const history = db.getVersionHistory(fullId);
+        if (history.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: `No version history for memory ${fullId.slice(0, 8)}. Memories gain history after their first patch.` }],
+            structuredContent: {
+              action: "history" as const,
+              memoryId: fullId,
+              currentContent: mem.content,
+              versions: [],
+            },
+          };
+        }
+
+        const lines = [
+          `Version history for memory ${fullId.slice(0, 8)}`,
+          `Current: "${mem.content}" (${(mem.confidence * 100).toFixed(0)}% confidence)`,
+          "",
+          `${history.length} version${history.length === 1 ? "" : "s"}:`,
+          ...history.map((v, i) =>
+            `  ${i + 1}. [${v.versionId.slice(0, 8)}] "${v.content}" — ${(v.confidence * 100).toFixed(0)}% — ${formatAge(v.editedAt)}\n     Reason: ${v.reason}`
+          ),
+        ];
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          structuredContent: {
+            action: "history" as const,
+            memoryId: fullId,
+            currentContent: mem.content,
+            versions: history.map(v => ({
+              versionId: v.versionId,
+              content: v.content,
+              confidence: v.confidence,
+              editedAt: v.editedAt,
+              age: formatAge(v.editedAt),
+              reason: v.reason,
+            })),
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error reading version history: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_log ────────────────────────────────────────────
+  server.registerTool(
+    "memory_log",
+    {
+      title: "Append to Conversation Log",
+      description: `Append a raw conversation turn to the lossless, append-only conversation log. Unlike memory_store (which distills memories), memory_log preserves the exact, unmodified content of every exchange — nothing is summarized or discarded.
+
+The log is your permanent audit trail:
+- Every user message, assistant response, or system note
+- Fully searchable via memory_log_recall
+- Organized by session ID for replaying conversations
+- Scoped per project — never mixes contexts
+
+Use this to preserve conversation turns that may be important later but aren't yet ready to be distilled into memories. You can later search the log and promote specific entries into proper memories.
+
+Args:
+  - session_id (string): Conversation session identifier — use a consistent ID per conversation
+  - role (enum): Who said it — user | assistant | system
+  - content (string): The exact text to preserve — no summarization
+  - metadata (object, optional): Extra context — e.g., { tool: "vscode", file: "auth.ts" }`,
+      inputSchema: z.object({
+        session_id: z.string().min(1).describe("Session identifier — keep consistent across a conversation"),
+        role: z.enum(["user", "assistant", "system"]).describe("Who said this"),
+        content: z.string().min(1).describe("Exact content to preserve — not summarized"),
+        metadata: z.record(z.unknown()).optional().describe("Optional extra context"),
+      }).strict(),
+      outputSchema: LogAppendResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ session_id, role, content, metadata }) => {
+      try {
+        const id = db.appendLog({
+          sessionId: session_id,
+          role,
+          content,
+          project,
+          metadata: metadata ?? {},
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Logged ${role} turn (${id.slice(0, 8)}) to session "${session_id}". Content length: ${content.length} chars.`,
+          }],
+          structuredContent: {
+            id,
+            sessionId: session_id,
+            role,
+            appended: true,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error appending to log: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_log_recall ─────────────────────────────────────
+  server.registerTool(
+    "memory_log_recall",
+    {
+      title: "Search Conversation Log",
+      description: `Search or replay the lossless conversation log. Returns raw, unmodified conversation turns — nothing has been summarized or lost.
+
+Use this when:
+- You need to find exactly what was said in a past conversation
+- Replaying a session to reconstruct context
+- Searching for a specific phrase, decision, or exchange that may not have been extracted into a memory
+- Auditing what happened in a past session
+
+Search modes:
+- By session_id: replays a specific conversation in order
+- By query: full-text search across all logged content
+- Recent: retrieve the N most recent log entries for this project
+
+Args:
+  - session_id (string, optional): Replay a specific session in chronological order
+  - query (string, optional): Full-text search across all logged content
+  - limit (number): Max entries to return (default: 20)`,
+      inputSchema: z.object({
+        session_id: z.string().optional().describe("Replay a specific session — returns turns in order"),
+        query: z.string().optional().describe("Full-text search across all logged content"),
+        limit: z.number().int().min(1).max(200).default(20).describe("Max entries to return"),
+      }).strict().refine(d => d.session_id || d.query || true, "Provide session_id or query, or omit both for recent entries"),
+      outputSchema: LogRecallResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ session_id, query, limit }) => {
+      try {
+        let entries: Awaited<ReturnType<typeof db.getRecentLog>>;
+
+        if (session_id) {
+          entries = db.getLogBySession(session_id);
+        } else if (query) {
+          entries = db.searchLog(query, limit);
+        } else {
+          entries = db.getRecentLog(limit, project);
+        }
+
+        if (entries.length === 0) {
+          const hint = session_id
+            ? `No log entries found for session "${session_id}". Log turns using memory_log first.`
+            : query
+            ? `No log entries match "${query}".`
+            : `No log entries yet for this project. Use memory_log to preserve conversation turns.`;
+          return {
+            content: [{ type: "text" as const, text: hint }],
+            structuredContent: {
+              query,
+              sessionId: session_id,
+              total: 0,
+              entries: [],
+            },
+          };
+        }
+
+        const lines: string[] = [];
+        if (session_id) {
+          lines.push(`Session "${session_id}" — ${entries.length} turn${entries.length === 1 ? "" : "s"}`);
+          lines.push("");
+          for (const e of entries) {
+            const roleLabel = e.role === "user" ? "▶ User" : e.role === "assistant" ? "◀ Assistant" : "⚙ System";
+            lines.push(`[${formatAge(e.timestamp)}] ${roleLabel}`);
+            lines.push(e.content.length > 300 ? e.content.slice(0, 300) + "…" : e.content);
+            lines.push("");
+          }
+        } else {
+          const header = query ? `Log search: "${query}" — ${entries.length} result${entries.length === 1 ? "" : "s"}` : `Recent log — ${entries.length} entries`;
+          lines.push(header);
+          lines.push("");
+          for (const e of entries) {
+            lines.push(`[${e.id.slice(0, 8)}] ${formatAge(e.timestamp)} | ${e.role} | session:${e.sessionId.slice(0, 8)}`);
+            lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
+            lines.push("");
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            query,
+            sessionId: session_id,
+            total: entries.length,
+            entries: entries.slice(0, limit).map(e => ({
+              id: e.id,
+              role: e.role,
+              content: e.content,
+              timestamp: e.timestamp,
+              age: formatAge(e.timestamp),
+              project: e.project,
+            })),
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error searching log: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_relate ─────────────────────────────────────────
+  server.registerTool(
+    "memory_relate",
+    {
+      title: "Relate / Unrelate Memories",
+      description: `Build a knowledge graph by explicitly linking memories with typed relationships. Or inspect all connections for a given memory.
+
+Relationship types (use these or invent your own):
+- "supports"     — this memory provides evidence for the other
+- "contradicts"  — these memories are in tension
+- "depends_on"   — one requires the other to make sense
+- "supersedes"   — this memory replaces or updates the other
+- "related_to"   — loosely related, no specific direction
+- "caused_by"    — this memory is a consequence of the other
+- "implements"   — this memory is a concrete implementation of a higher-level decision
+
+The knowledge graph lets amem surface not just direct matches, but connected context — when you recall one memory, its graph neighbors are available too.
+
+Args:
+  - action (enum): "relate" | "unrelate" | "graph"
+  - from_id (string): Source memory ID (required for relate/unrelate)
+  - to_id (string): Target memory ID (required for relate)
+  - relation_type (string): Relationship label (required for relate)
+  - strength (number 0-1): How strong is this relationship (default: 0.8)
+  - relation_id (string): Relation ID to remove (required for unrelate)
+  - memory_id (string): Memory to inspect all connections for (required for graph)`,
+      inputSchema: z.object({
+        action: z.enum(["relate", "unrelate", "graph"]).describe("Operation to perform"),
+        from_id: z.string().optional().describe("Source memory ID (relate)"),
+        to_id: z.string().optional().describe("Target memory ID (relate)"),
+        relation_type: z.string().optional().describe("Relationship type label"),
+        strength: z.number().min(0).max(1).default(0.8).optional().describe("Relationship strength 0-1"),
+        relation_id: z.string().optional().describe("Relation ID to remove (unrelate)"),
+        memory_id: z.string().optional().describe("Memory ID to inspect graph connections for"),
+      }).strict(),
+      outputSchema: RelateResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ action, from_id, to_id, relation_type, strength, relation_id, memory_id }) => {
+      try {
+        if (action === "relate") {
+          if (!from_id || !to_id || !relation_type) {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: "relate requires from_id, to_id, and relation_type." }],
+            };
+          }
+          const resolveId = (id: string) => {
+            if (id.length >= 36) return id;
+            const match = db.getAll().find(m => m.id.startsWith(id));
+            return match?.id ?? id;
+          };
+          const fromFull = resolveId(from_id);
+          const toFull = resolveId(to_id);
+          const fromMem = db.getById(fromFull);
+          const toMem = db.getById(toFull);
+          if (!fromMem || !toMem) {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: `Memory not found: ${!fromMem ? from_id : to_id}` }],
+            };
+          }
+          const relId = db.addRelation(fromFull, toFull, relation_type, strength ?? 0.8);
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Linked memories:\n  "${fromMem.content.slice(0, 60)}"\n  ${relation_type} →\n  "${toMem.content.slice(0, 60)}"\nRelation ID: ${relId.slice(0, 8)}`,
+            }],
+            structuredContent: {
+              action: "related" as const,
+              relationId: relId,
+              fromId: fromFull,
+              toId: toFull,
+              type: relation_type,
+              strength: strength ?? 0.8,
+            },
+          };
+        }
+
+        if (action === "unrelate") {
+          if (!relation_id) {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: "unrelate requires relation_id. Use action:graph to find relation IDs." }],
+            };
+          }
+          db.removeRelation(relation_id);
+          return {
+            content: [{ type: "text" as const, text: `Removed relation ${relation_id.slice(0, 8)}.` }],
+            structuredContent: { action: "unrelated" as const, relationId: relation_id },
+          };
+        }
+
+        // graph
+        if (!memory_id) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: "graph requires memory_id." }],
+          };
+        }
+        const resolveId = (id: string) => {
+          if (id.length >= 36) return id;
+          const match = db.getAll().find(m => m.id.startsWith(id));
+          return match?.id ?? id;
+        };
+        const fullId = resolveId(memory_id);
+        const mem = db.getById(fullId);
+        if (!mem) {
+          return {
+            isError: true,
+            content: [{ type: "text" as const, text: `Memory "${memory_id}" not found.` }],
+          };
+        }
+
+        const relations = db.getRelations(fullId);
+        if (relations.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Memory ${fullId.slice(0, 8)} has no explicit relations yet.\n\nUse action:relate to build the knowledge graph.`,
+            }],
+            structuredContent: { action: "graph" as const, memoryId: fullId, relations: [] },
+          };
+        }
+
+        const lines = [
+          `Knowledge graph for memory ${fullId.slice(0, 8)}:`,
+          `"${mem.content.slice(0, 80)}${mem.content.length > 80 ? "…" : ""}"`,
+          "",
+        ];
+        const structRelations = [];
+        for (const r of relations) {
+          const direction = r.fromId === fullId ? "outgoing" : "incoming";
+          const otherId = direction === "outgoing" ? r.toId : r.fromId;
+          const other = db.getById(otherId);
+          const arrow = direction === "outgoing" ? `→ [${r.relationshipType}] →` : `← [${r.relationshipType}] ←`;
+          lines.push(`  ${arrow} ${other?.content.slice(0, 60) ?? otherId.slice(0, 8)} (${(r.strength * 100).toFixed(0)}% strength)`);
+          lines.push(`     relation id: ${r.id.slice(0, 8)}`);
+          structRelations.push({
+            relatedId: otherId,
+            direction,
+            type: r.relationshipType,
+            strength: r.strength,
+            content: other?.content,
+          });
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          structuredContent: {
+            action: "graph" as const,
+            memoryId: fullId,
+            relations: structRelations,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error managing relations: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_since ──────────────────────────────────────────
+  server.registerTool(
+    "memory_since",
+    {
+      title: "Temporal Memory Query",
+      description: `Query memories by when they were created. Use this to answer "what did we decide last week?" or "what changed since yesterday?" or to find memories from a specific time window.
+
+Natural language time expressions supported:
+- "1h", "2h", "6h" — hours ago
+- "1d", "7d", "30d" — days ago
+- "1w", "2w" — weeks ago
+- ISO 8601 timestamp — exact time (e.g. "2025-01-15T10:00:00Z")
+- Unix millisecond timestamp
+
+Args:
+  - since (string): How far back to look — "7d", "1w", "2025-01-15", etc.
+  - until (string, optional): End of time window — same format. Defaults to now.
+  - type (enum, optional): Filter by memory type within this window`,
+      inputSchema: z.object({
+        since: z.string().min(1).describe("Start of time window — '7d', '2w', '1h', or ISO timestamp"),
+        until: z.string().optional().describe("End of time window — defaults to now"),
+        type: z.enum(TYPE_ORDER as [MemoryTypeValue, ...MemoryTypeValue[]]).optional().describe("Filter by memory type"),
+      }).strict(),
+      outputSchema: TemporalResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ since, until, type }) => {
+      try {
+        const parseTime = (s: string): number => {
+          const now = Date.now();
+          const match = s.match(/^(\d+)(h|d|w|m)$/i);
+          if (match) {
+            const n = parseInt(match[1], 10);
+            const unit = match[2].toLowerCase();
+            const ms = unit === "h" ? 3600000 : unit === "d" ? 86400000 : unit === "w" ? 604800000 : 2592000000;
+            return now - n * ms;
+          }
+          const parsed = Date.parse(s);
+          if (!isNaN(parsed)) return parsed;
+          const num = Number(s);
+          if (!isNaN(num)) return num;
+          throw new Error(`Cannot parse time expression: "${s}". Use formats like "7d", "2w", "1h", or an ISO date.`);
+        };
+
+        const fromTs = parseTime(since);
+        const toTs = until ? parseTime(until) : Date.now();
+
+        let memories = db.getMemoriesByDateRange(fromTs, toTs);
+        if (type) memories = memories.filter(m => m.type === type);
+
+        if (memories.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `No memories found between ${new Date(fromTs).toISOString().slice(0, 10)} and ${new Date(toTs).toISOString().slice(0, 10)}${type ? ` of type "${type}"` : ""}.`,
+            }],
+            structuredContent: {
+              from: new Date(fromTs).toISOString(),
+              to: new Date(toTs).toISOString(),
+              total: 0,
+              memories: [],
+            },
+          };
+        }
+
+        const lines = [
+          `Memories from ${new Date(fromTs).toISOString().slice(0, 10)} → ${new Date(toTs).toISOString().slice(0, 10)}`,
+          type ? `Type filter: ${type}` : `All types`,
+          `Found: ${memories.length}`,
+          "",
+        ];
+
+        for (const m of memories) {
+          lines.push(`[${m.type}] ${m.content.slice(0, 80)}${m.content.length > 80 ? "…" : ""}`);
+          lines.push(`  Created: ${formatAge(m.createdAt)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ID: ${m.id.slice(0, 8)}`);
+          if (m.tags.length > 0) lines.push(`  Tags: ${m.tags.join(", ")}`);
+          lines.push("");
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            from: new Date(fromTs).toISOString(),
+            to: new Date(toTs).toISOString(),
+            total: memories.length,
+            memories: memories.map(m => ({
+              id: m.id,
+              content: m.content,
+              type: m.type,
+              confidence: m.confidence,
+              createdAt: m.createdAt,
+              age: formatAge(m.createdAt),
+              tags: m.tags,
+            })),
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error in temporal query: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_search ─────────────────────────────────────────
+  server.registerTool(
+    "memory_search",
+    {
+      title: "Full-Text Memory Search",
+      description: `Exact full-text search across all memory content and tags using SQLite FTS5. Complements memory_recall (which is semantic/fuzzy) with precise keyword matching.
+
+Use this when:
+- You need exact phrase matching ("never use any" not just "TypeScript types")
+- Searching for a specific function name, file path, or technical term
+- memory_recall returns too many loosely-related results
+- You want to find all memories mentioning a specific tool, library, or concept
+
+Supports FTS5 query syntax:
+- Simple terms: "postgres"
+- Phrase search: '"event sourcing"'
+- Prefix search: "auth*"
+- Boolean: "postgres OR sqlite"
+- Negation: "database NOT redis"
+
+Args:
+  - query (string): Full-text search query — exact terms, phrases, or FTS5 syntax
+  - limit (number): Max results (default: 20)`,
+      inputSchema: z.object({
+        query: z.string().min(1).describe("Full-text search query — exact terms, phrases, or FTS5 syntax"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Max results to return"),
+      }).strict(),
+      outputSchema: RecallResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query, limit }) => {
+      try {
+        const results = db.fullTextSearch(query, limit);
+
+        if (results.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: `No memories found matching "${query}". Try memory_recall for semantic/fuzzy search.` }],
+            structuredContent: { query, total: 0, memories: [] },
+          };
+        }
+
+        const lines = [`Full-text search: "${query}" — ${results.length} result${results.length === 1 ? "" : "s"}`, ""];
+        for (const m of results) {
+          lines.push(`[${m.type}] ${m.content}`);
+          lines.push(`  ID: ${m.id.slice(0, 8)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ${formatAge(m.lastAccessed)}`);
+          if (m.tags.length > 0) lines.push(`  Tags: ${m.tags.join(", ")}`);
+          lines.push("");
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            query,
+            total: results.length,
+            memories: results.map(m => ({
+              id: m.id,
+              content: m.content,
+              type: m.type,
+              score: 1.0,
+              confidence: m.confidence,
+              tags: m.tags,
+              age: formatAge(m.lastAccessed),
+            })),
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error in full-text search: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
 }
+

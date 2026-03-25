@@ -33,7 +33,7 @@ const currentProject = detectProject();
 
 const server = new McpServer({
   name: "amem-mcp-server",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 registerTools(server, db, currentProject);
@@ -83,7 +83,26 @@ Call memory_extract with an array of memories. Each memory should be:
 - Ephemeral task details ("currently debugging X")
 - Things obvious from the code itself
 - Sensitive data (API keys, passwords)
-- Exact file contents (just reference the path)`,
+- Exact file contents (just reference the path)
+
+## Patching vs. Storing
+
+- Memory mostly right but has a wrong detail → **memory_patch** (surgical, auto-versioned)
+- Memory completely wrong → memory_forget then memory_store
+- Always check with memory_search or memory_recall before creating a duplicate
+
+## Building the Knowledge Graph
+
+After storing decisions, link connected memories with memory_relate:
+- Decision "supports" Pattern (why code is written a certain way)
+- Correction "caused_by" Decision (why something is off-limits)
+- Topology "depends_on" Topology (how modules relate)
+
+## Lossless Log
+
+For raw exchanges not yet ready to distill:
+- Use memory_log to preserve turns verbatim (append-only, nothing lost)
+- Search later with memory_log_recall and promote to proper memories`,
       },
     }],
   }),
@@ -101,12 +120,26 @@ server.registerPrompt(
         type: "text",
         text: `You have access to Amem memory. At the start of this conversation:
 
-1. Call memory_context with the likely topic (based on what the user asks about)
-2. Use any corrections as hard constraints — they override other context
-3. Use decisions and patterns to inform your approach
-4. Mention relevant memories naturally: "I remember you prefer X" not "According to my memory database..."
+1. Call memory_inject with the likely topic — this surfaces corrections (hard constraints) and decisions first
+2. Call memory_context for broader preferences, patterns, and topology
+3. Apply corrections as absolute constraints — they override everything else
+4. Reference memories naturally: "I remember you prefer X" not "According to my memory database..."
+5. If continuing previous work, call memory_log_recall with the session ID or a keyword to replay raw history
 
-If the user seems to be continuing previous work, call memory_recall to find relevant history.`,
+## Tool Quick Reference
+
+| Goal | Tool |
+|------|------|
+| Load context for a task | memory_inject, memory_context |
+| Find something specific | memory_recall (semantic), memory_search (exact) |
+| Store a new memory | memory_store or memory_extract (batch) |
+| Fix an existing memory | memory_patch (surgical, versioned) |
+| See what changed | memory_since "7d" |
+| Preserve raw conversation | memory_log |
+| Replay a past session | memory_log_recall |
+| Link related memories | memory_relate |
+| View edit history | memory_versions |
+| Clean up the database | memory_consolidate |`,
       },
     }],
   }),
@@ -190,6 +223,55 @@ server.registerResource(
     return {
       contents: [{ uri: "amem://summary", mimeType: "text/plain", text }],
     };
+  },
+);
+
+server.registerResource(
+  "log-recent",
+  "amem://log/recent",
+  { mimeType: "text/plain", description: "Recent raw conversation log entries — lossless, append-only history" },
+  () => {
+    const entries = db.getRecentLog(50, currentProject);
+    if (entries.length === 0) {
+      return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: "No log entries yet. Use memory_log to preserve conversation turns." }] };
+    }
+    const lines = [`# Recent Conversation Log (${entries.length} entries)\n`];
+    for (const e of entries) {
+      const ts = new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ");
+      lines.push(`[${ts}] ${e.role.toUpperCase()} (session: ${e.sessionId.slice(0, 8)})`);
+      lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
+      lines.push("");
+    }
+    return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: lines.join("\n") }] };
+  },
+);
+
+server.registerResource(
+  "graph-overview",
+  "amem://graph",
+  { mimeType: "text/plain", description: "Knowledge graph overview — all explicit memory relationships" },
+  () => {
+    const all = db.getAll();
+    const lines = [`# Knowledge Graph (${all.length} nodes)\n`];
+    let edgeCount = 0;
+    for (const mem of all) {
+      const relations = db.getRelations(mem.id);
+      const outgoing = relations.filter(r => r.fromId === mem.id);
+      if (outgoing.length > 0) {
+        lines.push(`[${mem.id.slice(0, 8)}] "${mem.content.slice(0, 60)}"`);
+        for (const r of outgoing) {
+          const target = db.getById(r.toId);
+          lines.push(`  → [${r.relationshipType}] "${target?.content.slice(0, 50) ?? r.toId.slice(0, 8)}"`);
+          edgeCount++;
+        }
+        lines.push("");
+      }
+    }
+    if (edgeCount === 0) {
+      return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: "No memory relations yet. Use memory_relate to build the knowledge graph." }] };
+    }
+    lines.unshift(`${edgeCount} edges\n`);
+    return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: lines.join("\n") }] };
   },
 );
 

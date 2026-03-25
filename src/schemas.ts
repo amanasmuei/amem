@@ -127,3 +127,103 @@ export const ConsolidateResultSchema = z.object({
     description: z.string(),
   })),
 });
+
+export const PatchResultSchema = z.union([
+  z.object({
+    action: z.literal("patched"),
+    id: z.string(),
+    field: z.string(),
+    previousContent: z.string(),
+    reason: z.string(),
+    versionSaved: z.boolean(),
+  }),
+  z.object({
+    action: z.literal("not_found"),
+    id: z.string(),
+  }),
+]);
+
+export const LogAppendResultSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  role: z.string(),
+  appended: z.boolean(),
+});
+
+export const LogRecallResultSchema = z.object({
+  query: z.string().optional(),
+  sessionId: z.string().optional(),
+  total: z.number(),
+  entries: z.array(z.object({
+    id: z.string(),
+    role: z.string(),
+    content: z.string(),
+    timestamp: z.number(),
+    age: z.string(),
+    project: z.string(),
+  })),
+});
+
+export const RelateResultSchema = z.union([
+  z.object({
+    action: z.literal("related"),
+    relationId: z.string(),
+    fromId: z.string(),
+    toId: z.string(),
+    type: z.string(),
+    strength: z.number(),
+  }),
+  z.object({
+    action: z.literal("unrelated"),
+    relationId: z.string(),
+  }),
+  z.object({
+    action: z.literal("graph"),
+    memoryId: z.string(),
+    relations: z.array(z.object({
+      relatedId: z.string(),
+      direction: z.enum(["outgoing", "incoming"]),
+      type: z.string(),
+      strength: z.number(),
+      content: z.string().optional(),
+    })),
+  }),
+]);
+
+export const VersionResultSchema = z.union([
+  z.object({
+    action: z.literal("history"),
+    memoryId: z.string(),
+    currentContent: z.string(),
+    versions: z.array(z.object({
+      versionId: z.string(),
+      content: z.string(),
+      confidence: z.number(),
+      editedAt: z.number(),
+      age: z.string(),
+      reason: z.string(),
+    })),
+  }),
+  z.object({
+    action: z.literal("restored"),
+    memoryId: z.string(),
+    restoredContent: z.string(),
+    versionId: z.string(),
+  }),
+]);
+
+export const TemporalResultSchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  total: z.number(),
+  memories: z.array(z.object({
+    id: z.string(),
+    content: z.string(),
+    type: z.string(),
+    confidence: z.number(),
+    createdAt: z.number(),
+    age: z.string(),
+    tags: z.array(z.string()),
+  })),
+});
+
