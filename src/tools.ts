@@ -62,7 +62,7 @@ Args:
 Returns:
   Confirmation with memory ID, or conflict detection if a similar memory exists.`,
       inputSchema: z.object({
-        content: z.string().min(1, "Content is required").describe("The memory content — be specific and include context"),
+        content: z.string().min(1, "Content is required").max(10000, "Content too long — max 10,000 characters").describe("The memory content — be specific and include context"),
         type: z.enum(MEMORY_TYPES as [string, ...string[]]).describe("Memory type — corrections are highest priority"),
         tags: z.array(z.string()).default([]).describe("Tags for filtering (e.g., ['typescript', 'auth', 'testing'])"),
         confidence: z.number().min(0).max(1).default(0.8).describe("How confident is this memory (0-1). Corrections from user = 1.0"),
@@ -196,9 +196,9 @@ Returns:
       }).strict(),
       outputSchema: RecallResultSchema,
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -460,7 +460,7 @@ Error Handling:
                 action: "preview" as const,
                 query,
                 total: matches.length,
-                previewed: matches.slice(0, 5).map(m => ({ id: m.id.slice(0, 8), content: m.content })),
+                previewed: matches.slice(0, 5).map(m => ({ id: m.id, content: m.content })),
               },
             };
           }
@@ -548,14 +548,16 @@ Returns:
           similarity?: number;
         }> = [];
 
+        // Load existing embeddings once (not per-memory)
+        const existingWithEmbeddings = db.getAllWithEmbeddings();
+
         for (const input of memoryInputs) {
           const embedding = await generateEmbedding(input.content);
 
           // Check for duplicates/conflicts
           let isDuplicate = false;
           if (embedding) {
-            const existing = db.getAllWithEmbeddings();
-            for (const mem of existing) {
+            for (const mem of existingWithEmbeddings) {
               if (!mem.embedding) continue;
               const sim = cosineSimilarity(embedding, mem.embedding);
               if (sim > 0.85) {
@@ -648,10 +650,10 @@ Returns:
     },
     async () => {
       try {
+        const all = db.getAllForProject(project);
         const stats = db.getStats();
-        const all = db.getAll();
 
-        if (stats.total === 0) {
+        if (all.length === 0) {
           return {
             content: [{ type: "text" as const, text: "No memories stored yet. Use memory_store or memory_extract to create memories." }],
             structuredContent: {
@@ -729,7 +731,7 @@ Returns:
     },
     async () => {
       try {
-        const all = db.getAll();
+        const all = db.getAllForProject(project);
 
         if (all.length === 0) {
           return {
@@ -1003,7 +1005,12 @@ Args:
           z.array(z.string()),
         ]).describe("New value — string for content/type, number 0-1 for confidence, string[] for tags"),
         reason: z.string().min(1).describe("Why this patch is being made — stored in version history"),
-      }).strict(),
+      }).strict().refine(({ field, value }) => {
+        if (field === "confidence") return typeof value === "number";
+        if (field === "tags") return Array.isArray(value);
+        if (field === "content" || field === "type") return typeof value === "string";
+        return true;
+      }, { message: "Value type must match field: string for content/type, number for confidence, string[] for tags" }),
       outputSchema: PatchResultSchema,
       annotations: {
         readOnlyHint: false,
@@ -1568,9 +1575,11 @@ Args:
       description: `Query memories by when they were created. Use this to answer "what did we decide last week?" or "what changed since yesterday?" or to find memories from a specific time window.
 
 Natural language time expressions supported:
+- "5m", "30m" — minutes ago
 - "1h", "2h", "6h" — hours ago
 - "1d", "7d", "30d" — days ago
 - "1w", "2w" — weeks ago
+- "1mo", "3mo" — months ago
 - ISO 8601 timestamp — exact time (e.g. "2025-01-15T10:00:00Z")
 - Unix millisecond timestamp
 
@@ -1595,12 +1604,12 @@ Args:
       try {
         const parseTime = (s: string): number => {
           const now = Date.now();
-          const match = s.match(/^(\d+)(h|d|w|m)$/i);
+          const match = s.match(/^(\d+)(m|min|h|d|w|mo)$/i);
           if (match) {
             const n = parseInt(match[1], 10);
             const unit = match[2].toLowerCase();
-            const ms = unit === "h" ? 3600000 : unit === "d" ? 86400000 : unit === "w" ? 604800000 : 2592000000;
-            return now - n * ms;
+            const ms: Record<string, number> = { m: 60000, min: 60000, h: 3600000, d: 86400000, w: 604800000, mo: 2592000000 };
+            return now - n * (ms[unit] ?? 86400000);
           }
           const parsed = Date.parse(s);
           if (!isNaN(parsed)) return parsed;
@@ -1710,7 +1719,7 @@ Args:
     },
     async ({ query, limit }) => {
       try {
-        const results = db.fullTextSearch(query, limit);
+        const results = db.fullTextSearch(query, limit, project);
 
         if (results.length === 0) {
           return {

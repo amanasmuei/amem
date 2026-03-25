@@ -93,7 +93,7 @@ export interface AmemDatabase {
   getMemoriesByDateRange(from: number, to: number): Memory[];
   getMemoriesSince(timestamp: number): Memory[];
   // Full-text search
-  fullTextSearch(query: string, limit?: number): Memory[];
+  fullTextSearch(query: string, limit?: number, scopeProject?: string): Memory[];
 }
 
 interface LogRow {
@@ -164,6 +164,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
   const db = new Database(dbPath);
 
   db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS memories (
@@ -443,15 +444,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
     },
 
     searchLog(query: string, limit = 20): LogEntry[] {
-      const stmt = db.prepare(`
-        SELECT conversation_log.* FROM log_fts
-        JOIN conversation_log ON conversation_log.id = log_fts.id
-        WHERE log_fts.content MATCH ?
-        ORDER BY rank
-        LIMIT ?
-      `);
-      const rows = stmt.all(query, limit) as LogRow[];
-      return rows.map(r => ({
+      const mapRow = (r: LogRow): LogEntry => ({
         id: r.id,
         sessionId: r.session_id,
         role: r.role as LogEntry["role"],
@@ -459,7 +452,28 @@ export function createDatabase(dbPath: string): AmemDatabase {
         timestamp: r.timestamp,
         project: r.project,
         metadata: JSON.parse(r.metadata) as Record<string, unknown>,
-      }));
+      });
+
+      try {
+        const stmt = db.prepare(`
+          SELECT conversation_log.* FROM log_fts
+          JOIN conversation_log ON conversation_log.id = log_fts.id
+          WHERE log_fts.content MATCH ?
+          ORDER BY rank
+          LIMIT ?
+        `);
+        const rows = stmt.all(query, limit) as LogRow[];
+        return rows.map(mapRow);
+      } catch {
+        // FTS5 may fail on special characters — fall back to LIKE
+        const escaped = query.replace(/[%_]/g, ch => "\\" + ch);
+        const pattern = `%${escaped}%`;
+        const stmt = db.prepare(`
+          SELECT * FROM conversation_log WHERE content LIKE ? ESCAPE '\\' ORDER BY timestamp DESC LIMIT ?
+        `);
+        const rows = stmt.all(pattern, limit) as LogRow[];
+        return rows.map(mapRow);
+      }
     },
 
     getRecentLog(limit: number, project?: string): LogEntry[] {
@@ -565,8 +579,19 @@ export function createDatabase(dbPath: string): AmemDatabase {
     },
 
     // ── Full-text search ─────────────────────────────────────
-    fullTextSearch(query: string, limit = 20): Memory[] {
+    fullTextSearch(query: string, limit = 20, scopeProject?: string): Memory[] {
       try {
+        if (scopeProject) {
+          const stmt = db.prepare(`
+            SELECT memories.* FROM memories_fts
+            JOIN memories ON memories.id = memories_fts.id
+            WHERE memories_fts MATCH ? AND (memories.scope = 'global' OR memories.scope = ?)
+            ORDER BY rank
+            LIMIT ?
+          `);
+          const rows = stmt.all(query, scopeProject, limit) as MemoryRow[];
+          return rows.map(rowToMemory);
+        }
         const stmt = db.prepare(`
           SELECT memories.* FROM memories_fts
           JOIN memories ON memories.id = memories_fts.id
@@ -578,10 +603,19 @@ export function createDatabase(dbPath: string): AmemDatabase {
         return rows.map(rowToMemory);
       } catch {
         // FTS may fail on complex queries — fall back to LIKE
+        const escaped = query.replace(/[%_]/g, ch => "\\" + ch);
+        const pattern = `%${escaped}%`;
+        if (scopeProject) {
+          const stmt = db.prepare(`
+            SELECT * FROM memories WHERE (content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')
+            AND (scope = 'global' OR scope = ?) ORDER BY last_accessed DESC LIMIT ?
+          `);
+          const rows = stmt.all(pattern, pattern, scopeProject, limit) as MemoryRow[];
+          return rows.map(rowToMemory);
+        }
         const stmt = db.prepare(`
-          SELECT * FROM memories WHERE content LIKE ? OR tags LIKE ? ORDER BY last_accessed DESC LIMIT ?
+          SELECT * FROM memories WHERE content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\' ORDER BY last_accessed DESC LIMIT ?
         `);
-        const pattern = `%${query}%`;
         const rows = stmt.all(pattern, pattern, limit) as MemoryRow[];
         return rows.map(rowToMemory);
       }

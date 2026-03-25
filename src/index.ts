@@ -8,6 +8,10 @@ import { MemoryType } from "./memory.js";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
 
 const AMEM_DIR = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
 const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
@@ -33,7 +37,7 @@ const currentProject = detectProject();
 
 const server = new McpServer({
   name: "amem-mcp-server",
-  version: "0.4.0",
+  version: pkg.version,
 });
 
 registerTools(server, db, currentProject);
