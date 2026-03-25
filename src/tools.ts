@@ -184,15 +184,17 @@ Args:
   - type (enum, optional): Filter by memory type
   - tag (string, optional): Filter by tag
   - min_confidence (number 0-1, optional): Minimum confidence threshold
+  - compact (boolean, optional): If true, return compact index (~50-100 tokens) with IDs for progressive disclosure. Use memory_detail to get full content.
 
 Returns:
-  Ranked list of memories with scores, confidence, age, and tags.`,
+  Ranked list of memories with scores, confidence, age, and tags. If compact=true, returns a compact index with short IDs and previews.`,
       inputSchema: z.object({
         query: z.string().min(1, "Query is required").describe("What to search for — natural language works best"),
         limit: z.number().int().min(1).max(50).default(10).describe("Max results to return"),
         type: z.enum(MEMORY_TYPES as [string, ...string[]]).optional().describe("Filter by memory type"),
         tag: z.string().optional().describe("Filter by tag"),
         min_confidence: z.number().min(0).max(1).optional().describe("Minimum confidence threshold"),
+        compact: z.boolean().default(false).describe("If true, return compact index (~50-100 tokens) with IDs for progressive disclosure. Use memory_detail to get full content."),
       }).strict(),
       outputSchema: RecallResultSchema,
       annotations: {
@@ -202,7 +204,7 @@ Returns:
         openWorldHint: false,
       },
     },
-    async ({ query, limit, type, tag, min_confidence }) => {
+    async ({ query, limit, type, tag, min_confidence, compact }) => {
       try {
         const queryEmbedding = await generateEmbedding(query);
 
@@ -227,6 +229,35 @@ Returns:
               query,
               total: 0,
               memories: [],
+            },
+          };
+        }
+
+        if (compact) {
+          const compactLines = results.map((r, i) => {
+            const preview = r.content.slice(0, 80) + (r.content.length > 80 ? "..." : "");
+            return `${r.id.slice(0, 8)} [${r.type}] ${preview} (${(r.score * 100).toFixed(0)}%)`;
+          });
+
+          const tokenEstimate = compactLines.join("\n").split(/\s+/).length;
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: `${results.length} memories (~${tokenEstimate} tokens):\n${compactLines.join("\n")}\n\nUse memory_detail with IDs for full content.`,
+            }],
+            structuredContent: {
+              query,
+              total: results.length,
+              compact: true,
+              tokenEstimate,
+              memories: results.map(r => ({
+                id: r.id,
+                type: r.type,
+                preview: r.content.slice(0, 80),
+                score: Number(r.score.toFixed(3)),
+                confidence: r.confidence,
+              })),
             },
           };
         }
@@ -264,6 +295,58 @@ Returns:
           content: [{
             type: "text" as const,
             text: `Error recalling memories: ${error instanceof Error ? error.message : String(error)}. Try a different query or check the database.`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_detail ────────────────────────────────────────
+  server.registerTool(
+    "memory_detail",
+    {
+      title: "Get Memory Details",
+      description: "Retrieve full details for specific memory IDs. Use after memory_recall with compact=true to get full content for selected memories. Supports partial IDs (first 8 chars).",
+      inputSchema: z.object({
+        ids: z.array(z.string()).min(1).max(20).describe("Memory IDs (full or first 8 chars) to retrieve"),
+      }).strict(),
+    },
+    async ({ ids }) => {
+      try {
+        const allMemories = db.getAll();
+        const found = ids.map(id => {
+          const mem = allMemories.find(m => m.id === id || m.id.startsWith(id));
+          if (!mem) return null;
+          db.touchAccess(mem.id);
+          return mem;
+        }).filter((m): m is NonNullable<typeof m> => m !== null);
+
+        if (found.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No memories found for the given IDs." }],
+          };
+        }
+
+        const lines = found.map((r) => {
+          const age = formatAge(r.createdAt);
+          const conf = (r.confidence * 100).toFixed(0);
+          return `[${r.type}] ${r.content}\nID: ${r.id.slice(0, 8)} | Confidence: ${conf}% | Age: ${age} | Tags: [${r.tags.join(", ")}]`;
+        });
+
+        const tokenEstimate = lines.join("\n\n").split(/\s+/).length;
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `${found.length} memories (~${tokenEstimate} tokens):\n\n${lines.join("\n\n")}`,
+          }],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error retrieving memories: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }
