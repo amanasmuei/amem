@@ -1,101 +1,88 @@
 <p align="center">
-  <img src="assets/logo.png" alt="amem" width="180" />
+  <img src="assets/logo.png" alt="amem" width="160" />
 </p>
 
-<h3 align="center">Give your AI a memory it never forgets</h3>
+<h1 align="center">amem</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@aman_asmuei/amem"><img src="https://img.shields.io/npm/v/@aman_asmuei/amem.svg?style=flat-square&color=cb3837" /></a>
-  <a href="https://github.com/amanasmuei/amem/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
-  <a href="https://github.com/amanasmuei/amem/actions"><img src="https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=flat-square&label=tests" /></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" />
-  <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2?style=flat-square" />
+  <strong>Give your AI a memory it never forgets.</strong>
 </p>
 
 <p align="center">
-  <b>amem</b> (<b>A</b>man's <b>Mem</b>ory) is the memory layer for AI coding tools.<br/>
-  Local-first · Semantic · Lossless · Works with Claude Code, Cursor, Windsurf &amp; any MCP client.
+  <a href="https://www.npmjs.com/package/@aman_asmuei/amem"><img src="https://img.shields.io/npm/v/@aman_asmuei/amem?style=for-the-badge&logo=npm&logoColor=white&color=cb3837" alt="npm version" /></a>
+  &nbsp;
+  <a href="https://github.com/amanasmuei/amem/actions"><img src="https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=for-the-badge&logo=github&label=CI" alt="CI status" /></a>
+  &nbsp;
+  <a href="https://github.com/amanasmuei/amem/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License" /></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2?style=for-the-badge" alt="MCP compatible" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 18+" />
+</p>
+
+<p align="center">
+  <b>amem</b> (<b>A</b>man's <b>Mem</b>ory) is a persistent memory layer for AI coding tools.<br/>
+  Local-first &middot; Semantic &middot; Lossless &middot; Works with Claude Code, Cursor, Windsurf &amp; any MCP client.
+</p>
+
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> &bull;
+  <a href="#-features">Features</a> &bull;
+  <a href="#-tools-reference">Tools</a> &bull;
+  <a href="#-usage-examples">Examples</a> &bull;
+  <a href="#-architecture">Architecture</a> &bull;
+  <a href="#-contributing">Contributing</a>
 </p>
 
 ---
 
 ## The Problem
 
-Every time you start a new conversation with an AI coding assistant, it starts from zero:
+Every time you start a new conversation with an AI coding assistant, it starts from zero.
 
-- You told it **three times** not to use `any` in TypeScript — it still does
-- Your team **chose PostgreSQL** over MongoDB last month — it doesn't know why
-- You **prefer** functional style, early returns, and pnpm — explained again and again
-- A critical decision was made **last week** — now it's gone forever
+> *"Don't use `any` in TypeScript"* — told it **three times**, still does it.
+>
+> *"We chose PostgreSQL over MongoDB"* — doesn't remember why.
+>
+> *"I prefer early returns and pnpm"* — explained again. And again.
+>
+> A critical decision from **last week**? Gone.
 
-You repeat yourself. Every. Single. Session.
+**You repeat yourself. Every. Single. Session.**
 
 ## The Solution
 
-**amem** is a persistent memory layer that plugs into any MCP-compatible AI tool. It remembers what matters, surfaces it automatically, and never loses anything — from distilled memories to raw conversation history.
+**amem** plugs into any MCP-compatible AI tool and gives it persistent, searchable, lossless memory.
 
 ```
 You: "Don't use any type in TypeScript"
 
-  → amem stores this as a correction (priority 1.0)
-  → next session, your AI already knows — and won't forget
+  amem stores this as a correction (priority 1.0)
+  next session, your AI already knows
 ```
 
----
-
-## What's New in v0.4.0
-
-| Feature | Description |
-|---|---|
-| 🗒️ **Lossless conversation log** | `memory_log` / `memory_log_recall` — append-only raw turns, nothing ever summarized or lost |
-| 🔧 **Patch system** | `memory_patch` — surgical field-level edits, auto-versioned before every change |
-| 📜 **Version history** | `memory_versions` — full edit history, restore any past snapshot |
-| 🕸️ **Knowledge graph** | `memory_relate` — typed relations between memories (supports, causes, implements…) |
-| ⏱️ **Temporal queries** | `memory_since` — "what changed last week?" in natural language |
-| 🔍 **Full-text search** | `memory_search` — exact FTS5 keyword search, complements semantic recall |
-| ⚡ **FTS5 auto-sync** | SQLite triggers keep the index in sync on every insert, update, delete |
+No cloud. No API keys. Everything stays on your machine.
 
 ---
 
-## Feature Comparison
+## Quick Start
 
-| Feature | amem v0.4 | Claude Code |
-|---|---|---|
-| Session memory | ✅ SQLite — persists across sessions | ✅ Context window only |
-| Persistent identity | ✅ `~/.amem/memory.db` | ✅ `CLAUDE.md` |
-| Auto accumulation | ✅ `memory_extract` batch | ✅ `MEMORY.md` auto |
-| Memory consolidation | ✅ Merge · prune · promote | ✅ Auto-dream |
-| Semantic recall | ✅ Cosine similarity + keyword | ✅ Chat search |
-| Per-project scope | ✅ Auto git-detected | ✅ `./CLAUDE.md` |
-| Memory export | ✅ Markdown + CLI | 🟡 "Write verbatim" |
-| **Lossless history** | ✅ Append-only conversation log | 🔴 Lossy summarization |
-| **Patch system** | ✅ Field-level, auto-versioned | 🔴 None |
-| **Version history** | ✅ Full edit history + restore | 🔴 None |
-| **Knowledge graph** | ✅ Typed memory relations | 🔴 None |
-| **Temporal queries** | ✅ "since 7d", date ranges | 🔴 None |
-| **Full-text search** | ✅ FTS5 exact match | 🔴 None |
-
----
-
-## Get Started
-
-### Install
+### 1. Install
 
 ```bash
 npm install -g @aman_asmuei/amem
 ```
 
-Node.js 18+ required. No cloud accounts, no API keys.
+### 2. Connect
 
-### Connect your AI tool
-
-**Claude Code**
+<details open>
+<summary><strong>Claude Code</strong> (one command)</summary>
 
 ```bash
 claude mcp add amem -- npx -y @aman_asmuei/amem
 ```
 
-Or manually in `~/.claude/settings.json`:
+Or add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -108,7 +95,10 @@ Or manually in `~/.claude/settings.json`:
 }
 ```
 
-**Cursor / Windsurf / any MCP client**
+</details>
+
+<details>
+<summary><strong>Cursor / Windsurf / Other MCP Clients</strong></summary>
 
 ```json
 {
@@ -118,22 +108,67 @@ Or manually in `~/.claude/settings.json`:
 }
 ```
 
-Restart your AI tool. You'll see **15 tools**, **6 resources**, and **2 prompts** available.
+</details>
+
+### 3. Use
+
+Restart your AI tool — you'll see **15 tools**, **6 resources**, and **2 prompts** ready to go.
+
+---
+
+## Features
+
+### v0.4.0
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | Lossless conversation log | `memory_log` / `memory_log_recall` — append-only raw turns, nothing summarized or lost |
+| **NEW** | Patch system | `memory_patch` — surgical field-level edits with auto-versioning |
+| **NEW** | Version history | `memory_versions` — immutable snapshots, restore any past state |
+| **NEW** | Knowledge graph | `memory_relate` — typed bidirectional relations between memories |
+| **NEW** | Temporal queries | `memory_since` — natural language time ranges (`7d`, `2w`, `1h`) |
+| **NEW** | Full-text search | `memory_search` — FTS5 exact match, auto-synced on every write |
+
+<details>
+<summary><strong>View all features across versions</strong></summary>
+
+### v0.3.0
+
+- Memory consolidation engine (merge, prune, promote)
+- Project detection and scope-aware filtering
+- Auto-migration for scope fields
+
+### v0.2.0
+
+- Structured output with Zod schemas
+- `memory_inject` for proactive context surfacing
+- Evaluation suite
+
+### v0.1.0
+
+- Core memory store/recall with semantic search
+- Local embeddings (HuggingFace all-MiniLM-L6-v2)
+- SQLite persistence with WAL mode
+- MCP resources and prompts
+
+</details>
 
 ---
 
 ## Memory Types
 
-| Priority | Type | What it captures | Example |
-|---|---|---|---|
-| 1.0 | **correction** | Rules that must never be broken | *"Don't mock the DB in integration tests"* |
-| 0.85 | **decision** | Architectural choices + rationale | *"Chose Postgres over Mongo for ACID compliance"* |
-| 0.7 | **pattern** | Coding style and habits | *"Prefers early returns over nested conditionals"* |
-| 0.7 | **preference** | Tool and workflow choices | *"Uses pnpm, not npm"* |
-| 0.5 | **topology** | Where things are in the codebase | *"Auth module lives in src/auth/, uses JWT"* |
-| 0.4 | **fact** | General project knowledge | *"API uses REST, launched January 2025"* |
+Memories are scored and prioritized automatically:
 
-Corrections always surface first. They are your AI's hard constraints.
+| Priority | Type | Example |
+|:---:|---|---|
+| `1.0` | **correction** | *"Don't mock the DB in integration tests"* |
+| `0.85` | **decision** | *"Chose Postgres over Mongo for ACID compliance"* |
+| `0.7` | **pattern** | *"Prefers early returns over nested conditionals"* |
+| `0.7` | **preference** | *"Uses pnpm, not npm"* |
+| `0.5` | **topology** | *"Auth module lives in src/auth/, uses JWT"* |
+| `0.4` | **fact** | *"API uses REST, launched January 2025"* |
+
+> **Corrections always surface first.** They are your AI's hard constraints.
 
 ---
 
@@ -141,9 +176,9 @@ Corrections always surface first. They are your AI's hard constraints.
 
 ### Core Memory
 
-| Tool | What it does |
+| Tool | Description |
 |---|---|
-| `memory_store` | Store a single memory with type, tags, confidence |
+| `memory_store` | Store a memory with type, tags, and confidence |
 | `memory_recall` | Semantic search — natural language, ranked by relevance |
 | `memory_context` | Load all relevant context for a topic, organized by type |
 | `memory_extract` | Batch-save multiple memories from a conversation |
@@ -152,31 +187,33 @@ Corrections always surface first. They are your AI's hard constraints.
 
 ### Precision & History
 
-| Tool | What it does |
+| Tool | Description |
 |---|---|
-| `memory_patch` | Surgical field-level edit — auto-snapshots before every change |
-| `memory_versions` | View full edit history or restore any past version |
-| `memory_search` | Exact full-text search (FTS5) — complements semantic recall |
-| `memory_since` | Temporal query — "what changed in the last 7 days?" |
-| `memory_relate` | Build knowledge graph — link memories with typed relations |
+| `memory_patch` | Surgical field-level edit with auto-snapshot |
+| `memory_versions` | View full edit history or restore any version |
+| `memory_search` | Exact full-text search via FTS5 |
+| `memory_since` | Temporal query with natural language ranges |
+| `memory_relate` | Build a knowledge graph between memories |
 
 ### Log & Maintenance
 
-| Tool | What it does |
+| Tool | Description |
 |---|---|
-| `memory_log` | Append raw conversation turns — lossless, append-only |
-| `memory_log_recall` | Search or replay log — by session, keyword, or recency |
-| `memory_stats` | Memory count, type breakdown, confidence, embedding coverage |
-| `memory_export` | Export all memories as markdown |
-| `memory_consolidate` | Merge duplicates · prune stale · promote frequently-used |
+| `memory_log` | Append raw conversation turns (lossless, append-only) |
+| `memory_log_recall` | Search or replay log by session, keyword, or recency |
+| `memory_stats` | Memory count, type breakdown, confidence stats |
+| `memory_export` | Export all memories as Markdown |
+| `memory_consolidate` | Merge duplicates, prune stale, promote frequent memories |
 
 ---
 
 ## Usage Examples
 
-### Store and recall
+<details open>
+<summary><strong>Store & Recall</strong></summary>
 
-```
+```js
+// Store a correction — highest priority, always surfaces first
 memory_store({
   content: "Never use 'any' type — always define proper interfaces",
   type: "correction",
@@ -184,39 +221,50 @@ memory_store({
   confidence: 1.0
 })
 
+// Semantic search
 memory_recall({ query: "TypeScript best practices", limit: 5 })
 ```
 
-### Patch a memory (surgical, versioned)
+</details>
 
-```
+<details>
+<summary><strong>Patch a memory (surgical, versioned)</strong></summary>
+
+```js
 memory_patch({
   id: "a1b2c3d4",
   field: "content",
   value: "Never use 'any' — define interfaces, use 'unknown' for unknown types",
   reason: "added unknown guidance"
 })
+
+// Every patch auto-snapshots. Restore any version:
+memory_versions({ memory_id: "a1b2c3d4" })
 ```
 
-Every patch auto-snapshots the previous state. Use `memory_versions` to restore.
+</details>
 
-### Lossless conversation log
+<details>
+<summary><strong>Lossless conversation log</strong></summary>
 
-```
-# Preserve raw turns verbatim
+```js
+// Preserve raw turns verbatim
 memory_log({ session_id: "2025-03-25", role: "user", content: "Let's use OAuth2 with PKCE" })
-memory_log({ session_id: "2025-03-25", role: "assistant", content: "Good call — removes token storage risk…" })
+memory_log({ session_id: "2025-03-25", role: "assistant", content: "Good call — removes token storage risk..." })
 
-# Replay a session
+// Replay a session
 memory_log_recall({ session_id: "2025-03-25" })
 
-# Search across all sessions
+// Search across all sessions
 memory_log_recall({ query: "OAuth PKCE", limit: 10 })
 ```
 
-### Build a knowledge graph
+</details>
 
-```
+<details>
+<summary><strong>Knowledge graph</strong></summary>
+
+```js
 memory_relate({
   action: "relate",
   from_id: "decision-abc",
@@ -225,80 +273,91 @@ memory_relate({
   strength: 0.9
 })
 
+// View connections
 memory_relate({ action: "graph", memory_id: "decision-abc" })
 ```
 
 Relation types: `supports`, `contradicts`, `depends_on`, `supersedes`, `related_to`, `caused_by`, `implements` — or define your own.
 
-### Query by time
+</details>
 
-```
-memory_since({ since: "7d" })                                   # last 7 days
-memory_since({ since: "1w", type: "decision" })                  # decisions this week
-memory_since({ since: "2025-03-01", until: "2025-03-15" })       # date range
+<details>
+<summary><strong>Temporal queries</strong></summary>
+
+```js
+memory_since({ since: "7d" })                              // last 7 days
+memory_since({ since: "1w", type: "decision" })             // decisions this week
+memory_since({ since: "2025-03-01", until: "2025-03-15" })  // date range
 ```
 
-### Exact full-text search
+</details>
 
+<details>
+<summary><strong>Full-text search (FTS5)</strong></summary>
+
+```js
+memory_search({ query: "OAuth PKCE" })           // exact terms
+memory_search({ query: '"event sourcing"' })      // phrase match
+memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ```
-memory_search({ query: "OAuth PKCE" })           # exact terms
-memory_search({ query: '"event sourcing"' })      # phrase match
-memory_search({ query: "auth* NOT legacy" })      # FTS5 syntax
-```
+
+</details>
 
 ---
 
-## How It Works
+## Architecture
 
 ```
-┌──────────────────────────────────────────┐
-│             Your AI Tool                 │
-│    Claude · Cursor · Windsurf · any      │
-└──────────────┬───────────────────────────┘
-               │  MCP Protocol (stdio)
-┌──────────────▼───────────────────────────┐
-│          amem-mcp-server                 │
-│                                          │
-│  15 Tools · 6 Resources · 2 Prompts      │
-│                                          │
-│  ┌──────────────────────────────────┐    │
-│  │  SQLite + FTS5 + Local Embeddings│    │
-│  │  ~/.amem/memory.db               │    │
-│  │                                  │    │
-│  │  memories         (scored)       │    │
-│  │  conversation_log (lossless)     │    │
-│  │  memory_versions  (history)      │    │
-│  │  memory_relations (graph)        │    │
-│  │  memories_fts     (FTS5 index)   │    │
-│  └──────────────────────────────────┘    │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│              Your AI Tool                    │
+│     Claude Code · Cursor · Windsurf · any    │
+└─────────────────┬────────────────────────────┘
+                  │ MCP Protocol (stdio)
+┌─────────────────▼────────────────────────────┐
+│           amem MCP Server                    │
+│                                              │
+│   15 Tools  ·  6 Resources  ·  2 Prompts     │
+│                                              │
+│   ┌────────────────────────────────────┐     │
+│   │  SQLite + WAL + FTS5               │     │
+│   │  ~/.amem/memory.db                 │     │
+│   │                                    │     │
+│   │  memories          (scored)        │     │
+│   │  conversation_log  (lossless)      │     │
+│   │  memory_versions   (history)       │     │
+│   │  memory_relations  (graph)         │     │
+│   │  memories_fts      (FTS5 index)    │     │
+│   └────────────────────────────────────┘     │
+│                                              │
+│   Local Embeddings (all-MiniLM-L6-v2, 80MB)  │
+└──────────────────────────────────────────────┘
 ```
 
-Everything stays on your machine. No cloud. No API keys.
-
-### Smart ranking
+### Ranking Formula
 
 ```
 score = relevance × recency × confidence × importance
 ```
 
-- **Relevance** — cosine similarity via local embeddings, keyword fallback
-- **Recency** — exponential decay (`0.995^hours`)
-- **Confidence** — reinforced by repeated confirmation
-- **Importance** — type-based: corrections 1.0 → facts 0.4
+| Factor | How it works |
+|---|---|
+| **Relevance** | Cosine similarity via local embeddings, keyword fallback |
+| **Recency** | Exponential decay (`0.995^hours`) |
+| **Confidence** | Reinforced by repeated confirmation |
+| **Importance** | Type-based: corrections `1.0` → facts `0.4` |
 
 ---
 
 ## MCP Resources
 
-| Resource URI | What it provides |
+| URI | Description |
 |---|---|
-| `amem://corrections` | All active corrections — hard constraints |
-| `amem://decisions` | Past architectural decisions |
-| `amem://profile` | Your preferences and coding patterns |
+| `amem://corrections` | All active corrections (hard constraints) |
+| `amem://decisions` | Architectural decisions |
+| `amem://profile` | Preferences and coding patterns |
 | `amem://summary` | Memory count and type breakdown |
 | `amem://log/recent` | Last 50 raw conversation log entries |
-| `amem://graph` | Knowledge graph — all explicit relations |
+| `amem://graph` | Knowledge graph overview |
 
 ---
 
@@ -325,17 +384,17 @@ amem-cli forget abc12345               # Delete by short ID
 
 ---
 
-## Technical Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Protocol | MCP SDK ^1.25 |
-| Language | TypeScript 5.6+ strict, zero `any` |
+| Language | TypeScript 5.6+, strict mode, zero `any` |
 | Database | SQLite + WAL + FTS5 |
 | Embeddings | HuggingFace Xenova/all-MiniLM-L6-v2 (local, 80MB) |
-| Validation | Zod 3.25+ `.strict()` schemas |
-| Testing | Vitest — 92 tests, 7 suites |
-| CI/CD | GitHub Actions — Node 18/20/22 |
+| Validation | Zod 3.25+ with `.strict()` schemas |
+| Testing | Vitest — 92 tests across 7 suites |
+| CI/CD | GitHub Actions → npm publish on release |
 
 ---
 
@@ -348,12 +407,20 @@ npm run build   # zero TS errors
 npm test        # 92 tests pass
 ```
 
-PRs must pass CI before merge.
+PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
 
 ---
 
-**Built by [Aman Asmuei](https://github.com/amanasmuei)**
+<p align="center">
+  Built by <a href="https://github.com/amanasmuei"><strong>Aman Asmuei</strong></a>
+</p>
 
-[GitHub](https://github.com/amanasmuei/amem) · [npm](https://www.npmjs.com/package/@aman_asmuei/amem) · [Issues](https://github.com/amanasmuei/amem/issues)
+<p align="center">
+  <a href="https://github.com/amanasmuei/amem">GitHub</a> &middot;
+  <a href="https://www.npmjs.com/package/@aman_asmuei/amem">npm</a> &middot;
+  <a href="https://github.com/amanasmuei/amem/issues">Issues</a>
+</p>
 
-MIT License
+<p align="center">
+  <sub>MIT License</sub>
+</p>
