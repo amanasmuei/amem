@@ -289,9 +289,9 @@ Returns:
       }).strict(),
       outputSchema: ContextResultSchema,
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -519,7 +519,7 @@ Returns:
   Summary of stored, reinforced, and skipped memories with details.`,
       inputSchema: z.object({
         memories: z.array(z.object({
-          content: z.string().min(1, "Content is required").describe("Specific, self-contained memory statement"),
+          content: z.string().min(1, "Content is required").max(10000, "Content too long — max 10,000 characters").describe("Specific, self-contained memory statement"),
           type: z.enum(MEMORY_TYPES as [string, ...string[]]).describe("Memory type"),
           tags: z.array(z.string()).default([]).describe("Relevant tags"),
           confidence: z.number().min(0).max(1).default(0.8).describe("Confidence level"),
@@ -816,9 +816,9 @@ Returns:
       }).strict(),
       outputSchema: InjectResultSchema,
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -1238,7 +1238,7 @@ Args:
       inputSchema: z.object({
         session_id: z.string().min(1).describe("Session identifier — keep consistent across a conversation"),
         role: z.enum(["user", "assistant", "system"]).describe("Who said this"),
-        content: z.string().min(1).describe("Exact content to preserve — not summarized"),
+        content: z.string().min(1).max(50000, "Log content too long — max 50,000 characters").describe("Exact content to preserve — not summarized"),
         metadata: z.record(z.unknown()).optional().describe("Optional extra context"),
       }).strict(),
       outputSchema: LogAppendResultSchema,
