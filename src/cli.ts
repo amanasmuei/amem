@@ -196,7 +196,8 @@ function handleInit(args: string[]) {
 
     if (fs.existsSync(configPath)) {
       try {
-        config = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+        const raw = fs.readFileSync(configPath, "utf-8").trim();
+        if (raw) config = JSON.parse(raw) as Record<string, unknown>;
       } catch {
         console.log(`  \u2717 ${tool.name} — could not parse ${tool.configFile}`);
         continue;

@@ -1,6 +1,6 @@
 {
   "name": "@aman_asmuei/amem",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js dist/cli.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
