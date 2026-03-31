@@ -8,7 +8,6 @@
     ".": "./dist/index.js"
   },
   "bin": {
-    "@aman_asmuei/amem": "dist/index.js",
     "amem": "dist/index.js",
     "amem-cli": "dist/cli.js"
   },

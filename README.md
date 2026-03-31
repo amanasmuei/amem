@@ -112,11 +112,26 @@ Or add to `~/.claude/settings.json`:
 
 ### 3. Use
 
-Restart your AI tool — you'll see **21 tools**, **6 resources**, and **2 prompts** ready to go.
+Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 prompts** ready to go.
 
 ---
 
 ## Features
+
+### v0.7.0
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | Memory import | `memory_import` — bulk import memories from JSON with content-hash dedup |
+| **NEW** | Log cleanup | `memory_log_cleanup` — prune old log entries with configurable retention period |
+| **NEW** | Confidence decay | `memory_consolidate` with `enable_decay` — stale non-correction memories gradually lose confidence |
+| **NEW** | Embedding cache | LRU cache (128 entries) avoids recomputing identical query embeddings |
+| **NEW** | Content-hash dedup | Exact duplicates caught even without embeddings (SHA-256 prefix) |
+| **FIX** | FTS5 sync | Delete/update triggers use explicit rowid — no more stale FTS index after delete or patch |
+| **FIX** | Short ID everywhere | `memory_forget`, CLI `forget` now support 8-char prefix matching |
+| **FIX** | Multi-process safe | `busy_timeout=5000` — Claude Code + Cursor can share the same DB |
+| **FIX** | Project collision | Scope uses full path, not just directory basename |
+| **PERF** | Scale protections | Store/extract caps at 5k embeddings, consolidation caps at 500/group, stats uses SQL aggregation |
 
 ### v0.5.1
 
@@ -224,9 +239,11 @@ Memories are scored and prioritized automatically:
 |---|---|
 | `memory_log` | Append raw conversation turns (lossless, append-only) |
 | `memory_log_recall` | Search or replay log by session, keyword, or recency |
+| `memory_log_cleanup` | Prune old log entries with configurable retention period |
 | `memory_stats` | Memory count, type breakdown, confidence stats |
-| `memory_export` | Export all memories as Markdown |
-| `memory_consolidate` | Merge duplicates, prune stale, promote frequent memories |
+| `memory_export` | Export all memories as Markdown or JSON |
+| `memory_import` | Bulk import memories from JSON with automatic dedup |
+| `memory_consolidate` | Merge duplicates, prune stale, promote frequent, decay idle memories |
 
 ---
 
@@ -383,7 +400,7 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ┌─────────────────▼────────────────────────────┐
 │           amem MCP Server                    │
 │                                              │
-│   21 Tools  ·  6 Resources  ·  2 Prompts    │
+│   23 Tools  ·  6 Resources  ·  2 Prompts    │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │
@@ -461,7 +478,7 @@ amem-cli forget abc12345               # Delete by short ID
 | Database | SQLite + WAL + FTS5 |
 | Embeddings | HuggingFace Xenova/all-MiniLM-L6-v2 (local, 80MB) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 92 tests across 7 suites |
+| Testing | Vitest — 252 tests across 16 suites |
 | CI/CD | GitHub Actions → npm publish on release |
 
 ---
@@ -472,7 +489,7 @@ amem-cli forget abc12345               # Delete by short ID
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 92 tests pass
+npm test        # 252 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
