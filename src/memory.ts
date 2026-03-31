@@ -183,10 +183,12 @@ export interface ConsolidationOptions {
   minConfidence: number;
   minAccessCount: number;
   dryRun: boolean;
+  enableDecay?: boolean;
+  decayFactor?: number;
 }
 
 export interface ConsolidationAction {
-  action: "merged" | "pruned" | "promoted";
+  action: "merged" | "pruned" | "promoted" | "decayed";
   memoryIds: string[];
   description: string;
 }
@@ -195,6 +197,7 @@ export interface ConsolidationReport {
   merged: number;
   pruned: number;
   promoted: number;
+  decayed: number;
   actions: ConsolidationAction[];
   healthScore: number;
   before: { total: number };
@@ -272,17 +275,41 @@ export function consolidateMemories(
   }
 
   // 3. PROMOTE: frequently-accessed memories with low confidence
-  const toPromote: { id: string; mem: Memory }[] = [];
+  const toPromote: { id: string }[] = [];
   for (const mem of all) {
     if (toDelete.has(mem.id)) continue;
     if (mem.accessCount >= 5 && mem.confidence < 0.8) {
-      toPromote.push({ id: mem.id, mem });
+      toPromote.push({ id: mem.id });
       promoted++;
       actions.push({
         action: "promoted",
         memoryIds: [mem.id],
         description: `Promoted "${mem.content}" to 90% confidence (accessed ${mem.accessCount} times)`,
       });
+    }
+  }
+
+  // 4. DECAY: gradually reduce confidence of stale, non-correction memories
+  let decayed = 0;
+  const toDecay: { id: string; newConfidence: number }[] = [];
+  if (options.enableDecay) {
+    const factor = options.decayFactor ?? 0.95;
+    for (const mem of all) {
+      if (toDelete.has(mem.id)) continue;
+      if (mem.type === "correction") continue;
+      const daysSinceAccess = (now - mem.lastAccessed) / msPerDay;
+      if (daysSinceAccess > 30 && mem.confidence > 0.3) {
+        const newConf = Number((mem.confidence * factor).toFixed(3));
+        if (newConf < mem.confidence) {
+          toDecay.push({ id: mem.id, newConfidence: Math.max(0.1, newConf) });
+          decayed++;
+          actions.push({
+            action: "decayed",
+            memoryIds: [mem.id],
+            description: `Decayed "${mem.content}" from ${(mem.confidence * 100).toFixed(0)}% to ${(newConf * 100).toFixed(0)}% confidence (${daysSinceAccess.toFixed(0)}d idle)`,
+          });
+        }
+      }
     }
   }
 
@@ -305,6 +332,9 @@ export function consolidateMemories(
       for (const { id } of toPromote) {
         db.updateConfidence(id, 0.9);
       }
+      for (const d of toDecay) {
+        db.updateConfidence(d.id, d.newConfidence);
+      }
     });
   }
 
@@ -316,6 +346,7 @@ export function consolidateMemories(
     merged: actions.filter(a => a.action === "merged").length,
     pruned: actions.filter(a => a.action === "pruned").length,
     promoted,
+    decayed,
     actions,
     healthScore,
     before: { total: beforeTotal },

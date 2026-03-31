@@ -49,7 +49,8 @@ function detectProject(): string {
     let dir = process.cwd();
     while (dir !== path.dirname(dir)) {
       if (fs.existsSync(path.join(dir, ".git"))) {
-        return `project:${path.basename(dir)}`;
+        // Use full path to avoid collisions between repos with the same basename
+        return `project:${dir}`;
       }
       dir = path.dirname(dir);
     }

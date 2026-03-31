@@ -5,7 +5,7 @@ import { generateEmbedding } from "../embeddings.js";
 import { VersionResultSchema } from "../schemas.js";
 import { shortId, formatAge } from "./helpers.js";
 
-export function registerVersionTools(server: McpServer, db: AmemDatabase, project: string): void {
+export function registerVersionTools(server: McpServer, db: AmemDatabase, _project: string): void {
 
   // ── memory_versions ───────────────────────────────────────
   server.registerTool(
@@ -56,8 +56,13 @@ Args:
             };
           }
 
-          db.patchMemory(fullId, { field: "content", value: target.content, reason: `restored from version ${shortId(target.versionId)}` });
-          db.patchMemory(fullId, { field: "confidence", value: target.confidence, reason: `restored from version ${shortId(target.versionId)}` });
+          // Single snapshot before restore, then apply both changes atomically (skip per-patch snapshots)
+          const restoreReason = `restored from version ${shortId(target.versionId)}`;
+          db.snapshotVersion(fullId, `before restore: ${restoreReason}`);
+          db.transaction(() => {
+            db.patchMemory(fullId, { field: "content", value: target.content, reason: restoreReason, skipSnapshot: true });
+            db.patchMemory(fullId, { field: "confidence", value: target.confidence, reason: restoreReason, skipSnapshot: true });
+          });
 
           const newEmbedding = await generateEmbedding(target.content);
           if (newEmbedding) db.updateEmbedding(fullId, newEmbedding);

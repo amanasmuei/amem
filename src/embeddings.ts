@@ -46,6 +46,29 @@ interface FeatureExtractor {
 let pipelineInstance: FeatureExtractor | null = null;
 let pipelineLoading: Promise<FeatureExtractor | null> | null = null;
 
+// LRU-style embedding cache to avoid recomputing identical queries
+const EMBEDDING_CACHE_MAX = 128;
+const embeddingCache = new Map<string, Float32Array>();
+
+function cacheGet(key: string): Float32Array | undefined {
+  const val = embeddingCache.get(key);
+  if (val) {
+    // Move to end (most recently used)
+    embeddingCache.delete(key);
+    embeddingCache.set(key, val);
+  }
+  return val;
+}
+
+function cachePut(key: string, val: Float32Array): void {
+  if (embeddingCache.size >= EMBEDDING_CACHE_MAX) {
+    // Evict oldest (first) entry
+    const oldest = embeddingCache.keys().next().value;
+    if (oldest !== undefined) embeddingCache.delete(oldest);
+  }
+  embeddingCache.set(key, val);
+}
+
 async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
   if (pipelineInstance) return pipelineInstance;
   if (pipelineLoading) return pipelineLoading;
@@ -70,11 +93,17 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
 export async function generateEmbedding(
   text: string,
 ): Promise<Float32Array | null> {
+  // Check cache first
+  const cached = cacheGet(text);
+  if (cached) return cached;
+
   const extractor = await getEmbeddingPipeline();
   if (!extractor) return null;
 
   const result = await extractor(text, { pooling: "mean", normalize: true });
-  return new Float32Array(result.data);
+  const embedding = new Float32Array(result.data);
+  cachePut(text, embedding);
+  return embedding;
 }
 
 export async function isEmbeddingAvailable(): Promise<boolean> {

@@ -4,7 +4,7 @@
 
 ```bash
 npm run build                                # tsc — must produce zero errors
-npm test                                     # vitest run — full suite (199 tests)
+npm test                                     # vitest run — full suite
 npx vitest run tests/memory.test.ts          # single test file
 npx vitest run -t "should compute score"     # single test by name
 npm run dev                                  # tsc --watch
@@ -14,7 +14,7 @@ No linter is configured. The TypeScript compiler (`strict: true`) is the primary
 
 ## Architecture
 
-amem is an MCP server that gives AI coding tools persistent, searchable memory backed by SQLite. It communicates over stdio and exposes 21 tools, 6 resources, and 2 prompts via the MCP protocol.
+amem is an MCP server that gives AI coding tools persistent, searchable memory backed by SQLite. It communicates over stdio and exposes 24 tools, 6 resources, and 2 prompts via the MCP protocol.
 
 ### Module dependency chain
 
@@ -22,12 +22,12 @@ amem is an MCP server that gives AI coding tools persistent, searchable memory b
 index.ts  — entry point: MCP server init, project detection, resource/prompt registration, auto-backup
   ├── database.ts  — SQLite layer: 7 tables, prepared statements, FTS5 triggers, migrations
   │     └── transaction(), resolveId(), resolveReminderId(), getAllRelations() — centralized DB ops
-  ├── tools/       — 21 MCP tool registrations, split by domain:
+  ├── tools/       — 24 MCP tool registrations, split by domain:
   │     ├── index.ts      — registerTools() orchestrator + re-exports (TYPE_ORDER, formatAge)
   │     ├── helpers.ts    — shared constants (SHORT_ID_LENGTH, CHARACTER_LIMIT) and utilities
-  │     ├── memory.ts     — 11 core tools: store, recall, detail, context, forget, extract, stats, export, inject, consolidate, patch
+  │     ├── memory.ts     — 12 core tools: store, recall, detail, context, forget, extract, stats, export, inject, consolidate, patch, import
   │     ├── versions.ts   — memory_versions tool
-  │     ├── log.ts        — memory_log, memory_log_recall tools
+  │     ├── log.ts        — memory_log, memory_log_recall, memory_log_cleanup tools
   │     ├── graph.ts      — memory_relate, memory_since, memory_search tools
   │     └── reminders.ts  — reminder_set, reminder_list, reminder_check, reminder_complete tools
   ├── memory.ts    — ranking engine (scoring, consolidation, recall, explain mode)
@@ -48,7 +48,7 @@ index.ts  — entry point: MCP server init, project detection, resource/prompt r
 
 ### Database tables
 
-- `memories` — core store with embedding BLOBs and scope column
+- `memories` — core store with embedding BLOBs, scope column, and content_hash for dedup
 - `memories_fts` / `log_fts` — FTS5 virtual tables, auto-synced via INSERT/UPDATE/DELETE triggers
 - `conversation_log` — append-only raw conversation turns
 - `memory_versions` — immutable snapshots for patch audit trail
@@ -57,7 +57,7 @@ index.ts  — entry point: MCP server init, project detection, resource/prompt r
 
 ### Project scoping
 
-`GLOBAL_TYPES = ["correction", "preference", "pattern"]` — always scope `"global"`, surface in every project. Other types (`decision`, `topology`, `fact`) are auto-scoped to the detected project. Queries filter: `WHERE scope = 'global' OR scope = ?`.
+`GLOBAL_TYPES = ["correction", "preference", "pattern"]` — always scope `"global"`, surface in every project. Other types (`decision`, `topology`, `fact`) are auto-scoped to the detected project (full path, not basename). Queries filter: `WHERE scope = 'global' OR scope = ?`.
 
 ### Memory type constants
 
@@ -80,6 +80,7 @@ GLOBAL_TYPES = ["correction", "preference", "pattern"];  // auto-scope to "globa
 - **Merge**: cosine similarity > 0.85 → keep higher confidence, boost by +0.1. Batched by type (corrections are never merged). All mutations wrapped in a single `db.transaction()` for atomicity.
 - **Prune**: stale > 60 days AND confidence < 0.3 AND access count < N (all three required; never prunes corrections). `min_access_count` is configurable via `memory_consolidate` tool.
 - **Promote**: access count ≥ 5 AND confidence < 0.8 → boost to 0.9
+- **Decay** (opt-in via `enable_decay`): stale > 30 days AND non-correction → multiply confidence by decay_factor (default: 0.95). Floor: 0.1.
 
 ### Short ID matching
 
@@ -87,7 +88,7 @@ Tools that accept memory IDs support 8-character prefix matching via `db.resolve
 
 ### Transactions
 
-`db.transaction(fn)` wraps synchronous operations in a SQLite transaction (rollback on error). For async work (like embedding generation), pre-compute async results first, then batch all DB writes inside `db.transaction()`. See `memory_extract` in `tools/memory.ts` for the canonical pattern.
+`db.transaction(fn)` wraps synchronous operations in a SQLite transaction (rollback on error). For async work (like embedding generation), pre-compute async results first, then batch all DB writes inside `db.transaction()`. See `memory_extract` in `tools/memory.ts` for the canonical pattern. `patchMemory` accepts `skipSnapshot: true` for batch operations that manage their own versioning (e.g., version restore).
 
 ### Auto-backup
 
@@ -140,6 +141,7 @@ server.registerTool(
 
 - All queries use prepared statements (`better-sqlite3`)
 - FTS5 queries wrap in try/catch with fallback to `LIKE` — special characters can break FTS5 syntax. Failures logged with `[amem]` prefix.
+- FTS5 triggers use explicit `rowid` for external content tables — required for correct delete/update sync. Triggers are DROP+CREATE (not IF NOT EXISTS) to allow migration of existing DBs.
 - Embeddings stored as `Float32Array` → `Buffer` BLOBs
 - Schema migrations are defensive: check with `PRAGMA table_info()` before `ALTER TABLE`
 - Batch operations (extract, consolidation) use `db.transaction()` for atomicity

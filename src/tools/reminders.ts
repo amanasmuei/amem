@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
+import {
+  ReminderSetResultSchema,
+  ReminderListResultSchema,
+  ReminderCheckResultSchema,
+  ReminderCompleteResultSchema,
+} from "../schemas.js";
 import { shortId } from "./helpers.js";
 
 export function registerReminderTools(server: McpServer, db: AmemDatabase): void {
@@ -24,6 +30,7 @@ Returns:
         due_at: z.number().optional().describe("Unix timestamp (ms) for when the reminder is due"),
         scope: z.string().default("global").describe("Scope for the reminder — 'global' or project-specific"),
       }).strict(),
+      outputSchema: ReminderSetResultSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -40,6 +47,12 @@ Returns:
             type: "text" as const,
             text: `Reminder set: "${content}"${dueStr}\nID: ${id}`,
           }],
+          structuredContent: {
+            id,
+            content,
+            dueAt: due_at ?? null,
+            scope,
+          },
         };
       } catch (error) {
         return {
@@ -70,6 +83,7 @@ Returns:
         include_completed: z.boolean().default(false).describe("Whether to include completed reminders"),
         scope: z.string().optional().describe("Filter by scope — returns global + scope-matching reminders"),
       }).strict(),
+      outputSchema: ReminderListResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -84,6 +98,7 @@ Returns:
         if (reminders.length === 0) {
           return {
             content: [{ type: "text" as const, text: "No reminders found." }],
+            structuredContent: { total: 0, reminders: [] },
           };
         }
 
@@ -98,6 +113,16 @@ Returns:
 
         return {
           content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            total: reminders.length,
+            reminders: reminders.map(r => ({
+              id: r.id,
+              content: r.content,
+              dueAt: r.dueAt,
+              completed: r.completed,
+              scope: r.scope,
+            })),
+          },
         };
       } catch (error) {
         return {
@@ -123,6 +148,7 @@ Args: None
 Returns:
   List of actionable reminders with [OVERDUE], [TODAY], or [upcoming] prefixes.`,
       inputSchema: z.object({}).strict(),
+      outputSchema: ReminderCheckResultSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -137,6 +163,7 @@ Returns:
         if (reminders.length === 0) {
           return {
             content: [{ type: "text" as const, text: "No overdue, today, or upcoming reminders." }],
+            structuredContent: { total: 0, reminders: [] },
           };
         }
 
@@ -151,6 +178,16 @@ Returns:
 
         return {
           content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            total: reminders.length,
+            reminders: reminders.map(r => ({
+              id: r.id,
+              content: r.content,
+              dueAt: r.dueAt,
+              status: r.status,
+              scope: r.scope,
+            })),
+          },
         };
       } catch (error) {
         return {
@@ -179,6 +216,7 @@ Returns:
       inputSchema: z.object({
         id: z.string().min(1).describe("Full or partial reminder ID"),
       }).strict(),
+      outputSchema: ReminderCompleteResultSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -188,26 +226,23 @@ Returns:
     },
     async ({ id }) => {
       try {
-        // Try exact match first
-        if (db.completeReminder(id)) {
-          return {
-            content: [{ type: "text" as const, text: `Reminder ${shortId(id)} marked as completed.` }],
-          };
-        }
-
-        // Try partial ID match via SQL prefix
-        const fullId = db.resolveReminderId(id);
-        if (!fullId) {
+        // Resolve partial ID first, then complete
+        const fullId = db.resolveReminderId(id) ?? id;
+        if (!db.completeReminder(fullId)) {
           return {
             isError: true,
             content: [{ type: "text" as const, text: `No reminder found matching ID "${id}".` }],
           };
         }
 
-        db.completeReminder(fullId);
         const reminder = db.listReminders(true).find(r => r.id === fullId);
         return {
           content: [{ type: "text" as const, text: `Reminder ${shortId(fullId)} marked as completed${reminder ? `: "${reminder.content}"` : ""}.` }],
+          structuredContent: {
+            id: fullId,
+            completed: true,
+            content: reminder?.content,
+          },
         };
       } catch (error) {
         return {

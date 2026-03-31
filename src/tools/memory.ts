@@ -14,6 +14,7 @@ import {
   InjectResultSchema,
   ConsolidateResultSchema,
   PatchResultSchema,
+  DetailResultSchema,
 } from "../schemas.js";
 import { TYPE_ORDER, MEMORY_TYPES, CHARACTER_LIMIT, shortId, formatAge } from "./helpers.js";
 
@@ -55,49 +56,56 @@ Returns:
       try {
         const embedding = await generateEmbedding(content);
 
-        // Single pass over existing memories: conflict detection + reinforcement
+        // Single pass over existing memories: conflict detection, confidence boost, and reinforcement
         if (embedding) {
           const existing = db.getAllWithEmbeddings();
+
+          const toReinforce: string[] = [];
+          const toBoostConfidence: Array<{ id: string; confidence: number }> = [];
 
           for (const mem of existing) {
             if (!mem.embedding) continue;
             const sim = cosineSimilarity(embedding, mem.embedding);
-            const conflict = detectConflict(content, mem.content, sim);
-            if (conflict.isConflict) {
-              db.updateConfidence(mem.id, Math.max(mem.confidence, confidence));
-              return {
-                content: [{
-                  type: "text" as const,
-                  text: `Memory conflict detected. Similar memory exists (${(sim * 100).toFixed(0)}% match): "${mem.content}" — updated its confidence instead of creating duplicate.\n\nIf these are genuinely different memories, rephrase to be more distinct.`,
-                }],
-                structuredContent: {
-                  action: "conflict_resolved" as const,
-                  existingId: mem.id,
-                  similarity: Number((sim * 100).toFixed(0)),
-                  existingContent: mem.content,
-                },
-              };
+
+            if (sim > 0.85) {
+              // Near-duplicate — conflict resolution
+              const conflict = detectConflict(content, mem.content, sim);
+              if (conflict.isConflict) {
+                db.updateConfidence(mem.id, Math.max(mem.confidence, confidence));
+                return {
+                  content: [{
+                    type: "text" as const,
+                    text: `Memory conflict detected. Similar memory exists (${(sim * 100).toFixed(0)}% match): "${mem.content}" — updated its confidence instead of creating duplicate.\n\nIf these are genuinely different memories, rephrase to be more distinct.`,
+                  }],
+                  structuredContent: {
+                    action: "conflict_resolved" as const,
+                    existingId: mem.id,
+                    similarity: Number((sim * 100).toFixed(0)),
+                    existingContent: mem.content,
+                  },
+                };
+              }
             }
+
             if (sim > 0.8) {
-              db.updateConfidence(mem.id, Math.min(1.0, mem.confidence + 0.1));
+              toBoostConfidence.push({ id: mem.id, confidence: mem.confidence });
+            } else if (sim > 0.6) {
+              toReinforce.push(mem.id);
             }
           }
 
           const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
 
-          // Reinforce related memories (0.6-0.8 range) using already-loaded embeddings
-          let evolved = 0;
-          for (const mem of existing) {
-            if (!mem.embedding) continue;
-            const sim = cosineSimilarity(embedding, mem.embedding);
-            if (sim > 0.6 && sim <= 0.8) {
-              db.touchAccess(mem.id);
-              evolved++;
-            }
+          // Apply boosts and reinforcements collected in the single pass
+          for (const b of toBoostConfidence) {
+            db.updateConfidence(b.id, Math.min(1.0, b.confidence + 0.1));
+          }
+          for (const rId of toReinforce) {
+            db.touchAccess(rId);
           }
 
           const stats = db.getStats();
-          const evolvedNote = evolved > 0 ? ` Reinforced ${evolved} related memories.` : "";
+          const evolvedNote = toReinforce.length > 0 ? ` Reinforced ${toReinforce.length} related memories.` : "";
           return {
             content: [{
               type: "text" as const,
@@ -110,12 +118,28 @@ Returns:
               confidence,
               tags,
               total: stats.total,
-              reinforced: evolved,
+              reinforced: toReinforce.length,
             },
           };
         }
 
-        // No embeddings available — store directly
+        // No embeddings available — check content hash for exact duplicates, then store
+        const existingByHash = db.findByContentHash(content);
+        if (existingByHash) {
+          db.updateConfidence(existingByHash.id, Math.max(existingByHash.confidence, confidence));
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Exact duplicate detected: "${existingByHash.content}" — updated confidence instead of creating duplicate.`,
+            }],
+            structuredContent: {
+              action: "conflict_resolved" as const,
+              existingId: existingByHash.id,
+              similarity: 100,
+              existingContent: existingByHash.content,
+            },
+          };
+        }
         const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
         const stats = db.getStats();
         return {
@@ -211,7 +235,7 @@ Returns:
         }
 
         if (compact) {
-          const compactLines = results.map((r, i) => {
+          const compactLines = results.map((r) => {
             const preview = r.content.slice(0, 80) + (r.content.length > 80 ? "..." : "");
             return `${shortId(r.id)} [${r.type}] ${preview} (${(r.score * 100).toFixed(0)}%)`;
           });
@@ -298,6 +322,13 @@ Returns:
       inputSchema: z.object({
         ids: z.array(z.string()).min(1).max(20).describe("Memory IDs (full or first 8 chars) to retrieve"),
       }).strict(),
+      outputSchema: DetailResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async ({ ids }) => {
       try {
@@ -313,6 +344,7 @@ Returns:
         if (found.length === 0) {
           return {
             content: [{ type: "text" as const, text: "No memories found for the given IDs." }],
+            structuredContent: { total: 0, tokenEstimate: 0, memories: [] },
           };
         }
 
@@ -329,6 +361,19 @@ Returns:
             type: "text" as const,
             text: `${found.length} memories (~${tokenEstimate} tokens):\n\n${lines.join("\n\n")}`,
           }],
+          structuredContent: {
+            total: found.length,
+            tokenEstimate,
+            memories: found.map(r => ({
+              id: r.id,
+              content: r.content,
+              type: r.type,
+              confidence: r.confidence,
+              tags: r.tags,
+              age: formatAge(r.createdAt),
+              scope: r.scope,
+            })),
+          },
         };
       } catch (error) {
         return {
@@ -484,19 +529,20 @@ Error Handling:
     async ({ id, query, confirm }) => {
       try {
         if (id) {
-          const memory = db.getById(id);
+          const fullId = db.resolveId(id) ?? id;
+          const memory = db.getById(fullId);
           if (!memory) {
             return {
               isError: true,
               content: [{ type: "text" as const, text: `Memory ${id} not found. Use memory_recall to search for the correct ID.` }],
             };
           }
-          db.deleteMemory(id);
+          db.deleteMemory(fullId);
           return {
             content: [{ type: "text" as const, text: `Deleted memory: "${memory.content}" (${memory.type})` }],
             structuredContent: {
               action: "deleted" as const,
-              id,
+              id: fullId,
               content: memory.content,
               type: memory.type,
             },
@@ -995,7 +1041,12 @@ Returns:
           };
         }
 
-        for (const r of results) db.touchAccess(r.id);
+        // Only touch access for memories actually surfaced to the user
+        for (const r of results) {
+          if (r.type === MemoryType.CORRECTION || r.type === MemoryType.DECISION) {
+            db.touchAccess(r.id);
+          }
+        }
 
         return {
           content: [{ type: "text" as const, text: context.trim() }],
@@ -1033,14 +1084,18 @@ Args:
   - max_stale_days (number): Days of inactivity before a memory is considered stale (default: 60)
   - min_confidence (number): Minimum confidence for stale memories to survive (default: 0.3)
   - min_access_count (number): Minimum access count for stale memories to survive (default: 2)
+  - enable_decay (boolean): Enable confidence decay for stale non-correction memories (default: false)
+  - decay_factor (number 0-1): Multiplier applied to confidence per consolidation cycle (default: 0.95)
 
 Returns:
-  Report with merged/pruned/promoted counts, health score, and detailed action list.`,
+  Report with merged/pruned/promoted/decayed counts, health score, and detailed action list.`,
       inputSchema: z.object({
         confirm: z.boolean().default(false).describe("false = preview (safe), true = execute consolidation"),
         max_stale_days: z.number().int().min(1).default(60).describe("Days of inactivity before considering a memory stale"),
         min_confidence: z.number().min(0).max(1).default(0.3).describe("Confidence threshold for stale memory pruning"),
         min_access_count: z.number().int().min(0).default(2).describe("Minimum access count for stale memories to survive pruning"),
+        enable_decay: z.boolean().default(false).describe("Enable confidence decay for stale non-correction memories"),
+        decay_factor: z.number().min(0.5).max(1).default(0.95).describe("Multiplier applied to confidence per consolidation cycle"),
       }).strict(),
       outputSchema: ConsolidateResultSchema,
       annotations: {
@@ -1050,13 +1105,15 @@ Returns:
         openWorldHint: false,
       },
     },
-    async ({ confirm, max_stale_days, min_confidence, min_access_count }) => {
+    async ({ confirm, max_stale_days, min_confidence, min_access_count, enable_decay, decay_factor }) => {
       try {
         const report = consolidateMemories(db, cosineSimilarity, {
           dryRun: !confirm,
           maxStaleDays: max_stale_days,
           minConfidence: min_confidence,
           minAccessCount: min_access_count,
+          enableDecay: enable_decay,
+          decayFactor: decay_factor,
         });
 
         const mode = confirm ? "EXECUTED" : "PREVIEW (dry run)";
@@ -1070,17 +1127,18 @@ Returns:
           `Merged: ${report.merged} near-duplicates`,
           `Pruned: ${report.pruned} stale memories`,
           `Promoted: ${report.promoted} frequently-used memories`,
+          ...(report.decayed > 0 ? [`Decayed: ${report.decayed} stale memories (confidence reduced)`] : []),
         ];
 
         if (report.actions.length > 0) {
           lines.push("", "Details:");
           for (const a of report.actions) {
-            const prefix = a.action === "merged" ? "~" : a.action === "pruned" ? "-" : "+";
+            const prefix = a.action === "merged" ? "~" : a.action === "pruned" ? "-" : a.action === "decayed" ? "v" : "+";
             lines.push(`  ${prefix} ${a.description}`);
           }
         }
 
-        if (!confirm && (report.merged > 0 || report.pruned > 0)) {
+        if (!confirm && (report.merged > 0 || report.pruned > 0 || report.decayed > 0)) {
           lines.push("", "Call again with confirm=true to execute these changes.");
         }
 
@@ -1090,6 +1148,7 @@ Returns:
             merged: report.merged,
             pruned: report.pruned,
             promoted: report.promoted,
+            decayed: report.decayed,
             healthScore: report.healthScore,
             before: report.before,
             after: report.after,
@@ -1209,6 +1268,121 @@ Args:
           content: [{
             type: "text" as const,
             text: `Error patching memory: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_import ────────────────────────────────────────
+  server.registerTool(
+    "memory_import",
+    {
+      title: "Import Memories from JSON",
+      description: `Import memories from a JSON array. Use this to restore from a backup, migrate between machines, or seed memories from another source.
+
+Each memory in the array should have: content, type, tags, confidence. Duplicates are detected by content hash and skipped.
+
+Args:
+  - memories (array): Array of {content, type, tags, confidence} objects to import
+  - source (string): Import source identifier (default: 'import')
+
+Returns:
+  Summary of imported, skipped (duplicate), and total memories.`,
+      inputSchema: z.object({
+        memories: z.array(z.object({
+          content: z.string().min(1).max(10000),
+          type: z.enum(MEMORY_TYPES as [string, ...string[]]),
+          tags: z.array(z.string()).default([]),
+          confidence: z.number().min(0).max(1).default(0.8),
+        }).strict()).min(1).max(500).describe("Array of memories to import"),
+        source: z.string().default("import").describe("Import source identifier"),
+      }).strict(),
+      outputSchema: ExtractResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ memories: memoryInputs, source }) => {
+      try {
+        let stored = 0;
+        let skipped = 0;
+        const details: Array<{
+          action: "stored" | "reinforced";
+          content: string;
+          type?: string;
+          id?: string;
+          matchedContent?: string;
+          similarity?: number;
+        }> = [];
+
+        // Pre-compute embeddings, then batch all DB writes
+        const pendingOps: Array<{
+          input: typeof memoryInputs[0];
+          embedding: Float32Array | null;
+        }> = [];
+
+        for (const input of memoryInputs) {
+          // Skip exact duplicates by content hash
+          const existing = db.findByContentHash(input.content);
+          if (existing) {
+            skipped++;
+            details.push({
+              action: "reinforced",
+              content: input.content,
+              matchedContent: existing.content,
+              similarity: 100,
+            });
+            continue;
+          }
+
+          const embedding = await generateEmbedding(input.content);
+          pendingOps.push({ input, embedding });
+        }
+
+        db.transaction(() => {
+          for (const { input, embedding } of pendingOps) {
+            const id = db.insertMemory({
+              content: input.content,
+              type: input.type as MemoryTypeValue,
+              tags: input.tags,
+              confidence: input.confidence,
+              source,
+              embedding,
+              scope: autoScope(input.type as MemoryTypeValue),
+            });
+            stored++;
+            details.push({
+              action: "stored",
+              content: input.content,
+              type: input.type,
+              id: shortId(id),
+            });
+          }
+        });
+
+        const stats = db.getStats();
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Import complete: ${stored} imported, ${skipped} duplicates skipped. Total memories: ${stats.total}.`,
+          }],
+          structuredContent: {
+            stored,
+            reinforced: skipped,
+            total: stats.total,
+            details,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error importing memories: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }

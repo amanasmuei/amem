@@ -255,16 +255,15 @@ function handleForget(args: string[]) {
     process.exit(1);
   }
 
-  // Support short IDs (first 8 chars)
-  const all = db.getAll();
-  const match = all.find(m => m.id.startsWith(id));
-
-  if (!match) {
+  // Support short IDs via SQL prefix match (no full table scan)
+  const fullId = db.resolveId(id);
+  if (!fullId) {
     console.error(`No memory found matching ID: ${id}`);
     process.exit(1);
   }
 
-  db.deleteMemory(match.id);
-  console.log(`Deleted: "${match.content}" (${match.type})`);
+  const match = db.getById(fullId);
+  db.deleteMemory(fullId);
+  console.log(`Deleted: "${match?.content}" (${match?.type})`);
 }
 

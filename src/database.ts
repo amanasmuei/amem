@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { Memory, MemoryTypeValue } from "./memory.js";
 
 export interface MemoryInput {
@@ -57,10 +57,12 @@ export interface PatchInput {
   field: "content" | "confidence" | "tags" | "type";
   value: string | number | string[];
   reason: string;
+  skipSnapshot?: boolean;
 }
 
 export interface AmemDatabase {
   insertMemory(input: MemoryInput): string;
+  findByContentHash(content: string): Memory | null;
   getById(id: string): Memory | null;
   searchByType(type: MemoryTypeValue): Memory[];
   searchByTag(tag: string): Memory[];
@@ -80,6 +82,8 @@ export interface AmemDatabase {
   getLogBySession(sessionId: string): LogEntry[];
   searchLog(query: string, limit?: number): LogEntry[];
   getRecentLog(limit: number, project?: string): LogEntry[];
+  deleteLogBefore(timestamp: number): number;
+  getLogCount(): number;
   // Versioning
   snapshotVersion(memoryId: string, reason: string): void;
   getVersionHistory(memoryId: string): MemoryVersion[];
@@ -277,10 +281,23 @@ export function createDatabase(dbPath: string): AmemDatabase {
   }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)`);
 
+  // Migration: add content_hash column for dedup without embeddings
+  const hasContentHash = columns.some(c => c.name === 'content_hash');
+  if (!hasContentHash) {
+    db.exec(`ALTER TABLE memories ADD COLUMN content_hash TEXT`);
+    // Backfill existing rows
+    const allRows = db.prepare("SELECT id, content FROM memories").all() as { id: string; content: string }[];
+    const updateHash = db.prepare("UPDATE memories SET content_hash = ? WHERE id = ?");
+    for (const row of allRows) {
+      updateHash.run(createHash("sha256").update(row.content).digest("hex").slice(0, 16), row.id);
+    }
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_content_hash ON memories(content_hash)`);
+
   const stmts = {
     insert: db.prepare(`
-      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding, scope)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding, scope, content_hash)
+      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare(`SELECT * FROM memories WHERE id = ?`),
     searchByType: db.prepare(`SELECT * FROM memories WHERE type = ? ORDER BY last_accessed DESC`),
@@ -313,6 +330,8 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getLogBySession: db.prepare(`SELECT * FROM conversation_log WHERE session_id = ? ORDER BY timestamp ASC`),
     getRecentLog: db.prepare(`SELECT * FROM conversation_log ORDER BY timestamp DESC LIMIT ?`),
     getRecentLogByProject: db.prepare(`SELECT * FROM conversation_log WHERE project = ? ORDER BY timestamp DESC LIMIT ?`),
+    deleteLogBefore: db.prepare(`DELETE FROM conversation_log WHERE timestamp < ?`),
+    countLog: db.prepare(`SELECT COUNT(*) as count FROM conversation_log`),
     // Versions
     insertVersion: db.prepare(`
       INSERT INTO memory_versions (version_id, memory_id, content, confidence, edited_at, reason)
@@ -332,7 +351,10 @@ export function createDatabase(dbPath: string): AmemDatabase {
     listReminders: db.prepare("SELECT * FROM reminders WHERE completed = 0 ORDER BY due_at ASC NULLS LAST"),
     listAllReminders: db.prepare("SELECT * FROM reminders ORDER BY due_at ASC NULLS LAST"),
     listRemindersByScope: db.prepare("SELECT * FROM reminders WHERE completed = 0 AND (scope = 'global' OR scope = ?) ORDER BY due_at ASC NULLS LAST"),
+    listAllRemindersByScope: db.prepare("SELECT * FROM reminders WHERE (scope = 'global' OR scope = ?) ORDER BY due_at ASC NULLS LAST"),
     completeReminder: db.prepare("UPDATE reminders SET completed = 1 WHERE id = ?"),
+    // Content hash dedup
+    findByContentHash: db.prepare("SELECT * FROM memories WHERE content_hash = ? LIMIT 1"),
     // ID resolution via SQL prefix match (avoids full table scan)
     resolveIdPrefix: db.prepare("SELECT id FROM memories WHERE id LIKE ? LIMIT 2"),
     resolveReminderIdPrefix: db.prepare("SELECT id FROM reminders WHERE id LIKE ? LIMIT 2"),
@@ -340,20 +362,27 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getAllRelations: db.prepare("SELECT * FROM memory_relations ORDER BY created_at DESC"),
   };
 
-  // Keep FTS index in sync via triggers
+  // Keep FTS index in sync via triggers.
+  // External-content FTS5 tables require explicit rowid in all operations.
+  // Drop and recreate triggers to pick up the rowid fix for existing DBs.
   db.exec(`
-    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-      INSERT INTO memories_fts(id, content, tags) VALUES (new.id, new.content, new.tags);
+    DROP TRIGGER IF EXISTS memories_ai;
+    DROP TRIGGER IF EXISTS memories_ad;
+    DROP TRIGGER IF EXISTS memories_au;
+    DROP TRIGGER IF EXISTS log_ai;
+
+    CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
+      INSERT INTO memories_fts(rowid, id, content, tags) VALUES (new.rowid, new.id, new.content, new.tags);
     END;
-    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-      INSERT INTO memories_fts(memories_fts, id, content, tags) VALUES ('delete', old.id, old.content, old.tags);
+    CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, id, content, tags) VALUES ('delete', old.rowid, old.id, old.content, old.tags);
     END;
-    CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-      INSERT INTO memories_fts(memories_fts, id, content, tags) VALUES ('delete', old.id, old.content, old.tags);
-      INSERT INTO memories_fts(id, content, tags) VALUES (new.id, new.content, new.tags);
+    CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, id, content, tags) VALUES ('delete', old.rowid, old.id, old.content, old.tags);
+      INSERT INTO memories_fts(rowid, id, content, tags) VALUES (new.rowid, new.id, new.content, new.tags);
     END;
-    CREATE TRIGGER IF NOT EXISTS log_ai AFTER INSERT ON conversation_log BEGIN
-      INSERT INTO log_fts(id, content) VALUES (new.id, new.content);
+    CREATE TRIGGER log_ai AFTER INSERT ON conversation_log BEGIN
+      INSERT INTO log_fts(rowid, id, content) VALUES (new.rowid, new.id, new.content);
     END;
   `);
 
@@ -364,6 +393,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
       const embeddingBuffer = input.embedding
         ? Buffer.from(input.embedding.buffer, input.embedding.byteOffset, input.embedding.byteLength)
         : null;
+      const contentHash = createHash("sha256").update(input.content).digest("hex").slice(0, 16);
       stmts.insert.run(
         id,
         input.content,
@@ -375,8 +405,15 @@ export function createDatabase(dbPath: string): AmemDatabase {
         input.source,
         embeddingBuffer,
         input.scope,
+        contentHash,
       );
       return id;
+    },
+
+    findByContentHash(content: string): Memory | null {
+      const hash = createHash("sha256").update(content).digest("hex").slice(0, 16);
+      const row = stmts.findByContentHash.get(hash) as MemoryRow | undefined;
+      return row ? rowToMemory(row) : null;
     },
 
     getById(id: string): Memory | null {
@@ -528,6 +565,15 @@ export function createDatabase(dbPath: string): AmemDatabase {
       }));
     },
 
+    deleteLogBefore(timestamp: number): number {
+      const result = stmts.deleteLogBefore.run(timestamp);
+      return result.changes;
+    },
+
+    getLogCount(): number {
+      return (stmts.countLog.get() as { count: number }).count;
+    },
+
     // ── Versioning ──────────────────────────────────────────
     snapshotVersion(memoryId: string, reason: string): void {
       const mem = this.getById(memoryId);
@@ -550,8 +596,10 @@ export function createDatabase(dbPath: string): AmemDatabase {
     patchMemory(id: string, patch: PatchInput): boolean {
       const mem = this.getById(id);
       if (!mem) return false;
-      // Snapshot before patching
-      this.snapshotVersion(id, `before patch: ${patch.reason}`);
+      // Snapshot before patching (can be skipped for batch operations like restore)
+      if (!patch.skipSnapshot) {
+        this.snapshotVersion(id, `before patch: ${patch.reason}`);
+      }
       const now = Date.now();
       switch (patch.field) {
         case "content":
@@ -624,7 +672,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
 
     listReminders(includeCompleted = false, scope?: string): Array<{ id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }> {
       const rows = (scope
-        ? stmts.listRemindersByScope.all(scope)
+        ? (includeCompleted ? stmts.listAllRemindersByScope.all(scope) : stmts.listRemindersByScope.all(scope))
         : (includeCompleted ? stmts.listAllReminders.all() : stmts.listReminders.all())
       ) as Array<{ id: string; content: string; due_at: number | null; completed: number; created_at: number; scope: string }>;
       return rows.map(r => ({

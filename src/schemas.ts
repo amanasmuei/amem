@@ -118,11 +118,12 @@ export const ConsolidateResultSchema = z.object({
   merged: z.number(),
   pruned: z.number(),
   promoted: z.number(),
+  decayed: z.number(),
   healthScore: z.number(),
   before: z.object({ total: z.number() }),
   after: z.object({ total: z.number() }),
   actions: z.array(z.object({
-    action: z.enum(["merged", "pruned", "promoted"]),
+    action: z.enum(["merged", "pruned", "promoted", "decayed"]),
     memoryIds: z.array(z.string()),
     description: z.string(),
   })),
@@ -225,5 +226,63 @@ export const TemporalResultSchema = z.object({
     age: z.string(),
     tags: z.array(z.string()),
   })),
+});
+
+// ── Memory Detail ───────────────────────────────────────
+export const DetailResultSchema = z.object({
+  total: z.number(),
+  tokenEstimate: z.number(),
+  memories: z.array(z.object({
+    id: z.string(),
+    content: z.string(),
+    type: z.string(),
+    confidence: z.number(),
+    tags: z.array(z.string()),
+    age: z.string(),
+    scope: z.string(),
+  })),
+});
+
+// ── Reminders ───────────────────────────────────────────
+export const ReminderSetResultSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  dueAt: z.number().nullable(),
+  scope: z.string(),
+});
+
+export const ReminderListResultSchema = z.object({
+  total: z.number(),
+  reminders: z.array(z.object({
+    id: z.string(),
+    content: z.string(),
+    dueAt: z.number().nullable(),
+    completed: z.boolean(),
+    scope: z.string(),
+  })),
+});
+
+export const ReminderCheckResultSchema = z.object({
+  total: z.number(),
+  reminders: z.array(z.object({
+    id: z.string(),
+    content: z.string(),
+    dueAt: z.number().nullable(),
+    status: z.enum(["overdue", "today", "upcoming"]),
+    scope: z.string(),
+  })),
+});
+
+export const ReminderCompleteResultSchema = z.object({
+  id: z.string(),
+  completed: z.boolean(),
+  content: z.string().optional(),
+});
+
+// ── Log Cleanup ─────────────────────────────────────────
+export const LogCleanupResultSchema = z.object({
+  deleted: z.number(),
+  remaining: z.number(),
+  cutoffDate: z.string(),
 });
 

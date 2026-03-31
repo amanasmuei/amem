@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
-import { LogAppendResultSchema, LogRecallResultSchema } from "../schemas.js";
+import { LogAppendResultSchema, LogRecallResultSchema, LogCleanupResultSchema } from "../schemas.js";
 import { shortId, formatAge } from "./helpers.js";
 
 export function registerLogTools(server: McpServer, db: AmemDatabase, project: string): void {
@@ -180,6 +180,80 @@ Args:
           content: [{
             type: "text" as const,
             text: `Error searching log: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_log_cleanup ───────────────────────────────────
+  server.registerTool(
+    "memory_log_cleanup",
+    {
+      title: "Clean Up Conversation Log",
+      description: `Delete old conversation log entries to keep the database lean. The conversation log is append-only and grows without bound — use this periodically to prune entries older than a given retention period.
+
+Args:
+  - older_than_days (number): Delete log entries older than this many days (default: 90)
+  - confirm (boolean): Must be true to actually delete (default: false — preview only)
+
+Returns:
+  Number of entries deleted and remaining.`,
+      inputSchema: z.object({
+        older_than_days: z.number().int().min(1).default(90).describe("Delete entries older than this many days"),
+        confirm: z.boolean().default(false).describe("false = preview (safe), true = execute deletion"),
+      }).strict(),
+      outputSchema: LogCleanupResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ older_than_days, confirm }) => {
+      try {
+        const cutoff = Date.now() - older_than_days * 24 * 60 * 60 * 1000;
+        const cutoffDate = new Date(cutoff).toISOString().slice(0, 10);
+        const totalBefore = db.getLogCount();
+
+        if (!confirm) {
+          // Preview: count how many would be deleted
+          const recent = db.getRecentLog(totalBefore);
+          const wouldDelete = recent.filter(e => e.timestamp < cutoff).length;
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Preview: ${wouldDelete} log entries older than ${older_than_days} days (before ${cutoffDate}) would be deleted.\n${totalBefore - wouldDelete} entries would remain.\n\nCall again with confirm=true to execute.`,
+            }],
+            structuredContent: {
+              deleted: wouldDelete,
+              remaining: totalBefore - wouldDelete,
+              cutoffDate,
+            },
+          };
+        }
+
+        const deleted = db.deleteLogBefore(cutoff);
+        const remaining = db.getLogCount();
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Deleted ${deleted} log entries older than ${older_than_days} days (before ${cutoffDate}). ${remaining} entries remaining.`,
+          }],
+          structuredContent: {
+            deleted,
+            remaining,
+            cutoffDate,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error cleaning up log: ${error instanceof Error ? error.message : String(error)}`,
           }],
         };
       }
