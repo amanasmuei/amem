@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createDatabase } from "./database.js";
-import { registerTools, TYPE_ORDER } from "./tools.js";
+import { registerTools, TYPE_ORDER } from "./tools/index.js";
 import { MemoryType } from "./memory.js";
 import path from "node:path";
 import os from "node:os";

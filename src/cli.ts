@@ -3,7 +3,7 @@
 import { createDatabase } from "./database.js";
 import { recallMemories, MemoryType, type MemoryTypeValue } from "./memory.js";
 import { generateEmbedding } from "./embeddings.js";
-import { formatAge, TYPE_ORDER } from "./tools.js";
+import { formatAge, TYPE_ORDER } from "./tools/index.js";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";

@@ -76,17 +76,33 @@ export interface RecallOptions {
   tag?: string;
   minConfidence?: number;
   scope?: string;
+  explain?: boolean;
 }
 
 export interface RecalledMemory extends Memory {
   score: number;
 }
 
+export interface ScoreExplanation {
+  relevance: number;
+  relevanceSource: "semantic" | "keyword" | "default";
+  recency: number;
+  hoursSinceAccess: number;
+  confidence: number;
+  importance: number;
+  importanceLabel: string;
+  finalScore: number;
+}
+
+export interface ExplainedMemory extends RecalledMemory {
+  explanation: ScoreExplanation;
+}
+
 export function recallMemories(
   db: AmemDatabase,
   options: RecallOptions,
-): RecalledMemory[] {
-  const { query, queryEmbedding, limit, type, tag, minConfidence, scope } = options;
+): (RecalledMemory | ExplainedMemory)[] {
+  const { query, queryEmbedding, limit, type, tag, minConfidence, scope, explain } = options;
   const now = Date.now();
 
   let candidates: Memory[];
@@ -122,23 +138,40 @@ export function recallMemories(
     // If no keyword matches, keep all candidates (broad fallback)
   }
 
-  const scored: RecalledMemory[] = candidates.map((memory) => {
+  const scored = candidates.map((memory) => {
     let relevance = 0.5;
+    let relevanceSource: ScoreExplanation["relevanceSource"] = "default";
     if (queryEmbedding && memory.embedding) {
       relevance = Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding));
+      relevanceSource = "semantic";
     } else if (query && memory.content.toLowerCase().includes(query.toLowerCase())) {
       relevance = 0.75;
+      relevanceSource = "keyword";
     }
 
-    const score = computeScore({
-      relevance,
-      confidence: memory.confidence,
-      lastAccessed: memory.lastAccessed,
-      importance: IMPORTANCE_WEIGHTS[memory.type] ?? 0.4,
-      now,
-    });
+    const importance = IMPORTANCE_WEIGHTS[memory.type] ?? 0.4;
+    const hoursSinceAccess = (now - memory.lastAccessed) / (1000 * 60 * 60);
+    const recency = Math.pow(0.995, Math.max(0, hoursSinceAccess));
+    const score = relevance * recency * memory.confidence * importance;
 
-    return { ...memory, score };
+    if (explain) {
+      return {
+        ...memory,
+        score,
+        explanation: {
+          relevance,
+          relevanceSource,
+          recency: Number(recency.toFixed(4)),
+          hoursSinceAccess: Number(hoursSinceAccess.toFixed(1)),
+          confidence: memory.confidence,
+          importance,
+          importanceLabel: memory.type,
+          finalScore: Number(score.toFixed(4)),
+        },
+      } as ExplainedMemory;
+    }
+
+    return { ...memory, score } as RecalledMemory;
   });
 
   scored.sort((a, b) => b.score - a.score);

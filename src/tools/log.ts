@@ -1,0 +1,188 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import type { AmemDatabase } from "../database.js";
+import { LogAppendResultSchema, LogRecallResultSchema } from "../schemas.js";
+import { shortId, formatAge } from "./helpers.js";
+
+export function registerLogTools(server: McpServer, db: AmemDatabase, project: string): void {
+
+  // ── memory_log ────────────────────────────────────────────
+  server.registerTool(
+    "memory_log",
+    {
+      title: "Append to Conversation Log",
+      description: `Append a raw conversation turn to the lossless, append-only conversation log. Unlike memory_store (which distills memories), memory_log preserves the exact, unmodified content of every exchange — nothing is summarized or discarded.
+
+The log is your permanent audit trail:
+- Every user message, assistant response, or system note
+- Fully searchable via memory_log_recall
+- Organized by session ID for replaying conversations
+- Scoped per project — never mixes contexts
+
+Use this to preserve conversation turns that may be important later but aren't yet ready to be distilled into memories. You can later search the log and promote specific entries into proper memories.
+
+Args:
+  - session_id (string): Conversation session identifier — use a consistent ID per conversation
+  - role (enum): Who said it — user | assistant | system
+  - content (string): The exact text to preserve — no summarization
+  - metadata (object, optional): Extra context — e.g., { tool: "vscode", file: "auth.ts" }`,
+      inputSchema: z.object({
+        session_id: z.string().min(1).describe("Session identifier — keep consistent across a conversation"),
+        role: z.enum(["user", "assistant", "system"]).describe("Who said this"),
+        content: z.string().min(1).max(50000, "Log content too long — max 50,000 characters").describe("Exact content to preserve — not summarized"),
+        metadata: z.record(z.unknown()).optional().describe("Optional extra context"),
+      }).strict(),
+      outputSchema: LogAppendResultSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ session_id, role, content, metadata }) => {
+      try {
+        const id = db.appendLog({
+          sessionId: session_id,
+          role,
+          content,
+          project,
+          metadata: metadata ?? {},
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Logged ${role} turn (${shortId(id)}) to session "${session_id}". Content length: ${content.length} chars.`,
+          }],
+          structuredContent: {
+            id,
+            sessionId: session_id,
+            role,
+            appended: true,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error appending to log: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+
+  // ── memory_log_recall ─────────────────────────────────────
+  server.registerTool(
+    "memory_log_recall",
+    {
+      title: "Search Conversation Log",
+      description: `Search or replay the lossless conversation log. Returns raw, unmodified conversation turns — nothing has been summarized or lost.
+
+Use this when:
+- You need to find exactly what was said in a past conversation
+- Replaying a session to reconstruct context
+- Searching for a specific phrase, decision, or exchange that may not have been extracted into a memory
+- Auditing what happened in a past session
+
+Search modes:
+- By session_id: replays a specific conversation in order
+- By query: full-text search across all logged content
+- Recent: retrieve the N most recent log entries for this project
+
+Args:
+  - session_id (string, optional): Replay a specific session in chronological order
+  - query (string, optional): Full-text search across all logged content
+  - limit (number): Max entries to return (default: 20)`,
+      inputSchema: z.object({
+        session_id: z.string().optional().describe("Replay a specific session — returns turns in order"),
+        query: z.string().optional().describe("Full-text search across all logged content"),
+        limit: z.number().int().min(1).max(200).default(20).describe("Max entries to return"),
+      }).strict().refine(d => d.session_id || d.query || true, "Provide session_id or query, or omit both for recent entries"),
+      outputSchema: LogRecallResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ session_id, query, limit }) => {
+      try {
+        let entries: Awaited<ReturnType<typeof db.getRecentLog>>;
+
+        if (session_id) {
+          entries = db.getLogBySession(session_id);
+        } else if (query) {
+          entries = db.searchLog(query, limit);
+        } else {
+          entries = db.getRecentLog(limit, project);
+        }
+
+        if (entries.length === 0) {
+          const hint = session_id
+            ? `No log entries found for session "${session_id}". Log turns using memory_log first.`
+            : query
+            ? `No log entries match "${query}".`
+            : `No log entries yet for this project. Use memory_log to preserve conversation turns.`;
+          return {
+            content: [{ type: "text" as const, text: hint }],
+            structuredContent: {
+              query,
+              sessionId: session_id,
+              total: 0,
+              entries: [],
+            },
+          };
+        }
+
+        const lines: string[] = [];
+        if (session_id) {
+          lines.push(`Session "${session_id}" — ${entries.length} turn${entries.length === 1 ? "" : "s"}`);
+          lines.push("");
+          for (const e of entries) {
+            const roleLabel = e.role === "user" ? "▶ User" : e.role === "assistant" ? "◀ Assistant" : "⚙ System";
+            lines.push(`[${formatAge(e.timestamp)}] ${roleLabel}`);
+            lines.push(e.content.length > 300 ? e.content.slice(0, 300) + "…" : e.content);
+            lines.push("");
+          }
+        } else {
+          const header = query ? `Log search: "${query}" — ${entries.length} result${entries.length === 1 ? "" : "s"}` : `Recent log — ${entries.length} entries`;
+          lines.push(header);
+          lines.push("");
+          for (const e of entries) {
+            lines.push(`[${shortId(e.id)}] ${formatAge(e.timestamp)} | ${e.role} | session:${shortId(e.sessionId)}`);
+            lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
+            lines.push("");
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            query,
+            sessionId: session_id,
+            total: entries.length,
+            entries: entries.slice(0, limit).map(e => ({
+              id: e.id,
+              role: e.role,
+              content: e.content,
+              timestamp: e.timestamp,
+              age: formatAge(e.timestamp),
+              project: e.project,
+            })),
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error searching log: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+        };
+      }
+    },
+  );
+}
