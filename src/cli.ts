@@ -116,6 +116,9 @@ if (command === "dashboard") {
       case "ls":
         handleList(db, args.slice(1));
         break;
+      case "reset":
+        handleReset(db, args.slice(1));
+        break;
       default:
         console.error(`Unknown command: ${command}`);
         printHelp();
@@ -148,6 +151,7 @@ MEMORY
   export [--file path] Export all memories as markdown
   list [--type TYPE]   List memories, optionally filtered by type
   forget <id>          Delete a memory by ID
+  reset [--confirm]    Wipe ALL data and start fresh (requires --confirm)
 
 OTHER
   help                 Show this help
@@ -481,4 +485,32 @@ function handleForget(db: AmemDatabase, args: string[]) {
   const match = db.getById(fullId);
   db.deleteMemory(fullId);
   console.log(`Deleted: "${match?.content}" (${match?.type})`);
+}
+
+function handleReset(db: AmemDatabase, args: string[]) {
+  const confirm = args.includes("--confirm");
+
+  if (!confirm) {
+    const stats = db.getStats();
+    const logCount = db.getLogCount();
+    console.log("This will permanently delete:");
+    console.log(`  - ${stats.total} memories`);
+    console.log(`  - ${logCount} conversation log entries`);
+    console.log(`  - All version history, relations, and reminders`);
+    console.log(`  - Database: ${DB_PATH}`);
+    console.log();
+    console.log("Run with --confirm to proceed:");
+    console.log("  amem-cli reset --confirm");
+    return;
+  }
+
+  db.close();
+
+  // Delete the database file and WAL/SHM files
+  fs.unlinkSync(DB_PATH);
+  try { fs.unlinkSync(DB_PATH + "-wal"); } catch {}
+  try { fs.unlinkSync(DB_PATH + "-shm"); } catch {}
+
+  console.log("All amem data has been wiped. Starting fresh.");
+  console.log(`Deleted: ${DB_PATH}`);
 }
