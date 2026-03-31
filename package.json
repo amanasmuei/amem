@@ -1,6 +1,6 @@
 {
   "name": "@aman_asmuei/amem",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "main": "dist/index.js",
