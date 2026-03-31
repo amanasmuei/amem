@@ -123,7 +123,7 @@ describe("CLI (amem-cli)", () => {
       const { stdout, exitCode } = await runCli(["help"], dbPath);
       expect(exitCode).toBe(0);
       expect(stdout).toContain("amem");
-      expect(stdout).toContain("COMMANDS");
+      expect(stdout).toContain("MEMORY");
       expect(stdout).toContain("recall");
       expect(stdout).toContain("stats");
       expect(stdout).toContain("export");
@@ -132,13 +132,13 @@ describe("CLI (amem-cli)", () => {
     it("prints help with --help flag", async () => {
       const { stdout, exitCode } = await runCli(["--help"], dbPath);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("COMMANDS");
+      expect(stdout).toContain("MEMORY");
     });
 
     it("prints help with -h flag", async () => {
       const { stdout, exitCode } = await runCli(["-h"], dbPath);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("COMMANDS");
+      expect(stdout).toContain("MEMORY");
     });
 
     it("prints help when no command is given", async () => {

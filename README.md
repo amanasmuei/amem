@@ -73,7 +73,15 @@ No cloud. No API keys. Everything stays on your machine.
 npm install -g @aman_asmuei/amem
 ```
 
-### 2. Connect
+### 2. Connect (auto)
+
+```bash
+amem-cli init    # Auto-detects and configures all installed AI tools
+amem-cli rules   # Generates auto-extraction rules so your AI uses amem proactively
+```
+
+<details>
+<summary><strong>Or configure manually</strong></summary>
 
 <details open>
 <summary><strong>Claude Code</strong> (one command)</summary>
@@ -110,6 +118,8 @@ Or add to `~/.claude/settings.json`:
 
 </details>
 
+</details>
+
 ### 3. Use
 
 Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 prompts** ready to go.
@@ -117,6 +127,14 @@ Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 promp
 ---
 
 ## Features
+
+### v0.8.0
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | `amem init` | Auto-detect and configure Claude Code, Cursor, Windsurf, GitHub Copilot in one command |
+| **NEW** | `amem rules` | Generate auto-extraction rules so your AI uses amem proactively (CLAUDE.md, .cursorrules, etc.) |
+| **NEW** | `amem dashboard` | Beautiful dark-themed web dashboard — memory list, knowledge graph, stats, reminders, log |
 
 ### v0.7.0
 
@@ -449,6 +467,9 @@ score = relevance × recency × confidence × importance
 ## CLI
 
 ```bash
+amem-cli init                          # Auto-configure AI tools
+amem-cli rules                         # Generate auto-extraction rules
+amem-cli dashboard                     # Open web dashboard
 amem-cli recall "authentication"       # Semantic search
 amem-cli stats                         # Statistics
 amem-cli list                          # List all memories
@@ -478,7 +499,7 @@ amem-cli forget abc12345               # Delete by short ID
 | Database | SQLite + WAL + FTS5 |
 | Embeddings | HuggingFace Xenova/all-MiniLM-L6-v2 (local, 80MB) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 252 tests across 16 suites |
+| Testing | Vitest — 262 tests across 17 suites |
 | CI/CD | GitHub Actions → npm publish on release |
 
 ---
@@ -489,7 +510,7 @@ amem-cli forget abc12345               # Delete by short ID
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 252 tests pass
+npm test        # 262 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
