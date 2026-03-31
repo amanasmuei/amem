@@ -14,7 +14,7 @@ No linter is configured. The TypeScript compiler (`strict: true`) is the primary
 
 ## Architecture
 
-amem is an MCP server that gives AI coding tools persistent, searchable memory backed by SQLite. It communicates over stdio and exposes 24 tools, 6 resources, and 2 prompts via the MCP protocol.
+amem is an MCP server that gives AI coding tools persistent, searchable memory backed by SQLite. It communicates over stdio and exposes 23 tools, 6 resources, and 2 prompts via the MCP protocol.
 
 ### Module dependency chain
 
@@ -22,7 +22,7 @@ amem is an MCP server that gives AI coding tools persistent, searchable memory b
 index.ts  — entry point: MCP server init, project detection, resource/prompt registration, auto-backup
   ├── database.ts  — SQLite layer: 7 tables, prepared statements, FTS5 triggers, migrations
   │     └── transaction(), resolveId(), resolveReminderId(), getAllRelations() — centralized DB ops
-  ├── tools/       — 24 MCP tool registrations, split by domain:
+  ├── tools/       — 23 MCP tool registrations, split by domain:
   │     ├── index.ts      — registerTools() orchestrator + re-exports (TYPE_ORDER, formatAge)
   │     ├── helpers.ts    — shared constants (SHORT_ID_LENGTH, CHARACTER_LIMIT) and utilities
   │     ├── memory.ts     — 12 core tools: store, recall, detail, context, forget, extract, stats, export, inject, consolidate, patch, import
@@ -38,13 +38,13 @@ index.ts  — entry point: MCP server init, project detection, resource/prompt r
 
 ### Data flow
 
-1. **Startup** (`index.ts`): Create SQLite DB with WAL mode → auto-backup (keeps last 3) → detect project scope from `AMEM_PROJECT` env var or git repo walk-up → register tools, resources, prompts
+1. **Startup** (`index.ts`): Create SQLite DB with WAL mode + busy_timeout (5s) → set 600 permissions → auto-backup (keeps last 3) → detect project scope from `AMEM_PROJECT` env var or git repo walk-up (full path) → register tools, resources, prompts
 2. **Tool call** (`tools/*.ts`): Validate input (`.strict()` Zod) → DB operations → rank/score results → return `{ content: [{ type: "text", text }], structuredContent }`
 3. **Ranking** (`memory.ts`): `score = relevance × recency × confidence × importance`
    - `recency = 0.995 ^ hoursSinceAccess` (exponential decay)
    - `relevance`: cosine similarity if embeddings available, keyword match (0.75) or broad fallback (0.5) otherwise
    - With `explain: true`, returns per-memory breakdown of all four scoring factors
-4. **Embeddings** (`embeddings.ts`): Lazy-loaded singleton via dynamic `import()` of optional `@huggingface/transformers`. Returns `null` if unavailable — ranking degrades gracefully to keyword matching. Failures logged to stderr with `[amem]` prefix.
+4. **Embeddings** (`embeddings.ts`): Lazy-loaded singleton via dynamic `import()` of optional `@huggingface/transformers`. Returns `null` if unavailable — ranking degrades gracefully to keyword matching. Failures logged to stderr with `[amem]` prefix. Includes LRU cache (128 entries) to avoid recomputing identical queries.
 
 ### Database tables
 
@@ -77,7 +77,7 @@ GLOBAL_TYPES = ["correction", "preference", "pattern"];  // auto-scope to "globa
 
 ### Consolidation thresholds
 
-- **Merge**: cosine similarity > 0.85 → keep higher confidence, boost by +0.1. Batched by type (corrections are never merged). All mutations wrapped in a single `db.transaction()` for atomicity.
+- **Merge**: cosine similarity > 0.85 → keep higher confidence, boost by +0.1. Batched by type (corrections are never merged), sorted by recency, capped at 500 per type group. All mutations wrapped in a single `db.transaction()` for atomicity.
 - **Prune**: stale > 60 days AND confidence < 0.3 AND access count < N (all three required; never prunes corrections). `min_access_count` is configurable via `memory_consolidate` tool.
 - **Promote**: access count ≥ 5 AND confidence < 0.8 → boost to 0.9
 - **Decay** (opt-in via `enable_decay`): stale > 30 days AND non-correction → multiply confidence by decay_factor (default: 0.95). Floor: 0.1.
@@ -93,6 +93,14 @@ Tools that accept memory IDs support 8-character prefix matching via `db.resolve
 ### Auto-backup
 
 On startup, `backupDatabase()` in `index.ts` copies the DB to `~/.amem/backups/memory-{timestamp}.db`, keeping the last 3 backups and deleting older ones.
+
+### Scale protections
+
+- `memory_store` and `memory_extract` compare against the 5000 most recently accessed embeddings (not all). Very old, rarely-accessed memories skip semantic dedup but content-hash dedup still catches exact duplicates.
+- Consolidation merge caps each type group at 500 memories (sorted by recency) to bound the O(n²) comparison.
+- `memory_stats` uses SQL aggregation (`COUNT` with `WHERE` clauses) — no full table load.
+- `busy_timeout = 5000` enables multi-process safety (e.g., Claude Code + Cursor both running amem).
+- DB file created with 600 permissions (owner read/write only).
 
 ## Conventions
 

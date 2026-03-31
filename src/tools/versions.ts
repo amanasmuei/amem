@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
 import { generateEmbedding } from "../embeddings.js";
-import { VersionResultSchema } from "../schemas.js";
 import { shortId, formatAge } from "./helpers.js";
 
 export function registerVersionTools(server: McpServer, db: AmemDatabase, _project: string): void {
@@ -26,7 +25,7 @@ Args:
         memory_id: z.string().min(1).describe("Memory ID to inspect — full UUID or first 8 chars"),
         restore_version_id: z.string().optional().describe("Version ID to restore — rolls the memory back to this snapshot"),
       }).strict(),
-      outputSchema: VersionResultSchema,
+      // outputSchema omitted — z.union() causes _zod serialization errors in MCP SDK
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

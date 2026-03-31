@@ -220,7 +220,9 @@ export function consolidateMemories(
   let promoted = 0;
 
   // 1. MERGE: find near-duplicate pairs (>0.85 similarity)
-  // Batch by type to reduce O(n²) — only compare within same type, skip corrections
+  // Batch by type to reduce O(n²) — only compare within same type, skip corrections.
+  // Sort by recency and cap group size to keep O(n²) bounded.
+  const MAX_MERGE_GROUP = 500;
   const byType = new Map<string, typeof allMemories>();
   for (const mem of allMemories) {
     if (!mem.embedding) continue;
@@ -231,17 +233,21 @@ export function consolidateMemories(
   }
 
   for (const [, group] of byType) {
-    for (let i = 0; i < group.length; i++) {
-      if (toDelete.has(group[i].id)) continue;
+    // Sort most recently accessed first — duplicates are most likely among recent memories
+    group.sort((a, b) => b.lastAccessed - a.lastAccessed);
+    const capped = group.slice(0, MAX_MERGE_GROUP);
 
-      for (let j = i + 1; j < group.length; j++) {
-        if (toDelete.has(group[j].id)) continue;
+    for (let i = 0; i < capped.length; i++) {
+      if (toDelete.has(capped[i].id)) continue;
 
-        const sim = cosineSim(group[i].embedding!, group[j].embedding!);
+      for (let j = i + 1; j < capped.length; j++) {
+        if (toDelete.has(capped[j].id)) continue;
+
+        const sim = cosineSim(capped[i].embedding!, capped[j].embedding!);
         if (sim > 0.85) {
-          const [keep, discard] = group[i].confidence >= group[j].confidence
-            ? [group[i], group[j]]
-            : [group[j], group[i]];
+          const [keep, discard] = capped[i].confidence >= capped[j].confidence
+            ? [capped[i], capped[j]]
+            : [capped[j], capped[i]];
 
           toDelete.add(discard.id);
           actions.push({

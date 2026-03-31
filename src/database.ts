@@ -67,6 +67,7 @@ export interface AmemDatabase {
   searchByType(type: MemoryTypeValue): Memory[];
   searchByTag(tag: string): Memory[];
   getAllWithEmbeddings(): Memory[];
+  getRecentWithEmbeddings(limit: number): Memory[];
   getAll(): Memory[];
   updateConfidence(id: string, confidence: number): void;
   updateEmbedding(id: string, embedding: Float32Array): void;
@@ -103,6 +104,9 @@ export interface AmemDatabase {
   listReminders(includeCompleted?: boolean, scope?: string): Array<{ id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }>;
   checkReminders(): Array<{ id: string; content: string; dueAt: number | null; status: "overdue" | "today" | "upcoming"; scope: string }>;
   completeReminder(id: string): boolean;
+  // Efficient aggregation (no full table load)
+  getConfidenceStats(): { high: number; medium: number; low: number };
+  getEmbeddingCount(): number;
   // Utilities
   transaction(fn: () => void): void;
   resolveId(partialId: string): string | null;
@@ -179,6 +183,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
 
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  db.pragma("busy_timeout = 5000"); // Wait up to 5s for lock — enables multi-process safety
 
   // Expose transaction support for atomic multi-step operations
   const runTransaction = db.transaction((fn: () => void) => fn());
@@ -303,6 +308,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
     searchByType: db.prepare(`SELECT * FROM memories WHERE type = ? ORDER BY last_accessed DESC`),
     searchByTag: db.prepare(`SELECT * FROM memories WHERE tags LIKE ? ORDER BY last_accessed DESC`),
     getAllWithEmbeddings: db.prepare(`SELECT * FROM memories WHERE embedding IS NOT NULL`),
+    getRecentWithEmbeddings: db.prepare(`SELECT * FROM memories WHERE embedding IS NOT NULL ORDER BY last_accessed DESC LIMIT ?`),
     getAll: db.prepare(`SELECT * FROM memories ORDER BY last_accessed DESC`),
     updateConfidence: db.prepare(`
       UPDATE memories SET confidence = ?, access_count = access_count + 1, last_accessed = ? WHERE id = ?
@@ -313,6 +319,10 @@ export function createDatabase(dbPath: string): AmemDatabase {
     `),
     deleteMemory: db.prepare(`DELETE FROM memories WHERE id = ?`),
     countAll: db.prepare(`SELECT COUNT(*) as count FROM memories`),
+    countHighConf: db.prepare(`SELECT COUNT(*) as count FROM memories WHERE confidence >= 0.8`),
+    countMedConf: db.prepare(`SELECT COUNT(*) as count FROM memories WHERE confidence >= 0.5 AND confidence < 0.8`),
+    countLowConf: db.prepare(`SELECT COUNT(*) as count FROM memories WHERE confidence < 0.5`),
+    countWithEmbeddings: db.prepare(`SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL`),
     countByType: db.prepare(`SELECT type, COUNT(*) as count FROM memories GROUP BY type`),
     listTables: db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`),
     searchByScope: db.prepare(`SELECT * FROM memories WHERE scope = ? ORDER BY last_accessed DESC`),
@@ -370,6 +380,8 @@ export function createDatabase(dbPath: string): AmemDatabase {
     DROP TRIGGER IF EXISTS memories_ad;
     DROP TRIGGER IF EXISTS memories_au;
     DROP TRIGGER IF EXISTS log_ai;
+    DROP TRIGGER IF EXISTS log_ad;
+    DROP TRIGGER IF EXISTS log_au;
 
     CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
       INSERT INTO memories_fts(rowid, id, content, tags) VALUES (new.rowid, new.id, new.content, new.tags);
@@ -382,6 +394,13 @@ export function createDatabase(dbPath: string): AmemDatabase {
       INSERT INTO memories_fts(rowid, id, content, tags) VALUES (new.rowid, new.id, new.content, new.tags);
     END;
     CREATE TRIGGER log_ai AFTER INSERT ON conversation_log BEGIN
+      INSERT INTO log_fts(rowid, id, content) VALUES (new.rowid, new.id, new.content);
+    END;
+    CREATE TRIGGER log_ad AFTER DELETE ON conversation_log BEGIN
+      INSERT INTO log_fts(log_fts, rowid, id, content) VALUES ('delete', old.rowid, old.id, old.content);
+    END;
+    CREATE TRIGGER log_au AFTER UPDATE ON conversation_log BEGIN
+      INSERT INTO log_fts(log_fts, rowid, id, content) VALUES ('delete', old.rowid, old.id, old.content);
       INSERT INTO log_fts(rowid, id, content) VALUES (new.rowid, new.id, new.content);
     END;
   `);
@@ -437,6 +456,11 @@ export function createDatabase(dbPath: string): AmemDatabase {
       return rows.map(rowToMemory);
     },
 
+    getRecentWithEmbeddings(limit: number): Memory[] {
+      const rows = stmts.getRecentWithEmbeddings.all(limit) as MemoryRow[];
+      return rows.map(rowToMemory);
+    },
+
     getAll(): Memory[] {
       const rows = stmts.getAll.all() as MemoryRow[];
       return rows.map(rowToMemory);
@@ -467,6 +491,18 @@ export function createDatabase(dbPath: string): AmemDatabase {
         byType[row.type] = row.count;
       }
       return { total, byType };
+    },
+
+    getConfidenceStats(): { high: number; medium: number; low: number } {
+      return {
+        high: (stmts.countHighConf.get() as { count: number }).count,
+        medium: (stmts.countMedConf.get() as { count: number }).count,
+        low: (stmts.countLowConf.get() as { count: number }).count,
+      };
+    },
+
+    getEmbeddingCount(): number {
+      return (stmts.countWithEmbeddings.get() as { count: number }).count;
     },
 
     searchByScope(scope: string): Memory[] {

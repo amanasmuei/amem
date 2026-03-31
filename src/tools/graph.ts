@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
 import type { MemoryTypeValue } from "../memory.js";
-import { RecallResultSchema, RelateResultSchema, TemporalResultSchema } from "../schemas.js";
+import { RecallResultSchema, TemporalResultSchema } from "../schemas.js";
 import { TYPE_ORDER, shortId, formatAge } from "./helpers.js";
 
 export function registerGraphTools(server: McpServer, db: AmemDatabase, project: string): void {
@@ -42,7 +42,7 @@ Args:
         relation_id: z.string().optional().describe("Relation ID to remove (unrelate)"),
         memory_id: z.string().optional().describe("Memory ID to inspect graph connections for"),
       }).strict(),
-      outputSchema: RelateResultSchema,
+      // outputSchema omitted — z.union() causes _zod serialization errors in MCP SDK
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

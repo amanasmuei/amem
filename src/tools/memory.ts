@@ -4,16 +4,13 @@ import type { AmemDatabase } from "../database.js";
 import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories } from "../memory.js";
 import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
 import {
-  StoreResultSchema,
   RecallResultSchema,
   ContextResultSchema,
-  ForgetResultSchema,
   ExtractResultSchema,
   StatsResultSchema,
   ExportResultSchema,
   InjectResultSchema,
   ConsolidateResultSchema,
-  PatchResultSchema,
   DetailResultSchema,
 } from "../schemas.js";
 import { TYPE_ORDER, MEMORY_TYPES, CHARACTER_LIMIT, shortId, formatAge } from "./helpers.js";
@@ -44,7 +41,7 @@ Returns:
         source: z.string().default("conversation").describe("Where this memory came from"),
         scope: z.string().optional().describe("Memory scope — 'global' or 'project:<name>'. Auto-detected from type if omitted."),
       }).strict(),
-      outputSchema: StoreResultSchema,
+      // outputSchema omitted — z.union() causes _zod serialization errors in MCP SDK
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -56,9 +53,10 @@ Returns:
       try {
         const embedding = await generateEmbedding(content);
 
-        // Single pass over existing memories: conflict detection, confidence boost, and reinforcement
+        // Single pass over recent memories: conflict detection, confidence boost, and reinforcement
+        // Limit to 5000 most recently accessed to stay fast at scale
         if (embedding) {
-          const existing = db.getAllWithEmbeddings();
+          const existing = db.getRecentWithEmbeddings(5000);
 
           const toReinforce: string[] = [];
           const toBoostConfidence: Array<{ id: string; confidence: number }> = [];
@@ -518,7 +516,7 @@ Error Handling:
         query: z.string().optional().describe("Delete all memories matching this query (requires confirmation)"),
         confirm: z.boolean().default(false).describe("Must be true to actually delete when using query-based deletion"),
       }).strict(),
-      outputSchema: ForgetResultSchema,
+      // outputSchema omitted — z.union() causes _zod serialization errors in MCP SDK
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -667,7 +665,7 @@ Returns:
         }> = [];
 
         // Load existing embeddings once (not per-memory)
-        const existingWithEmbeddings = db.getAllWithEmbeddings();
+        const existingWithEmbeddings = db.getRecentWithEmbeddings(5000);
 
         // Pre-compute embeddings (async) then batch all DB writes in a transaction
         const pendingOps: Array<
@@ -790,10 +788,10 @@ Returns:
     },
     async () => {
       try {
-        const all = db.getAllForProject(project);
+        // Use SQL aggregation — no full table load
         const stats = db.getStats();
 
-        if (all.length === 0) {
+        if (stats.total === 0) {
           return {
             content: [{ type: "text" as const, text: "No memories stored yet. Use memory_store or memory_extract to create memories." }],
             structuredContent: {
@@ -809,10 +807,8 @@ Returns:
           .filter(t => (stats.byType[t] || 0) > 0)
           .map(t => `  ${t}: ${stats.byType[t]}`);
 
-        const highConf = all.filter(m => m.confidence >= 0.8).length;
-        const medConf = all.filter(m => m.confidence >= 0.5 && m.confidence < 0.8).length;
-        const lowConf = all.filter(m => m.confidence < 0.5).length;
-        const withEmbeddings = db.getAllWithEmbeddings().length;
+        const { high: highConf, medium: medConf, low: lowConf } = db.getConfidenceStats();
+        const withEmbeddings = db.getEmbeddingCount();
 
         const text = [
           `Total memories: ${stats.total}`,
@@ -1202,7 +1198,7 @@ Args:
         if (field === "content" || field === "type") return typeof value === "string";
         return true;
       }, { message: "Value type must match field: string for content/type, number for confidence, string[] for tags" }),
-      outputSchema: PatchResultSchema,
+      // outputSchema omitted — z.union() causes _zod serialization errors in MCP SDK
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

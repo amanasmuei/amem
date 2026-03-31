@@ -16,7 +16,16 @@ const pkg = require("../package.json") as { version: string };
 const AMEM_DIR = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
 const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
 
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true, mode: 0o700 });
+
+// Set restrictive permissions on DB file after creation (owner-only read/write)
+function ensureSecurePermissions(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath) && process.platform !== "win32") {
+      fs.chmodSync(filePath, 0o600);
+    }
+  } catch {}
+}
 
 // Automatic backup: keep last 3 backups of the DB before server starts
 function backupDatabase(dbPath: string): void {
@@ -59,6 +68,7 @@ function detectProject(): string {
 }
 
 const db = createDatabase(DB_PATH);
+ensureSecurePermissions(DB_PATH);
 const currentProject = detectProject();
 
 const server = new McpServer({
