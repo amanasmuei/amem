@@ -18,6 +18,31 @@ const DB_PATH = process.env.AMEM_DB || path.join(AMEM_DIR, "memory.db");
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
+// Automatic backup: keep last 3 backups of the DB before server starts
+function backupDatabase(dbPath: string): void {
+  try {
+    if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0) return;
+    const backupDir = path.join(path.dirname(dbPath), "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    const backupPath = path.join(backupDir, `memory-${Date.now()}.db`);
+    fs.copyFileSync(dbPath, backupPath);
+
+    // Keep only the 3 most recent backups
+    const backups = fs.readdirSync(backupDir)
+      .filter(f => f.startsWith("memory-") && f.endsWith(".db"))
+      .sort()
+      .reverse();
+    for (const old of backups.slice(3)) {
+      fs.unlinkSync(path.join(backupDir, old));
+    }
+  } catch (error) {
+    console.error("[amem] Backup failed:", error instanceof Error ? error.message : String(error));
+  }
+}
+
+backupDatabase(DB_PATH);
+
 function detectProject(): string {
   if (process.env.AMEM_PROJECT) return `project:${process.env.AMEM_PROJECT}`;
   try {
@@ -155,17 +180,22 @@ server.registerResource(
   "amem://corrections",
   { mimeType: "text/plain", description: "All active corrections — hard constraints that should always be followed" },
   () => {
-    const corrections = db.searchByType(MemoryType.CORRECTION);
-    if (corrections.length === 0) {
-      return { contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: "No corrections stored." }] };
+    try {
+      const corrections = db.searchByType(MemoryType.CORRECTION);
+      if (corrections.length === 0) {
+        return { contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: "No corrections stored." }] };
+      }
+      const text = corrections
+        .sort((a, b) => b.confidence - a.confidence)
+        .map(c => `- ${c.content} (${(c.confidence * 100).toFixed(0)}% confidence)`)
+        .join("\n");
+      return {
+        contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: `# Corrections (${corrections.length})\n\n${text}` }],
+      };
+    } catch (error) {
+      console.error("[amem] Resource 'corrections' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: "Error loading corrections." }] };
     }
-    const text = corrections
-      .sort((a, b) => b.confidence - a.confidence)
-      .map(c => `- ${c.content} (${(c.confidence * 100).toFixed(0)}% confidence)`)
-      .join("\n");
-    return {
-      contents: [{ uri: "amem://corrections", mimeType: "text/plain", text: `# Corrections (${corrections.length})\n\n${text}` }],
-    };
   },
 );
 
@@ -174,17 +204,22 @@ server.registerResource(
   "amem://decisions",
   { mimeType: "text/plain", description: "Active architectural decisions and their rationale" },
   () => {
-    const decisions = db.searchByType(MemoryType.DECISION);
-    if (decisions.length === 0) {
-      return { contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: "No decisions stored." }] };
+    try {
+      const decisions = db.searchByType(MemoryType.DECISION);
+      if (decisions.length === 0) {
+        return { contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: "No decisions stored." }] };
+      }
+      const text = decisions
+        .sort((a, b) => b.confidence - a.confidence)
+        .map(d => `- ${d.content} (${(d.confidence * 100).toFixed(0)}% confidence)`)
+        .join("\n");
+      return {
+        contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: `# Decisions (${decisions.length})\n\n${text}` }],
+      };
+    } catch (error) {
+      console.error("[amem] Resource 'decisions' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: "Error loading decisions." }] };
     }
-    const text = decisions
-      .sort((a, b) => b.confidence - a.confidence)
-      .map(d => `- ${d.content} (${(d.confidence * 100).toFixed(0)}% confidence)`)
-      .join("\n");
-    return {
-      contents: [{ uri: "amem://decisions", mimeType: "text/plain", text: `# Decisions (${decisions.length})\n\n${text}` }],
-    };
   },
 );
 
@@ -193,21 +228,26 @@ server.registerResource(
   "amem://profile",
   { mimeType: "text/plain", description: "Developer profile — preferences, patterns, and tool choices" },
   () => {
-    const preferences = db.searchByType(MemoryType.PREFERENCE);
-    const patterns = db.searchByType(MemoryType.PATTERN);
-    const all = [...preferences, ...patterns].sort((a, b) => b.confidence - a.confidence);
-    if (all.length === 0) {
-      return { contents: [{ uri: "amem://profile", mimeType: "text/plain", text: "No profile data stored." }] };
+    try {
+      const preferences = db.searchByType(MemoryType.PREFERENCE);
+      const patterns = db.searchByType(MemoryType.PATTERN);
+      const all = [...preferences, ...patterns].sort((a, b) => b.confidence - a.confidence);
+      if (all.length === 0) {
+        return { contents: [{ uri: "amem://profile", mimeType: "text/plain", text: "No profile data stored." }] };
+      }
+      const prefText = preferences.length > 0
+        ? "## Preferences\n\n" + preferences.map(p => `- ${p.content}`).join("\n")
+        : "";
+      const patText = patterns.length > 0
+        ? "## Patterns\n\n" + patterns.map(p => `- ${p.content}`).join("\n")
+        : "";
+      return {
+        contents: [{ uri: "amem://profile", mimeType: "text/plain", text: [prefText, patText].filter(Boolean).join("\n\n") }],
+      };
+    } catch (error) {
+      console.error("[amem] Resource 'profile' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://profile", mimeType: "text/plain", text: "Error loading profile." }] };
     }
-    const prefText = preferences.length > 0
-      ? "## Preferences\n\n" + preferences.map(p => `- ${p.content}`).join("\n")
-      : "";
-    const patText = patterns.length > 0
-      ? "## Patterns\n\n" + patterns.map(p => `- ${p.content}`).join("\n")
-      : "";
-    return {
-      contents: [{ uri: "amem://profile", mimeType: "text/plain", text: [prefText, patText].filter(Boolean).join("\n\n") }],
-    };
   },
 );
 
@@ -216,17 +256,22 @@ server.registerResource(
   "amem://summary",
   { mimeType: "text/plain", description: "Quick summary of all stored memories" },
   () => {
-    const stats = db.getStats();
-    if (stats.total === 0) {
-      return { contents: [{ uri: "amem://summary", mimeType: "text/plain", text: "No memories stored yet." }] };
+    try {
+      const stats = db.getStats();
+      if (stats.total === 0) {
+        return { contents: [{ uri: "amem://summary", mimeType: "text/plain", text: "No memories stored yet." }] };
+      }
+      const lines = TYPE_ORDER
+        .filter(t => (stats.byType[t] || 0) > 0)
+        .map(t => `  ${t}: ${stats.byType[t]}`);
+      const text = `Amem: ${stats.total} memories\n\n${lines.join("\n")}`;
+      return {
+        contents: [{ uri: "amem://summary", mimeType: "text/plain", text }],
+      };
+    } catch (error) {
+      console.error("[amem] Resource 'summary' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://summary", mimeType: "text/plain", text: "Error loading summary." }] };
     }
-    const lines = TYPE_ORDER
-      .filter(t => (stats.byType[t] || 0) > 0)
-      .map(t => `  ${t}: ${stats.byType[t]}`);
-    const text = `Amem: ${stats.total} memories\n\n${lines.join("\n")}`;
-    return {
-      contents: [{ uri: "amem://summary", mimeType: "text/plain", text }],
-    };
   },
 );
 
@@ -235,18 +280,23 @@ server.registerResource(
   "amem://log/recent",
   { mimeType: "text/plain", description: "Recent raw conversation log entries — lossless, append-only history" },
   () => {
-    const entries = db.getRecentLog(50, currentProject);
-    if (entries.length === 0) {
-      return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: "No log entries yet. Use memory_log to preserve conversation turns." }] };
+    try {
+      const entries = db.getRecentLog(50, currentProject);
+      if (entries.length === 0) {
+        return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: "No log entries yet. Use memory_log to preserve conversation turns." }] };
+      }
+      const lines = [`# Recent Conversation Log (${entries.length} entries)\n`];
+      for (const e of entries) {
+        const ts = new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ");
+        lines.push(`[${ts}] ${e.role.toUpperCase()} (session: ${e.sessionId.slice(0, 8)})`);
+        lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
+        lines.push("");
+      }
+      return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: lines.join("\n") }] };
+    } catch (error) {
+      console.error("[amem] Resource 'log-recent' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: "Error loading recent log." }] };
     }
-    const lines = [`# Recent Conversation Log (${entries.length} entries)\n`];
-    for (const e of entries) {
-      const ts = new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ");
-      lines.push(`[${ts}] ${e.role.toUpperCase()} (session: ${e.sessionId.slice(0, 8)})`);
-      lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
-      lines.push("");
-    }
-    return { contents: [{ uri: "amem://log/recent", mimeType: "text/plain", text: lines.join("\n") }] };
   },
 );
 
@@ -255,27 +305,42 @@ server.registerResource(
   "amem://graph",
   { mimeType: "text/plain", description: "Knowledge graph overview — all explicit memory relationships" },
   () => {
-    const all = db.getAll();
-    const lines = [`# Knowledge Graph (${all.length} nodes)\n`];
-    let edgeCount = 0;
-    for (const mem of all) {
-      const relations = db.getRelations(mem.id);
-      const outgoing = relations.filter(r => r.fromId === mem.id);
-      if (outgoing.length > 0) {
-        lines.push(`[${mem.id.slice(0, 8)}] "${mem.content.slice(0, 60)}"`);
-        for (const r of outgoing) {
-          const target = db.getById(r.toId);
-          lines.push(`  → [${r.relationshipType}] "${target?.content.slice(0, 50) ?? r.toId.slice(0, 8)}"`);
-          edgeCount++;
-        }
-        lines.push("");
+    try {
+      const all = db.getAll();
+      const allRelations = db.getAllRelations();
+      const lines = [`# Knowledge Graph (${all.length} nodes)\n`];
+      let edgeCount = 0;
+
+      // Build lookup maps to avoid per-node DB queries
+      const memById = new Map(all.map(m => [m.id, m]));
+      const outgoingByNode = new Map<string, typeof allRelations>();
+      for (const r of allRelations) {
+        const group = outgoingByNode.get(r.fromId) ?? [];
+        group.push(r);
+        outgoingByNode.set(r.fromId, group);
       }
+
+      for (const mem of all) {
+        const outgoing = outgoingByNode.get(mem.id);
+        if (outgoing && outgoing.length > 0) {
+          lines.push(`[${mem.id.slice(0, 8)}] "${mem.content.slice(0, 60)}"`);
+          for (const r of outgoing) {
+            const target = memById.get(r.toId);
+            lines.push(`  → [${r.relationshipType}] "${target?.content.slice(0, 50) ?? r.toId.slice(0, 8)}"`);
+            edgeCount++;
+          }
+          lines.push("");
+        }
+      }
+      if (edgeCount === 0) {
+        return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: "No memory relations yet. Use memory_relate to build the knowledge graph." }] };
+      }
+      lines.unshift(`${edgeCount} edges\n`);
+      return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: lines.join("\n") }] };
+    } catch (error) {
+      console.error("[amem] Resource 'graph-overview' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: "Error loading graph." }] };
     }
-    if (edgeCount === 0) {
-      return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: "No memory relations yet. Use memory_relate to build the knowledge graph." }] };
-    }
-    lines.unshift(`${edgeCount} edges\n`);
-    return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: lines.join("\n") }] };
   },
 );
 

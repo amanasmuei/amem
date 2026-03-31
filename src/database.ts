@@ -99,6 +99,11 @@ export interface AmemDatabase {
   listReminders(includeCompleted?: boolean, scope?: string): Array<{ id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }>;
   checkReminders(): Array<{ id: string; content: string; dueAt: number | null; status: "overdue" | "today" | "upcoming"; scope: string }>;
   completeReminder(id: string): boolean;
+  // Utilities
+  transaction(fn: () => void): void;
+  resolveId(partialId: string): string | null;
+  resolveReminderId(partialId: string): string | null;
+  getAllRelations(): MemoryRelation[];
 }
 
 interface LogRow {
@@ -170,6 +175,9 @@ export function createDatabase(dbPath: string): AmemDatabase {
 
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+
+  // Expose transaction support for atomic multi-step operations
+  const runTransaction = db.transaction((fn: () => void) => fn());
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS memories (
@@ -325,6 +333,11 @@ export function createDatabase(dbPath: string): AmemDatabase {
     listAllReminders: db.prepare("SELECT * FROM reminders ORDER BY due_at ASC NULLS LAST"),
     listRemindersByScope: db.prepare("SELECT * FROM reminders WHERE completed = 0 AND (scope = 'global' OR scope = ?) ORDER BY due_at ASC NULLS LAST"),
     completeReminder: db.prepare("UPDATE reminders SET completed = 1 WHERE id = ?"),
+    // ID resolution via SQL prefix match (avoids full table scan)
+    resolveIdPrefix: db.prepare("SELECT id FROM memories WHERE id LIKE ? LIMIT 2"),
+    resolveReminderIdPrefix: db.prepare("SELECT id FROM reminders WHERE id LIKE ? LIMIT 2"),
+    // Batch relation loading
+    getAllRelations: db.prepare("SELECT * FROM memory_relations ORDER BY created_at DESC"),
   };
 
   // Keep FTS index in sync via triggers
@@ -487,8 +500,9 @@ export function createDatabase(dbPath: string): AmemDatabase {
         `);
         const rows = stmt.all(query, limit) as LogRow[];
         return rows.map(mapRow);
-      } catch {
+      } catch (error) {
         // FTS5 may fail on special characters — fall back to LIKE
+        console.error("[amem] FTS5 log search failed, falling back to LIKE:", error instanceof Error ? error.message : String(error));
         const escaped = query.replace(/[%_]/g, ch => "\\" + ch);
         const pattern = `%${escaped}%`;
         const stmt = db.prepare(`
@@ -665,8 +679,9 @@ export function createDatabase(dbPath: string): AmemDatabase {
         `);
         const rows = stmt.all(query, limit) as MemoryRow[];
         return rows.map(rowToMemory);
-      } catch {
+      } catch (error) {
         // FTS may fail on complex queries — fall back to LIKE
+        console.error("[amem] FTS5 memory search failed, falling back to LIKE:", error instanceof Error ? error.message : String(error));
         const escaped = query.replace(/[%_]/g, ch => "\\" + ch);
         const pattern = `%${escaped}%`;
         if (scopeProject) {
@@ -683,6 +698,40 @@ export function createDatabase(dbPath: string): AmemDatabase {
         const rows = stmt.all(pattern, pattern, limit) as MemoryRow[];
         return rows.map(rowToMemory);
       }
+    },
+
+    // ── Utilities ────────────────────────────────────────────
+    transaction(fn: () => void): void {
+      runTransaction(fn);
+    },
+
+    resolveId(partialId: string): string | null {
+      if (partialId.length >= 36) {
+        const mem = this.getById(partialId);
+        return mem ? partialId : null;
+      }
+      const rows = stmts.resolveIdPrefix.all(`${partialId}%`) as { id: string }[];
+      if (rows.length === 1) return rows[0].id;
+      return null;
+    },
+
+    resolveReminderId(partialId: string): string | null {
+      if (partialId.length >= 36) return partialId;
+      const rows = stmts.resolveReminderIdPrefix.all(`${partialId}%`) as { id: string }[];
+      if (rows.length === 1) return rows[0].id;
+      return null;
+    },
+
+    getAllRelations(): MemoryRelation[] {
+      const rows = stmts.getAllRelations.all() as RelationRow[];
+      return rows.map(r => ({
+        id: r.id,
+        fromId: r.from_id,
+        toId: r.to_id,
+        relationshipType: r.relationship_type,
+        strength: r.strength,
+        createdAt: r.created_at,
+      }));
     },
   };
 }

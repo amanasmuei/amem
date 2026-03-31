@@ -58,7 +58,8 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
         "Xenova/all-MiniLM-L6-v2",
       ) as unknown as FeatureExtractor;
       return pipelineInstance;
-    } catch {
+    } catch (error) {
+      console.error("[amem] Failed to load embedding pipeline — falling back to keyword matching:", error instanceof Error ? error.message : String(error));
       return null;
     }
   })();

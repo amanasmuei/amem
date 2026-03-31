@@ -184,30 +184,36 @@ export function consolidateMemories(
   let promoted = 0;
 
   // 1. MERGE: find near-duplicate pairs (>0.85 similarity)
-  for (let i = 0; i < allMemories.length; i++) {
-    if (toDelete.has(allMemories[i].id)) continue;
-    if (!allMemories[i].embedding) continue;
+  // Batch by type to reduce O(n²) — only compare within same type, skip corrections
+  const byType = new Map<string, typeof allMemories>();
+  for (const mem of allMemories) {
+    if (!mem.embedding) continue;
+    if (mem.type === "correction") continue;
+    const group = byType.get(mem.type) ?? [];
+    group.push(mem);
+    byType.set(mem.type, group);
+  }
 
-    for (let j = i + 1; j < allMemories.length; j++) {
-      if (toDelete.has(allMemories[j].id)) continue;
-      if (!allMemories[j].embedding) continue;
+  for (const [, group] of byType) {
+    for (let i = 0; i < group.length; i++) {
+      if (toDelete.has(group[i].id)) continue;
 
-      const sim = cosineSim(allMemories[i].embedding!, allMemories[j].embedding!);
-      if (sim > 0.85) {
-        const [keep, discard] = allMemories[i].confidence >= allMemories[j].confidence
-          ? [allMemories[i], allMemories[j]]
-          : [allMemories[j], allMemories[i]];
+      for (let j = i + 1; j < group.length; j++) {
+        if (toDelete.has(group[j].id)) continue;
 
-        if (!options.dryRun) {
-          db.updateConfidence(keep.id, Math.min(1.0, keep.confidence + 0.1));
-          db.deleteMemory(discard.id);
+        const sim = cosineSim(group[i].embedding!, group[j].embedding!);
+        if (sim > 0.85) {
+          const [keep, discard] = group[i].confidence >= group[j].confidence
+            ? [group[i], group[j]]
+            : [group[j], group[i]];
+
+          toDelete.add(discard.id);
+          actions.push({
+            action: "merged",
+            memoryIds: [keep.id, discard.id],
+            description: `Merged "${discard.content}" into "${keep.content}" (${(sim * 100).toFixed(0)}% similar)`,
+          });
         }
-        toDelete.add(discard.id);
-        actions.push({
-          action: "merged",
-          memoryIds: [keep.id, discard.id],
-          description: `Merged "${discard.content}" into "${keep.content}" (${(sim * 100).toFixed(0)}% similar)`,
-        });
       }
     }
   }
@@ -223,9 +229,6 @@ export function consolidateMemories(
       mem.confidence < options.minConfidence &&
       mem.accessCount < options.minAccessCount
     ) {
-      if (!options.dryRun) {
-        db.deleteMemory(mem.id);
-      }
       toDelete.add(mem.id);
       actions.push({
         action: "pruned",
@@ -236,12 +239,11 @@ export function consolidateMemories(
   }
 
   // 3. PROMOTE: frequently-accessed memories with low confidence
+  const toPromote: { id: string; mem: Memory }[] = [];
   for (const mem of all) {
     if (toDelete.has(mem.id)) continue;
     if (mem.accessCount >= 5 && mem.confidence < 0.8) {
-      if (!options.dryRun) {
-        db.updateConfidence(mem.id, 0.9);
-      }
+      toPromote.push({ id: mem.id, mem });
       promoted++;
       actions.push({
         action: "promoted",
@@ -249,6 +251,28 @@ export function consolidateMemories(
         description: `Promoted "${mem.content}" to 90% confidence (accessed ${mem.accessCount} times)`,
       });
     }
+  }
+
+  // Apply all mutations inside a single transaction for atomicity
+  if (!options.dryRun) {
+    db.transaction(() => {
+      for (const action of actions) {
+        if (action.action === "merged") {
+          const keepId = action.memoryIds[0];
+          const discardId = action.memoryIds[1];
+          const keep = allMemories.find(m => m.id === keepId) ?? all.find(m => m.id === keepId);
+          if (keep) {
+            db.updateConfidence(keepId, Math.min(1.0, keep.confidence + 0.1));
+          }
+          db.deleteMemory(discardId);
+        } else if (action.action === "pruned") {
+          db.deleteMemory(action.memoryIds[0]);
+        }
+      }
+      for (const { id } of toPromote) {
+        db.updateConfidence(id, 0.9);
+      }
+    });
   }
 
   const afterTotal = beforeTotal - toDelete.size;

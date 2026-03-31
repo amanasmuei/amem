@@ -112,7 +112,7 @@ Or add to `~/.claude/settings.json`:
 
 ### 3. Use
 
-Restart your AI tool — you'll see **19 tools**, **6 resources**, and **2 prompts** ready to go.
+Restart your AI tool — you'll see **21 tools**, **6 resources**, and **2 prompts** ready to go.
 
 ---
 
@@ -383,7 +383,7 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ┌─────────────────▼────────────────────────────┐
 │           amem MCP Server                    │
 │                                              │
-│   20 Tools  ·  6 Resources  ·  2 Prompts     │
+│   21 Tools  ·  6 Resources  ·  2 Prompts    │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │

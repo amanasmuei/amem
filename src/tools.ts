@@ -23,8 +23,13 @@ import {
 
 const MEMORY_TYPES = Object.values(MemoryType);
 const CHARACTER_LIMIT = 50_000;
+const SHORT_ID_LENGTH = 8;
 
 export const TYPE_ORDER: MemoryTypeValue[] = ["correction", "decision", "pattern", "preference", "topology", "fact"];
+
+function shortId(id: string): string {
+  return id.slice(0, SHORT_ID_LENGTH);
+}
 
 export function formatAge(timestamp: number): string {
   const ms = Date.now() - timestamp;
@@ -127,7 +132,7 @@ Returns:
           return {
             content: [{
               type: "text" as const,
-              text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}`,
+              text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}`,
             }],
             structuredContent: {
               action: "stored" as const,
@@ -147,7 +152,7 @@ Returns:
         return {
           content: [{
             type: "text" as const,
-            text: `Stored ${type} memory (${id.slice(0, 8)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.`,
+            text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.`,
           }],
           structuredContent: {
             action: "stored" as const,
@@ -236,7 +241,7 @@ Returns:
         if (compact) {
           const compactLines = results.map((r, i) => {
             const preview = r.content.slice(0, 80) + (r.content.length > 80 ? "..." : "");
-            return `${r.id.slice(0, 8)} [${r.type}] ${preview} (${(r.score * 100).toFixed(0)}%)`;
+            return `${shortId(r.id)} [${r.type}] ${preview} (${(r.score * 100).toFixed(0)}%)`;
           });
 
           const tokenEstimate = compactLines.join("\n").split(/\s+/).length;
@@ -313,9 +318,10 @@ Returns:
     },
     async ({ ids }) => {
       try {
-        const allMemories = db.getAll();
         const found = ids.map(id => {
-          const mem = allMemories.find(m => m.id === id || m.id.startsWith(id));
+          const fullId = db.resolveId(id);
+          if (!fullId) return null;
+          const mem = db.getById(fullId);
           if (!mem) return null;
           db.touchAccess(mem.id);
           return mem;
@@ -330,7 +336,7 @@ Returns:
         const lines = found.map((r) => {
           const age = formatAge(r.createdAt);
           const conf = (r.confidence * 100).toFixed(0);
-          return `[${r.type}] ${r.content}\nID: ${r.id.slice(0, 8)} | Confidence: ${conf}% | Age: ${age} | Tags: [${r.tags.join(", ")}]`;
+          return `[${r.type}] ${r.content}\nID: ${shortId(r.id)} | Confidence: ${conf}% | Age: ${age} | Tags: [${r.tags.join(", ")}]`;
         });
 
         const tokenEstimate = lines.join("\n\n").split(/\s+/).length;
@@ -532,7 +538,7 @@ Error Handling:
 
           if (!confirm) {
             const preview = matches.slice(0, 5).map((m, i) =>
-              `${i + 1}. [${m.id.slice(0, 8)}] ${m.content}`
+              `${i + 1}. [${shortId(m.id)}] ${m.content}`
             ).join("\n");
             return {
               content: [{
@@ -634,26 +640,28 @@ Returns:
         // Load existing embeddings once (not per-memory)
         const existingWithEmbeddings = db.getAllWithEmbeddings();
 
+        // Pre-compute embeddings (async) then batch all DB writes in a transaction
+        const pendingOps: Array<
+          | { op: "reinforce"; memId: string; confidence: number; content: string; inputContent: string; similarity: number }
+          | { op: "store"; input: typeof memoryInputs[0]; embedding: Float32Array | null }
+        > = [];
+
         for (const input of memoryInputs) {
           const embedding = await generateEmbedding(input.content);
 
-          // Check for duplicates/conflicts
           let isDuplicate = false;
           if (embedding) {
             for (const mem of existingWithEmbeddings) {
               if (!mem.embedding) continue;
               const sim = cosineSimilarity(embedding, mem.embedding);
               if (sim > 0.85) {
-                // Near-duplicate — reinforce existing
-                db.updateConfidence(mem.id, Math.min(1.0, mem.confidence + 0.1));
-                db.touchAccess(mem.id);
-                reinforced++;
-                details.push(`  ~ Reinforced: "${mem.content}" (${(sim * 100).toFixed(0)}% match)`);
-                structuredDetails.push({
-                  action: "reinforced",
-                  content: input.content,
-                  matchedContent: mem.content,
-                  similarity: Number((sim * 100).toFixed(0)),
+                pendingOps.push({
+                  op: "reinforce",
+                  memId: mem.id,
+                  confidence: mem.confidence,
+                  content: mem.content,
+                  inputContent: input.content,
+                  similarity: sim,
                 });
                 isDuplicate = true;
                 break;
@@ -662,25 +670,45 @@ Returns:
           }
 
           if (!isDuplicate) {
-            const id = db.insertMemory({
-              content: input.content,
-              type: input.type as MemoryTypeValue,
-              tags: input.tags,
-              confidence: input.confidence,
-              source,
-              embedding,
-              scope: autoScope(input.type as MemoryTypeValue),
-            });
-            stored++;
-            details.push(`  + Stored [${input.type}]: "${input.content}" (${id.slice(0, 8)})`);
-            structuredDetails.push({
-              action: "stored",
-              content: input.content,
-              type: input.type,
-              id: id.slice(0, 8),
-            });
+            pendingOps.push({ op: "store", input, embedding });
           }
         }
+
+        // Execute all DB writes atomically
+        db.transaction(() => {
+          for (const pending of pendingOps) {
+            if (pending.op === "reinforce") {
+              db.updateConfidence(pending.memId, Math.min(1.0, pending.confidence + 0.1));
+              db.touchAccess(pending.memId);
+              reinforced++;
+              details.push(`  ~ Reinforced: "${pending.content}" (${(pending.similarity * 100).toFixed(0)}% match)`);
+              structuredDetails.push({
+                action: "reinforced",
+                content: pending.inputContent,
+                matchedContent: pending.content,
+                similarity: Number((pending.similarity * 100).toFixed(0)),
+              });
+            } else {
+              const id = db.insertMemory({
+                content: pending.input.content,
+                type: pending.input.type as MemoryTypeValue,
+                tags: pending.input.tags,
+                confidence: pending.input.confidence,
+                source,
+                embedding: pending.embedding,
+                scope: autoScope(pending.input.type as MemoryTypeValue),
+              });
+              stored++;
+              details.push(`  + Stored [${pending.input.type}]: "${pending.input.content}" (${shortId(id)})`);
+              structuredDetails.push({
+                action: "stored",
+                content: pending.input.content,
+                type: pending.input.type,
+                id: shortId(id),
+              });
+            }
+          }
+        });
 
         const stats = db.getStats();
         const summary = [
@@ -797,13 +825,16 @@ Returns:
     "memory_export",
     {
       title: "Export Memories",
-      description: `Export all memories as formatted markdown, grouped by type. Useful for backup, review, or sharing.
+      description: `Export all memories in a chosen format, grouped by type. Useful for backup, review, or sharing.
 
-Args: None
+Args:
+  - format ("markdown" | "json", optional): Export format (default: "markdown")
 
 Returns:
-  Markdown document with all memories grouped by type, including confidence, tags, and metadata.`,
-      inputSchema: z.object({}).strict(),
+  Formatted export with all memories grouped by type, including confidence, tags, and metadata.`,
+      inputSchema: z.object({
+        format: z.enum(["markdown", "json"]).default("markdown").describe("Export format"),
+      }).strict(),
       outputSchema: ExportResultSchema,
       annotations: {
         readOnlyHint: true,
@@ -812,7 +843,7 @@ Returns:
         openWorldHint: false,
       },
     },
-    async () => {
+    async ({ format }) => {
       try {
         const all = db.getAllForProject(project);
 
@@ -824,6 +855,39 @@ Returns:
               total: 0,
               markdown: "",
               truncated: false,
+            },
+          };
+        }
+
+        if (format === "json") {
+          const grouped: Record<string, Array<{ id: string; content: string; confidence: number; tags: string[]; scope: string; createdAt: number }>> = {};
+          for (const t of TYPE_ORDER) {
+            const memories = all.filter(m => m.type === t);
+            if (memories.length > 0) {
+              grouped[t] = memories.map(m => ({
+                id: m.id,
+                content: m.content,
+                confidence: m.confidence,
+                tags: m.tags,
+                scope: m.scope,
+                createdAt: m.createdAt,
+              }));
+            }
+          }
+          const jsonStr = JSON.stringify({ exportedAt: new Date().toISOString(), total: all.length, memories: grouped }, null, 2);
+          let truncated = false;
+          let output = jsonStr;
+          if (output.length > CHARACTER_LIMIT) {
+            output = output.slice(0, CHARACTER_LIMIT) + "\n... (truncated)";
+            truncated = true;
+          }
+          return {
+            content: [{ type: "text" as const, text: output }],
+            structuredContent: {
+              exportedAt: new Date().toISOString(),
+              total: all.length,
+              markdown: output,
+              truncated,
             },
           };
         }
@@ -985,6 +1049,7 @@ Args:
   - confirm (boolean): false = preview what would change (default), true = execute changes
   - max_stale_days (number): Days of inactivity before a memory is considered stale (default: 60)
   - min_confidence (number): Minimum confidence for stale memories to survive (default: 0.3)
+  - min_access_count (number): Minimum access count for stale memories to survive (default: 2)
 
 Returns:
   Report with merged/pruned/promoted counts, health score, and detailed action list.`,
@@ -992,6 +1057,7 @@ Returns:
         confirm: z.boolean().default(false).describe("false = preview (safe), true = execute consolidation"),
         max_stale_days: z.number().int().min(1).default(60).describe("Days of inactivity before considering a memory stale"),
         min_confidence: z.number().min(0).max(1).default(0.3).describe("Confidence threshold for stale memory pruning"),
+        min_access_count: z.number().int().min(0).default(2).describe("Minimum access count for stale memories to survive pruning"),
       }).strict(),
       outputSchema: ConsolidateResultSchema,
       annotations: {
@@ -1001,13 +1067,13 @@ Returns:
         openWorldHint: false,
       },
     },
-    async ({ confirm, max_stale_days, min_confidence }) => {
+    async ({ confirm, max_stale_days, min_confidence, min_access_count }) => {
       try {
         const report = consolidateMemories(db, cosineSimilarity, {
           dryRun: !confirm,
           maxStaleDays: max_stale_days,
           minConfidence: min_confidence,
-          minAccessCount: 2,
+          minAccessCount: min_access_count,
         });
 
         const mode = confirm ? "EXECUTED" : "PREVIEW (dry run)";
@@ -1104,18 +1170,12 @@ Args:
     },
     async ({ id, field, value, reason }) => {
       try {
-        // Support short IDs: find full ID if 8-char prefix given
-        let fullId = id;
-        if (id.length < 36) {
-          const all = db.getAll();
-          const match = all.find(m => m.id.startsWith(id));
-          if (!match) {
-            return {
-              content: [{ type: "text" as const, text: `No memory found with ID starting with "${id}".` }],
-              structuredContent: { action: "not_found" as const, id },
-            };
-          }
-          fullId = match.id;
+        const fullId = db.resolveId(id);
+        if (!fullId) {
+          return {
+            content: [{ type: "text" as const, text: `No memory found with ID starting with "${id}".` }],
+            structuredContent: { action: "not_found" as const, id },
+          };
         }
 
         const mem = db.getById(fullId);
@@ -1149,7 +1209,7 @@ Args:
         return {
           content: [{
             type: "text" as const,
-            text: `Patched memory (${fullId.slice(0, 8)}): ${field} → ${displayValue}\nReason: ${reason}\nPrevious ${field}: ${previousContent}\nVersion snapshot saved.`,
+            text: `Patched memory (${shortId(fullId)}): ${field} → ${displayValue}\nReason: ${reason}\nPrevious ${field}: ${previousContent}\nVersion snapshot saved.`,
           }],
           structuredContent: {
             action: "patched" as const,
@@ -1201,13 +1261,7 @@ Args:
     },
     async ({ memory_id, restore_version_id }) => {
       try {
-        // Resolve short IDs
-        let fullId = memory_id;
-        if (memory_id.length < 36) {
-          const all = db.getAll();
-          const match = all.find(m => m.id.startsWith(memory_id));
-          if (match) fullId = match.id;
-        }
+        const fullId = db.resolveId(memory_id) ?? memory_id;
 
         const mem = db.getById(fullId);
         if (!mem) {
@@ -1223,12 +1277,12 @@ Args:
           if (!target) {
             return {
               isError: true,
-              content: [{ type: "text" as const, text: `Version "${restore_version_id}" not found in history for memory ${fullId.slice(0, 8)}.` }],
+              content: [{ type: "text" as const, text: `Version "${restore_version_id}" not found in history for memory ${shortId(fullId)}.` }],
             };
           }
 
-          db.patchMemory(fullId, { field: "content", value: target.content, reason: `restored from version ${target.versionId.slice(0, 8)}` });
-          db.patchMemory(fullId, { field: "confidence", value: target.confidence, reason: `restored from version ${target.versionId.slice(0, 8)}` });
+          db.patchMemory(fullId, { field: "content", value: target.content, reason: `restored from version ${shortId(target.versionId)}` });
+          db.patchMemory(fullId, { field: "confidence", value: target.confidence, reason: `restored from version ${shortId(target.versionId)}` });
 
           const newEmbedding = await generateEmbedding(target.content);
           if (newEmbedding) db.updateEmbedding(fullId, newEmbedding);
@@ -1236,7 +1290,7 @@ Args:
           return {
             content: [{
               type: "text" as const,
-              text: `Restored memory ${fullId.slice(0, 8)} to version ${target.versionId.slice(0, 8)}\nContent: "${target.content}"\nConfidence: ${(target.confidence * 100).toFixed(0)}%\nOriginal age: ${formatAge(target.editedAt)}`,
+              text: `Restored memory ${shortId(fullId)} to version ${shortId(target.versionId)}\nContent: "${target.content}"\nConfidence: ${(target.confidence * 100).toFixed(0)}%\nOriginal age: ${formatAge(target.editedAt)}`,
             }],
             structuredContent: {
               action: "restored" as const,
@@ -1250,7 +1304,7 @@ Args:
         const history = db.getVersionHistory(fullId);
         if (history.length === 0) {
           return {
-            content: [{ type: "text" as const, text: `No version history for memory ${fullId.slice(0, 8)}. Memories gain history after their first patch.` }],
+            content: [{ type: "text" as const, text: `No version history for memory ${shortId(fullId)}. Memories gain history after their first patch.` }],
             structuredContent: {
               action: "history" as const,
               memoryId: fullId,
@@ -1261,12 +1315,12 @@ Args:
         }
 
         const lines = [
-          `Version history for memory ${fullId.slice(0, 8)}`,
+          `Version history for memory ${shortId(fullId)}`,
           `Current: "${mem.content}" (${(mem.confidence * 100).toFixed(0)}% confidence)`,
           "",
           `${history.length} version${history.length === 1 ? "" : "s"}:`,
           ...history.map((v, i) =>
-            `  ${i + 1}. [${v.versionId.slice(0, 8)}] "${v.content}" — ${(v.confidence * 100).toFixed(0)}% — ${formatAge(v.editedAt)}\n     Reason: ${v.reason}`
+            `  ${i + 1}. [${shortId(v.versionId)}] "${v.content}" — ${(v.confidence * 100).toFixed(0)}% — ${formatAge(v.editedAt)}\n     Reason: ${v.reason}`
           ),
         ];
 
@@ -1344,7 +1398,7 @@ Args:
         return {
           content: [{
             type: "text" as const,
-            text: `Logged ${role} turn (${id.slice(0, 8)}) to session "${session_id}". Content length: ${content.length} chars.`,
+            text: `Logged ${role} turn (${shortId(id)}) to session "${session_id}". Content length: ${content.length} chars.`,
           }],
           structuredContent: {
             id,
@@ -1444,7 +1498,7 @@ Args:
           lines.push(header);
           lines.push("");
           for (const e of entries) {
-            lines.push(`[${e.id.slice(0, 8)}] ${formatAge(e.timestamp)} | ${e.role} | session:${e.sessionId.slice(0, 8)}`);
+            lines.push(`[${shortId(e.id)}] ${formatAge(e.timestamp)} | ${e.role} | session:${shortId(e.sessionId)}`);
             lines.push(e.content.length > 200 ? e.content.slice(0, 200) + "…" : e.content);
             lines.push("");
           }
@@ -1530,13 +1584,8 @@ Args:
               content: [{ type: "text" as const, text: "relate requires from_id, to_id, and relation_type." }],
             };
           }
-          const resolveId = (id: string) => {
-            if (id.length >= 36) return id;
-            const match = db.getAll().find(m => m.id.startsWith(id));
-            return match?.id ?? id;
-          };
-          const fromFull = resolveId(from_id);
-          const toFull = resolveId(to_id);
+          const fromFull = db.resolveId(from_id) ?? from_id;
+          const toFull = db.resolveId(to_id) ?? to_id;
           const fromMem = db.getById(fromFull);
           const toMem = db.getById(toFull);
           if (!fromMem || !toMem) {
@@ -1549,7 +1598,7 @@ Args:
           return {
             content: [{
               type: "text" as const,
-              text: `Linked memories:\n  "${fromMem.content.slice(0, 60)}"\n  ${relation_type} →\n  "${toMem.content.slice(0, 60)}"\nRelation ID: ${relId.slice(0, 8)}`,
+              text: `Linked memories:\n  "${fromMem.content.slice(0, 60)}"\n  ${relation_type} →\n  "${toMem.content.slice(0, 60)}"\nRelation ID: ${shortId(relId)}`,
             }],
             structuredContent: {
               action: "related" as const,
@@ -1571,7 +1620,7 @@ Args:
           }
           db.removeRelation(relation_id);
           return {
-            content: [{ type: "text" as const, text: `Removed relation ${relation_id.slice(0, 8)}.` }],
+            content: [{ type: "text" as const, text: `Removed relation ${shortId(relation_id)}.` }],
             structuredContent: { action: "unrelated" as const, relationId: relation_id },
           };
         }
@@ -1583,12 +1632,7 @@ Args:
             content: [{ type: "text" as const, text: "graph requires memory_id." }],
           };
         }
-        const resolveId = (id: string) => {
-          if (id.length >= 36) return id;
-          const match = db.getAll().find(m => m.id.startsWith(id));
-          return match?.id ?? id;
-        };
-        const fullId = resolveId(memory_id);
+        const fullId = db.resolveId(memory_id) ?? memory_id;
         const mem = db.getById(fullId);
         if (!mem) {
           return {
@@ -1602,14 +1646,14 @@ Args:
           return {
             content: [{
               type: "text" as const,
-              text: `Memory ${fullId.slice(0, 8)} has no explicit relations yet.\n\nUse action:relate to build the knowledge graph.`,
+              text: `Memory ${shortId(fullId)} has no explicit relations yet.\n\nUse action:relate to build the knowledge graph.`,
             }],
             structuredContent: { action: "graph" as const, memoryId: fullId, relations: [] },
           };
         }
 
         const lines = [
-          `Knowledge graph for memory ${fullId.slice(0, 8)}:`,
+          `Knowledge graph for memory ${shortId(fullId)}:`,
           `"${mem.content.slice(0, 80)}${mem.content.length > 80 ? "…" : ""}"`,
           "",
         ];
@@ -1619,8 +1663,8 @@ Args:
           const otherId = direction === "outgoing" ? r.toId : r.fromId;
           const other = db.getById(otherId);
           const arrow = direction === "outgoing" ? `→ [${r.relationshipType}] →` : `← [${r.relationshipType}] ←`;
-          lines.push(`  ${arrow} ${other?.content.slice(0, 60) ?? otherId.slice(0, 8)} (${(r.strength * 100).toFixed(0)}% strength)`);
-          lines.push(`     relation id: ${r.id.slice(0, 8)}`);
+          lines.push(`  ${arrow} ${other?.content.slice(0, 60) ?? shortId(otherId)} (${(r.strength * 100).toFixed(0)}% strength)`);
+          lines.push(`     relation id: ${shortId(r.id)}`);
           structRelations.push({
             relatedId: otherId,
             direction,
@@ -1731,7 +1775,7 @@ Args:
 
         for (const m of memories) {
           lines.push(`[${m.type}] ${m.content.slice(0, 80)}${m.content.length > 80 ? "…" : ""}`);
-          lines.push(`  Created: ${formatAge(m.createdAt)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ID: ${m.id.slice(0, 8)}`);
+          lines.push(`  Created: ${formatAge(m.createdAt)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ID: ${shortId(m.id)}`);
           if (m.tags.length > 0) lines.push(`  Tags: ${m.tags.join(", ")}`);
           lines.push("");
         }
@@ -1814,7 +1858,7 @@ Args:
         const lines = [`Full-text search: "${query}" — ${results.length} result${results.length === 1 ? "" : "s"}`, ""];
         for (const m of results) {
           lines.push(`[${m.type}] ${m.content}`);
-          lines.push(`  ID: ${m.id.slice(0, 8)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ${formatAge(m.lastAccessed)}`);
+          lines.push(`  ID: ${shortId(m.id)} | Confidence: ${(m.confidence * 100).toFixed(0)}% | ${formatAge(m.lastAccessed)}`);
           if (m.tags.length > 0) lines.push(`  Tags: ${m.tags.join(", ")}`);
           lines.push("");
         }
@@ -1934,7 +1978,7 @@ Returns:
           const dueStr = r.dueAt ? new Date(r.dueAt).toISOString() : "no due date";
           const status = r.completed ? "[DONE]" : "[pending]";
           lines.push(`${status} ${r.content}`);
-          lines.push(`  ID: ${r.id.slice(0, 8)} | Due: ${dueStr} | Scope: ${r.scope}`);
+          lines.push(`  ID: ${shortId(r.id)} | Due: ${dueStr} | Scope: ${r.scope}`);
           lines.push("");
         }
 
@@ -1987,7 +2031,7 @@ Returns:
           const prefix = r.status === "overdue" ? "[OVERDUE]" : r.status === "today" ? "[TODAY]" : "[upcoming]";
           const dueStr = r.dueAt ? new Date(r.dueAt).toISOString() : "no due date";
           lines.push(`${prefix} ${r.content}`);
-          lines.push(`  ID: ${r.id.slice(0, 8)} | Due: ${dueStr} | Scope: ${r.scope}`);
+          lines.push(`  ID: ${shortId(r.id)} | Due: ${dueStr} | Scope: ${r.scope}`);
           lines.push("");
         }
 
@@ -2033,32 +2077,23 @@ Returns:
         // Try exact match first
         if (db.completeReminder(id)) {
           return {
-            content: [{ type: "text" as const, text: `Reminder ${id.slice(0, 8)} marked as completed.` }],
+            content: [{ type: "text" as const, text: `Reminder ${shortId(id)} marked as completed.` }],
           };
         }
 
-        // Try partial ID match
-        const all = db.listReminders();
-        const matches = all.filter(r => r.id.startsWith(id));
-
-        if (matches.length === 0) {
+        // Try partial ID match via SQL prefix
+        const fullId = db.resolveReminderId(id);
+        if (!fullId) {
           return {
             isError: true,
             content: [{ type: "text" as const, text: `No reminder found matching ID "${id}".` }],
           };
         }
 
-        if (matches.length > 1) {
-          const ids = matches.map(r => `  ${r.id.slice(0, 8)}: ${r.content}`).join("\n");
-          return {
-            isError: true,
-            content: [{ type: "text" as const, text: `Multiple reminders match "${id}". Be more specific:\n${ids}` }],
-          };
-        }
-
-        db.completeReminder(matches[0].id);
+        db.completeReminder(fullId);
+        const reminder = db.listReminders(true).find(r => r.id === fullId);
         return {
-          content: [{ type: "text" as const, text: `Reminder ${matches[0].id.slice(0, 8)} marked as completed: "${matches[0].content}"` }],
+          content: [{ type: "text" as const, text: `Reminder ${shortId(fullId)} marked as completed${reminder ? `: "${reminder.content}"` : ""}.` }],
         };
       } catch (error) {
         return {
