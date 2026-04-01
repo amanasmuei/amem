@@ -69,9 +69,6 @@ function cachePut(key: string, val: Float32Array): void {
   embeddingCache.set(key, val);
 }
 
-/** Whether the first embedding load has completed (success or failure). */
-let pipelineReady = false;
-
 /** Skip embedding loading entirely (useful for CLI commands that need fast exit). */
 let embeddingDisabled = false;
 
@@ -85,8 +82,9 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
   if (pipelineLoading) return pipelineLoading;
 
   pipelineLoading = (async () => {
-    try {
-      // Race with a timeout to avoid hanging on slow model downloads
+    const LOAD_TIMEOUT_MS = 30000;
+
+    async function attemptLoad(): Promise<FeatureExtractor | null> {
       const loadPromise = (async () => {
         const mod = await import("@huggingface/transformers");
         return await mod.pipeline(
@@ -95,23 +93,63 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
         ) as unknown as FeatureExtractor;
       })();
 
-      const LOAD_TIMEOUT_MS = 30000;
-      const result = await Promise.race([
+      return await Promise.race([
         loadPromise,
         new Promise<null>((resolve) => setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)),
       ]);
+    }
 
+    try {
+      const result = await attemptLoad();
       if (result) {
         pipelineInstance = result;
-        pipelineReady = true;
+  
         return pipelineInstance;
       }
-      pipelineReady = true;
+
       console.error("[amem] Embedding model load timed out — using keyword matching");
       return null;
     } catch (error) {
-      pipelineReady = true;
-      console.error("[amem] Embeddings unavailable — using keyword matching (still works great!):", error instanceof Error ? error.message : String(error));
+      const msg = error instanceof Error ? error.message : String(error);
+      // If the cached model is corrupted, clear it and retry once
+      if (msg.includes("Protobuf parsing failed") || msg.includes("invalid model")) {
+        console.error("[amem] Corrupted model cache detected — clearing and retrying...");
+        try {
+          const fs = await import("node:fs");
+          const path = await import("node:path");
+          const os = await import("node:os");
+          // Clear the HuggingFace cache for this model
+          const cacheLocations = [
+            path.join(os.homedir(), ".cache", "huggingface", "transformers", "Xenova", "all-MiniLM-L6-v2"),
+          ];
+          // Also try to find the cache inside node_modules
+          try {
+            const modPath = import.meta.resolve?.("@huggingface/transformers") ?? "";
+            if (modPath) {
+              const modDir = path.dirname(modPath.replace("file://", ""));
+              cacheLocations.push(path.join(modDir, ".cache", "Xenova", "all-MiniLM-L6-v2"));
+            }
+          } catch {}
+          for (const loc of cacheLocations) {
+            if (fs.existsSync(loc)) {
+              fs.rmSync(loc, { recursive: true, force: true });
+              console.error(`[amem] Cleared cache: ${loc}`);
+            }
+          }
+          // Retry once
+          const retryResult = await attemptLoad();
+          if (retryResult) {
+            pipelineInstance = retryResult;
+      
+            console.error("[amem] Model re-downloaded successfully — semantic search enabled");
+            return pipelineInstance;
+          }
+        } catch (retryError) {
+          console.error("[amem] Cache recovery failed:", retryError instanceof Error ? retryError.message : String(retryError));
+        }
+      }
+
+      console.error("[amem] Embeddings unavailable — using keyword matching (still works great!):", msg);
       console.error("[amem] To enable semantic search: npm install @huggingface/transformers");
       return null;
     }
