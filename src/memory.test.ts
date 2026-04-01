@@ -92,10 +92,11 @@ describe("computeScore", () => {
     expect(highRel).toBeGreaterThan(lowRel);
   });
 
-  it("returns 0 when relevance is 0", () => {
+  it("returns low score when relevance is 0", () => {
     const now = Date.now();
     const score = computeScore({ relevance: 0, confidence: 1.0, lastAccessed: now, importance: 1.0, now });
-    expect(score).toBe(0);
+    // With additive scoring, zero relevance still gets recency+confidence+importance contributions
+    expect(score).toBeCloseTo(0.55, 1);
   });
 });
 

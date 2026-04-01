@@ -8,7 +8,7 @@
       "name": "amem",
       "source": "./plugin",
       "description": "Persistent memory layer for AI — typed, scored, temporal, searchable. 28 tools, knowledge graph, privacy controls.",
-      "version": "0.12.0"
+      "version": "0.13.0"
     }
   ]
 }

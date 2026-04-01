@@ -86,10 +86,12 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
 
     async function attemptLoad(): Promise<FeatureExtractor | null> {
       const loadPromise = (async () => {
+        const { loadConfig } = await import("./config.js");
+        const config = loadConfig();
         const mod = await import("@huggingface/transformers");
         return await mod.pipeline(
           "feature-extraction",
-          "Xenova/all-MiniLM-L6-v2",
+          config.embeddingModel,
         ) as unknown as FeatureExtractor;
       })();
 
@@ -118,16 +120,21 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
           const fs = await import("node:fs");
           const path = await import("node:path");
           const os = await import("node:os");
+          const { loadConfig } = await import("./config.js");
+          const cfg = loadConfig();
+          const modelParts = cfg.embeddingModel.split("/");
+          const modelOrg = modelParts[0] ?? "Xenova";
+          const modelName = modelParts[1] ?? cfg.embeddingModel;
           // Clear the HuggingFace cache for this model
           const cacheLocations = [
-            path.join(os.homedir(), ".cache", "huggingface", "transformers", "Xenova", "all-MiniLM-L6-v2"),
+            path.join(os.homedir(), ".cache", "huggingface", "transformers", modelOrg, modelName),
           ];
           // Also try to find the cache inside node_modules
           try {
             const modPath = import.meta.resolve?.("@huggingface/transformers") ?? "";
             if (modPath) {
               const modDir = path.dirname(modPath.replace("file://", ""));
-              cacheLocations.push(path.join(modDir, ".cache", "Xenova", "all-MiniLM-L6-v2"));
+              cacheLocations.push(path.join(modDir, ".cache", modelOrg, modelName));
             }
           } catch {}
           for (const loc of cacheLocations) {

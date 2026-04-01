@@ -58,7 +58,7 @@ export interface AmemConfig {
 }
 
 const DEFAULT_CONFIG: AmemConfig = {
-  embeddingModel: "Xenova/all-MiniLM-L6-v2",
+  embeddingModel: "Xenova/bge-small-en-v1.5",
   embeddingDimensions: 384,
   embeddingCacheSize: 128,
 

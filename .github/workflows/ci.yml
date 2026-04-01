@@ -31,3 +31,6 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run benchmarks
+        run: npx vitest run benchmarks/
