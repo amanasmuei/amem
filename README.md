@@ -223,24 +223,40 @@ Memories aren't forever. When facts change:
 
 ## Features
 
-### v0.9.x — The Temporal Intelligence Release
+### v0.13.0 — World-Class Recall
 
 | Feature | Description |
 |---|---|
-| Temporal validity | Memories have `valid_from`/`valid_until` — facts expire, history preserved |
-| Auto-expire | Storing a new memory auto-expires conflicting old ones |
-| Multi-strategy retrieval | Combines semantic + FTS5 + knowledge graph + temporal recency |
-| Cross-encoder reranking | Optional 2nd-pass reranking for highest accuracy |
-| Memory tiers | Core (always loaded) / Working (session) / Archival (searchable) |
-| Privacy tags | `<private>...</private>` stripped; API keys auto-redacted |
-| Automatic capture | Lifecycle hooks for passive observation |
-| Session summaries | Structured digests with key decisions and corrections |
-| Interactive dashboard | Drag-and-drop graph, memory editing, export, search highlighting |
-| Config system | `~/.amem/config.json` for full tuning |
-| Benchmark suite | Reproducible Recall@K / MRR / Precision measurements |
+| Upgraded embedding model | `bge-small-en-v1.5` — better MTEB retrieval scores, same 384-dim |
+| Additive weighted scoring | Fair ranking — no single low factor kills the score |
+| Query expansion | Dev-domain synonyms (`auth` → `authentication`, `login`, `session`) + stemming |
+| Auto-relate | New memories automatically link to similar ones — graph builds itself |
+| Graph-aware injection | `memory_inject` surfaces 1-hop knowledge graph neighbors |
+| In-memory ANN index | Pre-loaded vectors for fast semantic search (vs SQLite BLOB scan) |
+| `amem doctor` | Health diagnostics CLI — embedding coverage, core budget, stale memories |
+| Cross-session continuity | `amem://last-session` resource for previous session summary |
+| CI benchmarks | Recall regression detection in CI pipeline |
 
 <details>
 <summary><strong>View all features across versions</strong></summary>
+
+### v0.12.0
+- Passive capture and auto-injection
+- Team sync and dashboard timeline
+- Auto-recover corrupted embedding cache
+
+### v0.9.x — The Temporal Intelligence Release
+- Temporal validity (`valid_from`/`valid_until`) — facts expire, history preserved
+- Auto-expire contradicting memories on store
+- Multi-strategy retrieval: semantic + FTS5 + knowledge graph + temporal recency
+- Cross-encoder reranking (optional 2nd-pass for highest accuracy)
+- Memory tiers: core (always loaded) / working (session) / archival (searchable)
+- Privacy tags `<private>...</private>` stripped; API keys auto-redacted
+- Lifecycle hooks for passive observation
+- Session summaries with key decisions and corrections
+- Interactive dashboard with drag-and-drop graph, memory editing, export
+- Config system (`~/.amem/config.json`)
+- Benchmark suite (Recall@K / MRR / Precision)
 
 ### v0.8.0
 - `amem init` — auto-configure all AI tools in one command
@@ -266,7 +282,7 @@ Memories aren't forever. When facts change:
 
 ### v0.1.0 — v0.3.0
 - Core store/recall with semantic search
-- Local embeddings (HuggingFace all-MiniLM-L6-v2)
+- Local embeddings (HuggingFace)
 - SQLite + WAL persistence
 - Memory consolidation engine
 - Project-aware scoping
@@ -484,6 +500,8 @@ memory_tier({ id: "a1b2c3d4", tier: "archival" })
 
 ### Knowledge Graph
 
+> **New in v0.13.0:** The graph builds itself. When you store a memory, amem automatically finds and links the top-3 most similar existing memories. You can also link manually:
+
 <details>
 <summary><strong>Link related memories</strong></summary>
 
@@ -640,6 +658,7 @@ amem-cli hooks                         # Install automatic capture hooks
 amem-cli hooks --uninstall             # Remove hooks
 amem-cli sync                          # Import Claude auto-memory into amem
 amem-cli sync --dry-run                # Preview sync without importing
+amem-cli doctor                        # Health diagnostics
 
 # Dashboard
 amem-cli dashboard                     # Web dashboard (localhost:3333)
@@ -669,11 +688,11 @@ amem-cli reset --confirm               # Wipe all data
 ┌────────▼─────────────────────▼───────────────┐
 │             amem MCP Server                  │
 │                                              │
-│   28 Tools  ·  6 Resources  ·  2 Prompts    │
+│   28 Tools  ·  7 Resources  ·  2 Prompts    │
 │                                              │
 │   Multi-Strategy Retrieval Pipeline          │
-│   [Semantic] + [FTS5] + [Graph] + [Temporal] │
-│          ↓ optional cross-encoder rerank     │
+│   [ANN Index] + [FTS5] + [Graph] + [Temporal]│
+│        ↓ query expansion + cross-encoder     │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │
@@ -688,22 +707,24 @@ amem-cli reset --confirm               # Wipe all data
 │   └────────────────────────────────────┘     │
 │                                              │
 │   Config: ~/.amem/config.json                │
-│   Local Embeddings (all-MiniLM-L6-v2, 80MB)  │
+│   Local Embeddings (bge-small-en-v1.5, 80MB)  │
 └──────────────────────────────────────────────┘
 ```
 
 ### Ranking Formula
 
 ```
-score = relevance × recency × confidence × importance
+score = relevance × 0.45 + recency × 0.2 + confidence × 0.2 + importance × 0.15
 ```
 
 | Factor | How it works |
 |---|---|
-| **Relevance** | Cosine similarity via local embeddings; keyword fallback |
+| **Relevance** | Cosine similarity via in-memory ANN index; query-expanded keyword fallback |
 | **Recency** | Exponential decay (`0.995^hours`) |
 | **Confidence** | Reinforced by repeated confirmation (0-1) |
 | **Importance** | Type-based: corrections `1.0` → facts `0.4` |
+
+> **Additive weighted scoring** ensures no single low factor kills the ranking. A memory with low confidence but high relevance still surfaces — unlike multiplicative scoring where one zero kills everything.
 
 ### Benchmark Results
 
@@ -733,6 +754,7 @@ These are automatically available to your AI tool:
 | `amem://summary` | Memory count and type breakdown |
 | `amem://log/recent` | Last 50 raw conversation log entries |
 | `amem://graph` | Knowledge graph overview |
+| `amem://last-session` | Previous session summary — decisions, corrections, and metrics |
 
 ---
 
@@ -788,11 +810,11 @@ Created automatically with defaults. Edit to customize:
 | Protocol | MCP SDK ^1.25 |
 | Language | TypeScript 5.6+, strict mode |
 | Database | SQLite + WAL + FTS5 |
-| Embeddings | HuggingFace Xenova/all-MiniLM-L6-v2 (local, 80MB) |
+| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + in-memory ANN index |
 | Reranking | Xenova/ms-marco-MiniLM-L-6-v2 (optional, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 311 tests across 20 suites |
-| CI/CD | GitHub Actions → npm publish on release |
+| Testing | Vitest — 337 tests across 24 suites + recall benchmarks |
+| CI/CD | GitHub Actions → npm publish on release, recall regression in CI |
 
 ---
 
@@ -802,7 +824,7 @@ Created automatically with defaults. Edit to customize:
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 311 tests pass
+npm test        # 337 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
