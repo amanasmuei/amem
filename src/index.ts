@@ -75,17 +75,22 @@ const currentProject = detectProject();
 import { preloadEmbeddings, generateEmbedding } from "./embeddings.js";
 preloadEmbeddings();
 
-// Background task: generate embeddings for memories that don't have them yet
+// Background task: generate embeddings for memories that don't have them yet,
+// then auto-relate any that were missing links (fixes first-run gap when model was downloading)
+import { autoRelateMemory } from "./auto-relate.js";
+
 async function backfillEmbeddings(): Promise<void> {
   try {
     const all = db.getAll();
     const missing = all.filter(m => !m.embedding);
     if (missing.length === 0) return;
     let filled = 0;
+    const backfilledIds: string[] = [];
     for (const mem of missing.slice(0, 50)) { // Process up to 50 per startup
       const emb = await generateEmbedding(mem.content);
       if (emb) {
         db.updateEmbedding(mem.id, emb);
+        backfilledIds.push(mem.id);
         filled++;
       } else {
         break; // Embeddings not available
@@ -93,6 +98,18 @@ async function backfillEmbeddings(): Promise<void> {
     }
     if (filled > 0) {
       console.error(`[amem] Backfilled embeddings for ${filled} memories`);
+      // Auto-relate backfilled memories that missed linking at store time
+      let linked = 0;
+      for (const id of backfilledIds) {
+        const existing = db.getRelations(id);
+        if (existing.length === 0) {
+          const result = autoRelateMemory(db, id);
+          linked += result.created;
+        }
+      }
+      if (linked > 0) {
+        console.error(`[amem] Auto-linked ${linked} relations for backfilled memories`);
+      }
     }
   } catch {}
 }
