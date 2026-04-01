@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "amem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@aman_asmuei/amem"]
+    }
+  }
+}

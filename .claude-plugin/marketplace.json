@@ -1,0 +1,14 @@
+{
+  "name": "amem",
+  "owner": {
+    "name": "Aman Asmuei"
+  },
+  "plugins": [
+    {
+      "name": "amem",
+      "source": "./plugin",
+      "description": "Persistent memory layer for AI — typed, scored, temporal, searchable. 28 tools, knowledge graph, privacy controls.",
+      "version": "0.11.0"
+    }
+  ]
+}

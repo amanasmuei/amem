@@ -1,0 +1,9 @@
+{
+  "name": "amem-plugin",
+  "version": "0.11.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "^12.0.0"
+  }
+}

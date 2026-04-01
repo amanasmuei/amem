@@ -66,18 +66,31 @@ No cloud. No API keys. Everything stays on your machine.
 
 ## Getting Started
 
-### Step 1: Install
+### Option A: Claude Code Plugin (recommended for Claude Code users)
+
+One command — gives you MCP tools + lifecycle hooks + slash commands + auto-config:
+
+```bash
+/plugin marketplace add amanasmuei/amem
+/plugin install amem
+```
+
+That's it. You get:
+- **28 MCP tools** auto-registered
+- **Lifecycle hooks** — PostToolUse (captures observations) + Stop (auto-summarizes sessions)
+- **5 slash commands** — `/amem:remember`, `/amem:recall`, `/amem:sync`, `/amem:dashboard`, `/amem:context`
+- **CLAUDE.md** context injected every session
+
+### Option B: MCP Server (works with any MCP client)
+
+For Claude Code, Cursor, Windsurf, GitHub Copilot, or any MCP-compatible tool:
 
 ```bash
 npm install -g @aman_asmuei/amem
-```
-
-### Step 2: Auto-Configure
-
-```bash
-amem-cli init      # Detects & configures Claude Code, Cursor, Windsurf, GitHub Copilot
-amem-cli rules     # Generates extraction rules so your AI uses amem proactively
-amem-cli hooks     # Installs automatic memory capture (PostToolUse + SessionEnd)
+amem-cli init      # Detects & configures all installed AI tools
+amem-cli rules     # Generates extraction rules for proactive memory use
+amem-cli hooks     # Installs automatic capture hooks (Claude Code only)
+amem-cli sync      # Imports Claude auto-memory into amem
 ```
 
 <details>
@@ -85,21 +98,22 @@ amem-cli hooks     # Installs automatic memory capture (PostToolUse + SessionEnd
 
 | Command | What it does |
 |---|---|
-| `amem-cli init` | Finds your installed AI tools and adds amem to their MCP server config. Works with Claude Code (`~/.claude/settings.json`), Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.windsurf/mcp.json`), and GitHub Copilot. |
-| `amem-cli rules` | Writes a set of memory extraction guidelines to your tool's rules file (e.g., `CLAUDE.md`, `.cursorrules`). This teaches the AI *when* and *how* to store memories. |
-| `amem-cli hooks` | Installs Claude Code lifecycle hooks that passively capture tool observations (PostToolUse) and auto-summarize sessions on exit (Stop). Memories accumulate without you asking. |
+| `amem-cli init` | Finds your installed AI tools and adds amem to their MCP server config. Works with Claude Code, Cursor, Windsurf, and GitHub Copilot. |
+| `amem-cli rules` | Writes extraction guidelines to your tool's rules file (`CLAUDE.md`, `.cursorrules`, etc.). Teaches the AI *when* and *how* to store memories. |
+| `amem-cli hooks` | Installs Claude Code lifecycle hooks for passive capture (PostToolUse + Stop). |
+| `amem-cli sync` | Imports Claude Code auto-memory files into amem for unified structured access. |
 
 </details>
 
 <details>
-<summary><strong>Or configure manually (Claude Code)</strong></summary>
+<summary><strong>Manual MCP configuration</strong></summary>
 
+**Claude Code:**
 ```bash
 claude mcp add amem -- npx -y @aman_asmuei/amem
 ```
 
-Or add to `~/.claude/settings.json`:
-
+**Cursor / Windsurf / Other MCP Clients:**
 ```json
 {
   "mcpServers": {
@@ -113,31 +127,14 @@ Or add to `~/.claude/settings.json`:
 
 </details>
 
-<details>
-<summary><strong>Or configure manually (Cursor / Windsurf / Other MCP Clients)</strong></summary>
-
-```json
-{
-  "mcpServers": {
-    "amem": { "command": "amem" }
-  }
-}
-```
-
-</details>
-
-### Step 3: Restart Your AI Tool
-
-You'll see **28 tools**, **6 resources**, and **2 prompts** ready to go.
-
-### Step 4: Verify
+### Verify Installation
 
 ```bash
 amem-cli stats       # Should show "0 memories" initially
 amem-cli dashboard   # Opens web dashboard at localhost:3333
 ```
 
-Then start a conversation and tell your AI:
+Start a conversation and tell your AI:
 
 > *"Remember: always use strict TypeScript, never use any type"*
 
@@ -146,6 +143,16 @@ Start a **new** conversation and ask:
 > *"What do you remember about TypeScript?"*
 
 It should recall the correction instantly.
+
+### Slash Commands (Plugin only)
+
+| Command | What it does |
+|---|---|
+| `/amem:remember "never use any"` | Quick-store a memory with auto type detection |
+| `/amem:recall "auth architecture"` | Quick search with progressive disclosure |
+| `/amem:context` | Load full context for the current task |
+| `/amem:sync` | Import Claude auto-memory into amem |
+| `/amem:dashboard` | Open the web dashboard |
 
 ---
 
