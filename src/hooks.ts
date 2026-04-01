@@ -7,27 +7,44 @@ export interface HookConfig {
   captureSessionEnd: boolean;
 }
 
+/** Check if a hook entry was created by amem (by inspecting nested hooks[].command) */
+function isAmemHookEntry(entry: Record<string, unknown>): boolean {
+  const nested = entry.hooks as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(nested)) {
+    return nested.some(h => String(h.command ?? "").includes("amem"));
+  }
+  // Legacy flat format
+  return String(entry.command ?? "").includes("amem") || String(entry.description ?? "").includes("amem:");
+}
+
 /**
  * Generate Claude Code hook configuration for automatic memory capture.
+ *
+ * Claude Code hooks format:
+ * { "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "..." }] }] }
  */
 export function generateHooksConfig(config: HookConfig): Record<string, unknown[]> {
   const hooks: Record<string, unknown[]> = {};
 
   if (config.captureToolUse) {
     hooks.PostToolUse = [{
-      type: "command",
-      command: getPostToolUseCommand(),
-      timeout: 10000,
-      description: "amem: capture tool observations for persistent memory",
+      matcher: "",  // Match all tools — the script filters internally
+      hooks: [{
+        type: "command",
+        command: getPostToolUseCommand(),
+        timeout: 10000,
+      }],
     }];
   }
 
   if (config.captureSessionEnd) {
     hooks.Stop = [{
-      type: "command",
-      command: getStopCommand(),
-      timeout: 15000,
-      description: "amem: summarize session and extract final memories",
+      matcher: "",
+      hooks: [{
+        type: "command",
+        command: getStopCommand(),
+        timeout: 15000,
+      }],
     }];
   }
 
@@ -94,8 +111,8 @@ export function installHooks(config: HookConfig): { installed: string[]; configP
   // Merge amem hooks with existing hooks (don't overwrite user hooks)
   for (const [event, newHooks] of Object.entries(hooksConfig)) {
     const existing = (existingHooks[event] ?? []) as Array<Record<string, unknown>>;
-    // Remove any previous amem hooks
-    const filtered = existing.filter(h => !String(h.description ?? "").includes("amem:"));
+    // Remove any previous amem hooks (detect by command containing "amem" in nested hooks array)
+    const filtered = existing.filter(h => !isAmemHookEntry(h));
     existingHooks[event] = [...filtered, ...newHooks];
   }
 
@@ -131,7 +148,7 @@ export function uninstallHooks(): { removed: string[] } {
         const settings = JSON.parse(raw) as Record<string, unknown>;
         const hooks = (settings.hooks ?? {}) as Record<string, Array<Record<string, unknown>>>;
         for (const event of Object.keys(hooks)) {
-          hooks[event] = hooks[event].filter(h => !String(h.description ?? "").includes("amem:"));
+          hooks[event] = hooks[event].filter(h => !isAmemHookEntry(h));
           if (hooks[event].length === 0) delete hooks[event];
         }
         settings.hooks = hooks;

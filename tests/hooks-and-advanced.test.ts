@@ -17,18 +17,24 @@ describe("Hooks system", () => {
     try { fs.rmSync(testDir, { recursive: true }); } catch {}
   });
 
-  it("generateHooksConfig produces PostToolUse and Stop hooks", () => {
+  it("generateHooksConfig produces PostToolUse and Stop hooks in Claude Code format", () => {
     const config = generateHooksConfig({ captureToolUse: true, captureSessionEnd: true });
     expect(config.PostToolUse).toHaveLength(1);
     expect(config.Stop).toHaveLength(1);
 
+    // Claude Code format: { matcher: "", hooks: [{ type: "command", command: "..." }] }
     const postTool = config.PostToolUse[0] as Record<string, unknown>;
-    expect(postTool.type).toBe("command");
-    expect(postTool.description).toContain("amem:");
+    expect(postTool.matcher).toBe("");
+    const postHooks = postTool.hooks as Array<Record<string, unknown>>;
+    expect(postHooks).toHaveLength(1);
+    expect(postHooks[0].type).toBe("command");
+    expect(String(postHooks[0].command)).toContain("amem");
 
     const stop = config.Stop[0] as Record<string, unknown>;
-    expect(stop.type).toBe("command");
-    expect(stop.description).toContain("amem:");
+    expect(stop.matcher).toBe("");
+    const stopHooks = stop.hooks as Array<Record<string, unknown>>;
+    expect(stopHooks).toHaveLength(1);
+    expect(stopHooks[0].type).toBe("command");
   });
 
   it("generateHooksConfig respects partial config", () => {
