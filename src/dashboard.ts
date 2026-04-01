@@ -77,7 +77,26 @@ a{color:var(--decision);text-decoration:none}
 .mem-card .mem-meta .tag{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1px 6px}
 
 /* knowledge graph */
-#graph-svg{width:100%;height:360px;border-radius:6px;background:var(--bg)}
+#graph-svg{width:100%;height:460px;border-radius:6px;background:var(--bg);cursor:grab}
+#graph-svg:active{cursor:grabbing}
+#graph-svg circle{cursor:pointer;transition:r 0.15s}
+#graph-svg circle:hover{r:12}
+.graph-tooltip{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:0.8rem;max-width:300px;pointer-events:none;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+
+/* memory actions */
+.mem-actions{display:flex;gap:6px;margin-top:6px}
+.mem-actions button{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:3px 10px;font-size:0.7rem;cursor:pointer;transition:all 0.15s}
+.mem-actions button:hover{background:var(--border);color:#fff}
+.mem-actions .btn-core{border-color:var(--correction)}
+.mem-actions .btn-expire{border-color:var(--muted)}
+
+/* export bar */
+.export-bar{display:flex;gap:10px;justify-content:flex-end;margin-bottom:10px}
+.export-bar button{background:var(--decision);color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:0.8rem;cursor:pointer;font-weight:600;transition:opacity 0.15s}
+.export-bar button:hover{opacity:0.85}
+
+/* highlight */
+.highlight{background:rgba(88,166,255,0.2);border-radius:2px;padding:0 2px}
 
 /* reminders */
 .reminder-list{max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
@@ -125,6 +144,10 @@ a{color:var(--decision);text-decoration:none}
   <!-- Memory list -->
   <div class="card full" id="mem-section">
     <h2>Memories</h2>
+    <div class="export-bar">
+      <button onclick="exportMemories('json')">Export JSON</button>
+      <button onclick="exportMemories('markdown')">Export Markdown</button>
+    </div>
     <div class="mem-controls">
       <input type="text" id="mem-search" placeholder="Search memories..."/>
       <select id="mem-type">
@@ -149,6 +172,7 @@ a{color:var(--decision);text-decoration:none}
   <!-- Knowledge graph -->
   <div class="card" id="graph-card">
     <h2>Knowledge Graph</h2>
+    <div id="graph-tooltip" class="graph-tooltip" style="display:none"></div>
     <svg id="graph-svg"></svg>
   </div>
 
@@ -229,6 +253,17 @@ a{color:var(--decision);text-decoration:none}
     setHTML($('conf-bars'), bar('High',conf.high,'conf-high')+bar('Medium',conf.medium,'conf-med')+bar('Low',conf.low,'conf-low'));
   }
 
+  var currentSearchQuery='';
+
+  function highlightText(text,query){
+    if(!query) return esc(text);
+    var escaped=esc(text);
+    try{
+      var q=query.replace(/[-\\/\\\\^$*+?.()|[\\]{}]/g,'\\\\$&');
+      return escaped.replace(new RegExp('('+q+')','gi'),'<span class="highlight">$1</span>');
+    }catch(e){return escaped}
+  }
+
   function renderMemories(memories){
     var el=$('mem-list');
     if(!memories.length){setHTML(el,'<div class="empty">No memories found</div>');return}
@@ -238,13 +273,16 @@ a{color:var(--decision);text-decoration:none}
       var tierBadge = m.tier && m.tier !== 'archival' ? '<span class="type-badge" style="background:'+(m.tier==='core'?'#f0883e':'#58a6ff')+'">'+esc(m.tier)+'</span>' : '';
       var expiredBadge = m.validUntil ? '<span class="type-badge" style="background:#f85149;opacity:0.7">expired</span>' : '';
       var validInfo = m.validFrom ? '<span>Valid: '+new Date(m.validFrom).toISOString().slice(0,10)+(m.validUntil?' → '+new Date(m.validUntil).toISOString().slice(0,10):' → now')+'</span>' : '';
+      var contentHtml = highlightText(m.content, currentSearchQuery);
+      var sid=esc(m.id.slice(0,8));
+      var tierLabel=m.tier||'archival';
       return '<div class="mem-card"'+(m.validUntil?' style="opacity:0.6"':'')+'>'+
         '<div class="mem-head">'+
           '<span class="type-badge" style="background:'+color+'">'+esc(m.type)+'</span>'+
           tierBadge+expiredBadge+
-          '<code class="mono" style="color:var(--muted);font-size:0.7rem">'+esc(m.id.slice(0,8))+'</code>'+
+          '<code class="mono" style="color:var(--muted);font-size:0.7rem">'+sid+'</code>'+
         '</div>'+
-        '<div class="mem-content">'+esc(m.content)+'</div>'+
+        '<div class="mem-content">'+contentHtml+'</div>'+
         '<div class="mem-meta">'+
           '<span>Confidence: '+Math.round(m.confidence*100)+'%</span>'+
           '<span>'+timeAgo(m.createdAt)+'</span>'+
@@ -252,6 +290,11 @@ a{color:var(--decision);text-decoration:none}
           (m.scope?'<span>Scope: '+esc(m.scope)+'</span>':'')+
           validInfo+
           (tags?' '+tags:'')+
+        '</div>'+
+        '<div class="mem-actions">'+
+          (tierLabel!=='core'?'<button class="btn-core" data-action="tier:core:'+sid+'">Promote to Core</button>':
+            '<button data-action="tier:archival:'+sid+'">Demote</button>')+
+          (!m.validUntil?'<button class="btn-expire" data-action="expire::'+sid+'">Expire</button>':'')+
         '</div></div>';
     }).join(''));
   }
@@ -260,6 +303,7 @@ a{color:var(--decision);text-decoration:none}
     var q=($('mem-search').value||'').toLowerCase();
     var t=$('mem-type').value;
     var tier=$('mem-tier')?$('mem-tier').value:'';
+    currentSearchQuery=q;
     var list=allMemories;
     if(q) list=list.filter(function(m){return m.content.toLowerCase().indexOf(q)!==-1});
     if(t) list=list.filter(function(m){return m.type===t});
@@ -321,6 +365,11 @@ a{color:var(--decision);text-decoration:none}
       }
     }
 
+    // Store for interactive use
+    graphNodes=nodes;
+    graphEdges=edges;
+    graphNodeMap=nodeMap;
+
     // render SVG elements (all text escaped via esc())
     var html='';
     for(i=0;i<edges.length;i++){
@@ -332,7 +381,7 @@ a{color:var(--decision);text-decoration:none}
     }
     for(i=0;i<nodes.length;i++){
       var color=TYPE_COLORS[nodes[i].type]||'#8b949e';
-      html+='<circle cx="'+nodes[i].x+'" cy="'+nodes[i].y+'" r="8" fill="'+color+'" stroke="#0d1117" stroke-width="2"/>';
+      html+='<circle data-nid="'+esc(nodes[i].id)+'" cx="'+nodes[i].x+'" cy="'+nodes[i].y+'" r="8" fill="'+color+'" stroke="#0d1117" stroke-width="2"/>';
       html+='<text x="'+nodes[i].x+'" y="'+(nodes[i].y+20)+'" fill="'+color+'" font-size="10" text-anchor="middle" font-family="-apple-system,sans-serif">'+esc(nodes[i].label.slice(0,24))+'</text>';
     }
     setHTML(svg, html);
@@ -421,7 +470,134 @@ a{color:var(--decision);text-decoration:none}
   $('mem-type').addEventListener('change',filterMemories);
   if($('mem-tier')) $('mem-tier').addEventListener('change',filterMemories);
 
+  // -- Memory actions (delegated) --
+  document.addEventListener('click',function(e){
+    var btn=e.target;
+    if(!btn||!btn.dataset||!btn.dataset.action) return;
+    var parts=btn.dataset.action.split(':');
+    var action=parts[0],val=parts[1],id=parts[2];
+    if(!id) return;
+
+    var url='';
+    if(action==='tier') url='/api/action/tier?id='+encodeURIComponent(id)+'&tier='+encodeURIComponent(val);
+    else if(action==='expire') url='/api/action/expire?id='+encodeURIComponent(id);
+    else return;
+
+    fetch(url,{method:'POST'}).then(function(r){
+      if(r.ok) loadAll();
+      else r.text().then(function(t){alert('Error: '+t)});
+    }).catch(function(err){alert('Error: '+err.message)});
+  });
+
+  // -- Export --
+  window.exportMemories=function(format){
+    fetch('/api/memories?limit=10000').then(function(r){return r.json()}).then(function(data){
+      var content,filename,mime;
+      if(format==='json'){
+        content=JSON.stringify(data,null,2);
+        filename='amem-export.json';
+        mime='application/json';
+      } else {
+        var lines=['# amem Memory Export\\n','*Exported: '+new Date().toISOString()+'*','*Total: '+data.length+' memories*\\n'];
+        var types=['correction','decision','pattern','preference','topology','fact'];
+        for(var ti=0;ti<types.length;ti++){
+          var type=types[ti];
+          var mems=data.filter(function(m){return m.type===type});
+          if(!mems.length) continue;
+          lines.push('## '+type.charAt(0).toUpperCase()+type.slice(1)+'s\\n');
+          for(var mi=0;mi<mems.length;mi++){
+            lines.push('- **'+mems[mi].content+'** ('+Math.round(mems[mi].confidence*100)+'% confidence)');
+            if(mems[mi].tags&&mems[mi].tags.length) lines.push('  Tags: '+mems[mi].tags.join(', '));
+            lines.push('');
+          }
+        }
+        content=lines.join('\\n');
+        filename='amem-export.md';
+        mime='text/markdown';
+      }
+      var blob=new Blob([content],{type:mime});
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  };
+
+  // -- Interactive Graph (drag, click-to-inspect) --
+  var dragNode=null, dragOffset={x:0,y:0}, graphNodes=[], graphNodeMap={}, graphEdges=[];
+
+  function makeGraphInteractive(){
+    var svg=$('graph-svg');
+    var tooltip=$('graph-tooltip');
+    if(!svg||!tooltip) return;
+
+    svg.addEventListener('mousedown',function(e){
+      var circle=e.target;
+      if(circle.tagName!=='circle') return;
+      var nid=circle.dataset.nid;
+      if(!nid) return;
+      dragNode=graphNodeMap[nid];
+      if(!dragNode) return;
+      var rect=svg.getBoundingClientRect();
+      dragOffset.x=e.clientX-rect.left-dragNode.x;
+      dragOffset.y=e.clientY-rect.top-dragNode.y;
+      e.preventDefault();
+    });
+
+    svg.addEventListener('mousemove',function(e){
+      if(!dragNode) return;
+      var rect=svg.getBoundingClientRect();
+      dragNode.x=e.clientX-rect.left-dragOffset.x;
+      dragNode.y=e.clientY-rect.top-dragOffset.y;
+      redrawGraph();
+    });
+
+    document.addEventListener('mouseup',function(){dragNode=null});
+
+    svg.addEventListener('click',function(e){
+      var circle=e.target;
+      if(circle.tagName!=='circle') return;
+      var nid=circle.dataset.nid;
+      if(!nid) return;
+      var n=graphNodeMap[nid];
+      if(!n) return;
+      var rect=svg.getBoundingClientRect();
+      tooltip.style.display='block';
+      tooltip.style.left=(e.clientX-rect.left+15)+'px';
+      tooltip.style.top=(e.clientY-rect.top-10)+'px';
+      setHTML(tooltip,
+        '<div style="margin-bottom:4px"><span class="type-badge" style="background:'+(TYPE_COLORS[n.type]||'#8b949e')+'">'+esc(n.type)+'</span> <code class="mono">'+esc(n.id.slice(0,8))+'</code></div>'+
+        '<div style="font-size:0.85rem;margin-bottom:6px">'+esc(n.fullContent||n.label)+'</div>'+
+        '<div style="font-size:0.75rem;color:var(--muted)">Tier: '+(n.tier||'archival')+'</div>'
+      );
+    });
+
+    document.addEventListener('click',function(e){
+      if(e.target.tagName!=='circle'&&!tooltip.contains(e.target)) tooltip.style.display='none';
+    });
+  }
+
+  function redrawGraph(){
+    var svg=$('graph-svg');
+    var html='';
+    for(var i=0;i<graphEdges.length;i++){
+      var ea=graphNodeMap[graphEdges[i].from],eb=graphNodeMap[graphEdges[i].to];
+      if(!ea||!eb) continue;
+      var mx=(ea.x+eb.x)/2,my=(ea.y+eb.y)/2;
+      html+='<line x1="'+ea.x+'" y1="'+ea.y+'" x2="'+eb.x+'" y2="'+eb.y+'" stroke="#30363d" stroke-width="'+(1+graphEdges[i].strength*2)+'"/>';
+      if(graphEdges[i].type) html+='<text x="'+mx+'" y="'+(my-4)+'" fill="#8b949e" font-size="9" text-anchor="middle">'+esc(graphEdges[i].type)+'</text>';
+    }
+    for(var i=0;i<graphNodes.length;i++){
+      var color=TYPE_COLORS[graphNodes[i].type]||'#8b949e';
+      html+='<circle data-nid="'+esc(graphNodes[i].id)+'" cx="'+graphNodes[i].x+'" cy="'+graphNodes[i].y+'" r="8" fill="'+color+'" stroke="#0d1117" stroke-width="2"/>';
+      html+='<text x="'+graphNodes[i].x+'" y="'+(graphNodes[i].y+20)+'" fill="'+color+'" font-size="10" text-anchor="middle" font-family="-apple-system,sans-serif">'+esc(graphNodes[i].label.slice(0,24))+'</text>';
+    }
+    setHTML(svg,html);
+  }
+
   // -- Init --
+  makeGraphInteractive();
   loadAll();
   setInterval(loadAll,30000);
 })();
@@ -548,7 +724,9 @@ function handleGraph(db: AmemDatabase, res: http.ServerResponse): void {
     id: m.id,
     label:
       m.content.length > 40 ? m.content.slice(0, 40) + "..." : m.content,
+    fullContent: m.content,
     type: m.type,
+    tier: m.tier,
   }));
 
   const memoryIds = new Set(memories.map((m) => m.id));
@@ -605,6 +783,37 @@ function handleLog(
   );
 }
 
+function handleActionTier(
+  db: AmemDatabase,
+  res: http.ServerResponse,
+  query: Record<string, string>,
+): void {
+  const id = query.id;
+  const tier = query.tier;
+  if (!id || !tier) { errorResponse(res, "Missing id or tier parameter", 400); return; }
+
+  const fullId = db.resolveId(id);
+  if (!fullId) { errorResponse(res, `Memory "${id}" not found`, 404); return; }
+
+  db.updateTier(fullId, tier);
+  jsonResponse(res, { ok: true, id: fullId, tier });
+}
+
+function handleActionExpire(
+  db: AmemDatabase,
+  res: http.ServerResponse,
+  query: Record<string, string>,
+): void {
+  const id = query.id;
+  if (!id) { errorResponse(res, "Missing id parameter", 400); return; }
+
+  const fullId = db.resolveId(id);
+  if (!fullId) { errorResponse(res, `Memory "${id}" not found`, 404); return; }
+
+  db.expireMemory(fullId);
+  jsonResponse(res, { ok: true, id: fullId, expired: true });
+}
+
 function handleSummaries(
   db: AmemDatabase,
   res: http.ServerResponse,
@@ -659,6 +868,12 @@ export function startDashboard(db: AmemDatabase, port: number): void {
           break;
         case "/api/summaries":
           handleSummaries(db, res, query);
+          break;
+        case "/api/action/tier":
+          handleActionTier(db, res, query);
+          break;
+        case "/api/action/expire":
+          handleActionExpire(db, res, query);
           break;
         default:
           errorResponse(res, "Not found", 404);
