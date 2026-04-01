@@ -1,5 +1,5 @@
 import type { AmemDatabase } from "./database.js";
-import { cosineSimilarity } from "./embeddings.js";
+import { cosineSimilarity, rerankWithCrossEncoder } from "./embeddings.js";
 
 export const MemoryType = {
   CORRECTION: "correction",
@@ -390,6 +390,10 @@ export interface MultiStrategyOptions {
     graph: number;
     temporal: number;
   };
+  /** Enable cross-encoder reranking as the final pass. Default: false (uses config). */
+  rerank?: boolean;
+  /** How many candidates to feed to the reranker. Default: 20. */
+  rerankerTopK?: number;
 }
 
 /**
@@ -397,10 +401,10 @@ export interface MultiStrategyOptions {
  * and temporal recency into a unified ranking. Each strategy votes independently,
  * then scores are merged with configurable weights.
  */
-export function multiStrategyRecall(
+export async function multiStrategyRecall(
   db: AmemDatabase,
   options: MultiStrategyOptions,
-): RecalledMemory[] {
+): Promise<RecalledMemory[]> {
   const { query, queryEmbedding, limit, scope } = options;
   const weights = options.weights ?? { semantic: 0.4, fts: 0.3, graph: 0.15, temporal: 0.15 };
   const now = Date.now();
@@ -482,6 +486,31 @@ export function multiStrategyRecall(
   }
 
   results.sort((a, b) => b.score - a.score);
+
+  // Optional cross-encoder reranking — the final pass for highest accuracy
+  const shouldRerank = options.rerank ?? false;
+  if (shouldRerank && results.length > 1) {
+    const rerankerTopK = options.rerankerTopK ?? 20;
+    const candidatesForRerank = results.slice(0, rerankerTopK);
+    const reranked = await rerankWithCrossEncoder(
+      query,
+      candidatesForRerank.map(r => ({ id: r.id, content: r.content, score: r.score })),
+      limit,
+    );
+
+    // Map reranked scores back to full RecalledMemory objects
+    const rerankedMap = new Map(reranked.map(r => [r.id, r.score]));
+    const finalResults: RecalledMemory[] = [];
+    for (const r of candidatesForRerank) {
+      const newScore = rerankedMap.get(r.id);
+      if (newScore !== undefined) {
+        finalResults.push({ ...r, score: newScore });
+      }
+    }
+    finalResults.sort((a, b) => b.score - a.score);
+    return finalResults.slice(0, limit);
+  }
+
   return results.slice(0, limit);
 }
 

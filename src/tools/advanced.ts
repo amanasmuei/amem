@@ -258,12 +258,14 @@ Args:
     async ({ query, limit, weights }) => {
       try {
         const queryEmbedding = await generateEmbedding(query);
-        const results = multiStrategyRecall(db, {
+        const results = await multiStrategyRecall(db, {
           query,
           queryEmbedding,
           limit,
           scope: project,
           weights,
+          rerank: loadConfig().retrieval.rerankerEnabled,
+          rerankerTopK: loadConfig().retrieval.rerankerTopK,
         });
 
         if (results.length === 0) {

@@ -315,12 +315,12 @@ describe("Multi-strategy retrieval", () => {
   beforeEach(() => { ({ db, dbPath } = makeDb()); });
   afterEach(() => { db.close(); try { fs.unlinkSync(dbPath); } catch {} });
 
-  it("returns results from FTS even without embeddings", () => {
+  it("returns results from FTS even without embeddings", async () => {
     mem(db, "PostgreSQL is our primary database");
     mem(db, "Redis is used for caching");
     mem(db, "Auth uses JWT tokens");
 
-    const results = multiStrategyRecall(db, {
+    const results = await multiStrategyRecall(db, {
       query: "database",
       queryEmbedding: null,
       limit: 10,
@@ -331,26 +331,26 @@ describe("Multi-strategy retrieval", () => {
     expect(results[0].content).toContain("database");
   });
 
-  it("combines FTS and graph neighbors", () => {
+  it("combines FTS and graph neighbors", async () => {
     const dbId = mem(db, "PostgreSQL is our primary database");
     const cacheId = mem(db, "Redis caches frequent queries");
     db.addRelation(dbId, cacheId, "depends_on");
 
-    const results = multiStrategyRecall(db, {
+    const results = await multiStrategyRecall(db, {
       query: "database",
       queryEmbedding: null,
       limit: 10,
     });
 
     // Should find both: database via FTS, Redis via graph
-    const contents = results.map(r => r.content);
+    const contents = results.map((r: { content: string }) => r.content);
     expect(contents).toContain("PostgreSQL is our primary database");
   });
 
-  it("respects custom weights", () => {
+  it("respects custom weights", async () => {
     mem(db, "PostgreSQL is our primary database");
 
-    const results = multiStrategyRecall(db, {
+    const results = await multiStrategyRecall(db, {
       query: "database",
       queryEmbedding: null,
       limit: 10,
@@ -361,18 +361,18 @@ describe("Multi-strategy retrieval", () => {
     expect(results.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("excludes expired memories", () => {
+  it("excludes expired memories", async () => {
     mem(db, "current database approach");
     const expId = mem(db, "old database approach");
     db.expireMemory(expId, Date.now() - 1000);
 
-    const results = multiStrategyRecall(db, {
+    const results = await multiStrategyRecall(db, {
       query: "database",
       queryEmbedding: null,
       limit: 10,
     });
 
-    const contents = results.map(r => r.content);
+    const contents = results.map((r: { content: string }) => r.content);
     expect(contents).not.toContain("old database approach");
   });
 });
