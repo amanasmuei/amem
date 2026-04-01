@@ -196,6 +196,20 @@ server.registerPrompt(
 6. Reference memories naturally: "I remember you prefer X" not "According to my memory database..."
 7. If continuing previous work, call memory_log_recall or memory_history to review past sessions
 
+## Working with Claude Code Auto-Memory
+
+You may have two memory sources active:
+1. **Claude auto-memory** — flat markdown file, one consolidated overview, auto-captured
+2. **amem** — structured, typed, scored, searchable, temporal, versioned
+
+How to handle both:
+- **amem is authoritative** — it has timestamps, versioning, and confidence scores. When they conflict, trust amem.
+- **Don't duplicate** — if something is already in amem (via sync or manual storage), don't re-store it from auto-memory
+- **Use amem for recall** — memory_recall and memory_multi_recall are more precise than loading the entire auto-memory file
+- **Let auto-memory handle the broad picture** — it's good for general project overview
+- **Use amem for specifics** — corrections, decisions, patterns, and anything that needs to be scored, searched, or expired
+- Use \`amem-cli sync\` to import Claude auto-memory into amem for unified access
+
 ## Tool Quick Reference
 
 | Goal | Tool |

@@ -79,6 +79,11 @@ if (command === "hooks") {
   process.exit(0);
 }
 
+if (command === "sync") {
+  await handleSync(args.slice(1));
+  process.exit(0);
+}
+
 // ── Commands that need a database ───────────────────────
 if (command === "dashboard") {
   if (!fs.existsSync(DB_PATH)) {
@@ -149,6 +154,7 @@ SETUP
   init                 Auto-configure amem for detected AI tools
   rules [--tool NAME]  Generate auto-extraction rules for AI tools
   hooks [--uninstall]  Install/uninstall automatic memory capture hooks
+  sync [--dry-run]     Import Claude Code auto-memory into amem
   dashboard [--port=N] Open the memory dashboard in your browser (default: 3333)
 
 MEMORY
@@ -174,6 +180,7 @@ EXAMPLES
   amem init
   amem rules
   amem hooks
+  amem sync
   amem dashboard
   amem recall "authentication approach"
   amem stats
@@ -368,6 +375,53 @@ async function handleHooks(args: string[]) {
   console.log("  - Mark session end for summarization (Stop)");
   console.log();
   console.log("Use 'amem-cli hooks --uninstall' to remove hooks.");
+}
+
+// ═══════════════════════════════════════════════════════════
+// SYNC — Import Claude Code auto-memory
+// ═══════════════════════════════════════════════════════════
+
+async function handleSync(args: string[]) {
+  const dryRun = args.includes("--dry-run") || args.includes("-n");
+  const projectFilter = getFlag(args, "--project", "-p");
+
+  // Need DB for sync
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  const syncDb = createDatabase(DB_PATH);
+
+  try {
+    const { discoverClaudeMemories, syncFromClaude } = await import("./sync.js");
+
+    const discovered = discoverClaudeMemories();
+    if (discovered.size === 0) {
+      console.log("No Claude Code auto-memory found.");
+      console.log("Claude stores memory in ~/.claude/projects/*/memory/");
+      return;
+    }
+
+    console.log(`Found ${discovered.size} project(s) with Claude auto-memory.`);
+    if (dryRun) console.log("(dry run — no changes will be made)\n");
+    else console.log();
+
+    const result = await syncFromClaude(syncDb, projectFilter, dryRun);
+
+    // Print results
+    for (const d of result.details) {
+      const icon = d.action === "imported" ? "\u2713" : d.action === "updated" ? "~" : "\u2022";
+      const suffix = d.reason ? ` (${d.reason})` : "";
+      console.log(`  ${icon} [${d.type}] ${d.name}${suffix}`);
+    }
+
+    console.log();
+    console.log(`Imported: ${result.imported} | Skipped: ${result.skipped} | Updated: ${result.updated}`);
+    console.log(`Projects scanned: ${result.projectsScanned}`);
+
+    if (dryRun && result.imported > 0) {
+      console.log("\nRun without --dry-run to import these memories.");
+    }
+  } finally {
+    syncDb.close();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

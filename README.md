@@ -561,6 +561,44 @@ memory_history({ limit: 5 })
 
 ---
 
+## Working with Claude Code Auto-Memory
+
+Claude Code has a built-in auto-memory feature that stores a flat markdown file per project. **amem is designed to complement it, not replace it.**
+
+| | Claude auto-memory | amem |
+|---|---|---|
+| **Capture** | Automatic, zero config | Typed with confidence scores |
+| **Storage** | Single markdown file | SQLite with search, graph, temporal |
+| **Recall** | Entire file loaded every session | Only relevant memories surfaced |
+| **History** | Overwritten on update | Versioned, temporal validity |
+| **Search** | None | Semantic + FTS5 + graph + reranking |
+
+### Recommended Setup: Use Both
+
+1. **Keep Claude auto-memory enabled** — it captures the broad project overview automatically
+2. **Run `amem-cli sync`** — imports Claude's memories into amem for unified, structured access
+3. **amem handles the specifics** — corrections, decisions, patterns get typed, scored, and searchable
+
+```bash
+# Import Claude auto-memory into amem (one-time or periodic)
+amem-cli sync              # Import all projects
+amem-cli sync --dry-run    # Preview what would be imported
+amem-cli sync --project myapp  # Import specific project only
+```
+
+Type mapping when syncing:
+
+| Claude type | amem type | Confidence |
+|---|---|---|
+| `feedback` | `correction` | 1.0 |
+| `project` | `decision` | 0.85 |
+| `user` | `preference` | 0.8 |
+| `reference` | `topology` | 0.7 |
+
+> When both memory sources are active, amem's MCP prompts teach the AI to prefer amem's structured recall over loading the entire auto-memory file, while respecting both sources.
+
+---
+
 ## Dashboard
 
 Launch the interactive web dashboard:
@@ -591,6 +629,8 @@ amem-cli init                          # Auto-configure AI tools
 amem-cli rules                         # Generate extraction rules
 amem-cli hooks                         # Install automatic capture hooks
 amem-cli hooks --uninstall             # Remove hooks
+amem-cli sync                          # Import Claude auto-memory into amem
+amem-cli sync --dry-run                # Preview sync without importing
 
 # Dashboard
 amem-cli dashboard                     # Web dashboard (localhost:3333)
