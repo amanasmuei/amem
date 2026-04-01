@@ -342,7 +342,7 @@ a{color:var(--decision);text-decoration:none}
     for(i=0;i<nodes.length;i++) nodeMap[nodes[i].id]=nodes[i];
 
     // force simulation
-    var REPULSION=3000, SPRING=0.02, DAMPING=0.85, DT=1;
+    var REPULSION=3000, SPRING=0.06, DAMPING=0.85, DT=1;
     for(var iter=0;iter<80;iter++){
       // repulsion between all pairs
       for(i=0;i<nodes.length;i++){
@@ -389,8 +389,8 @@ a{color:var(--decision);text-decoration:none}
       var ea=nodeMap[edges[i].from],eb=nodeMap[edges[i].to];
       if(!ea||!eb) continue;
       var mx=(ea.x+eb.x)/2,my=(ea.y+eb.y)/2;
-      html+='<line x1="'+ea.x+'" y1="'+ea.y+'" x2="'+eb.x+'" y2="'+eb.y+'" stroke="#30363d" stroke-width="'+(1+edges[i].strength*2)+'"/>';
-      if(edges[i].type) html+='<text x="'+mx+'" y="'+(my-4)+'" fill="#8b949e" font-size="9" text-anchor="middle">'+esc(edges[i].type)+'</text>';
+      html+='<line x1="'+ea.x+'" y1="'+ea.y+'" x2="'+eb.x+'" y2="'+eb.y+'" stroke="#58a6ff" stroke-opacity="0.5" stroke-width="'+(1.5+edges[i].strength*2)+'"/>';
+      if(edges[i].type) html+='<text x="'+mx+'" y="'+(my-4)+'" fill="#c9d1d9" font-size="9" text-anchor="middle" font-weight="600">'+esc(edges[i].type)+'</text>';
     }
     for(i=0;i<nodes.length;i++){
       var color=TYPE_COLORS[nodes[i].type]||'#8b949e';
