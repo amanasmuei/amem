@@ -78,7 +78,7 @@ One command — gives you MCP tools + lifecycle hooks + slash commands + auto-co
 That's it. You get:
 - **28 MCP tools** auto-registered
 - **Lifecycle hooks** — PostToolUse (captures observations) + Stop (auto-summarizes sessions)
-- **5 slash commands** — `/amem:remember`, `/amem:recall`, `/amem:sync`, `/amem:dashboard`, `/amem:context`
+- **5 AI skills** — the AI automatically uses `amem:remember`, `amem:recall`, `amem:context`, `amem:sync`, `amem:dashboard` based on your intent
 - **CLAUDE.md** context injected every session
 
 ### Option B: MCP Server (works with any MCP client)
@@ -144,15 +144,17 @@ Start a **new** conversation and ask:
 
 It should recall the correction instantly.
 
-### Slash Commands (Plugin only)
+### AI Skills (Plugin only)
 
-| Command | What it does |
-|---|---|
-| `/amem:remember "never use any"` | Quick-store a memory with auto type detection |
-| `/amem:recall "auth architecture"` | Quick search with progressive disclosure |
-| `/amem:context` | Load full context for the current task |
-| `/amem:sync` | Import Claude auto-memory into amem |
-| `/amem:dashboard` | Open the web dashboard |
+The plugin includes 5 skills that the AI invokes automatically based on your intent. Just speak naturally:
+
+| What you say | Skill triggered | What happens |
+|---|---|---|
+| *"Remember never use any type"* | `amem:remember` | Stores as a correction with confidence 1.0 |
+| *"What do you remember about auth?"* | `amem:recall` | Searches memories with progressive disclosure |
+| *"Load context for this task"* | `amem:context` | Injects corrections, decisions, and core memories |
+| *"Sync my Claude memory"* | `amem:sync` | Imports Claude auto-memory into amem |
+| *"Open the memory dashboard"* | `amem:dashboard` | Launches web dashboard at localhost:3333 |
 
 ---
 
