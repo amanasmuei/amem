@@ -22,7 +22,7 @@
 
 <p align="center">
   <b>amem</b> (<b>A</b>man's <b>Mem</b>ory) is a persistent memory layer for AI coding tools.<br/>
-  Local-first &middot; Semantic &middot; Lossless &middot; Works with Claude Code, Cursor, Windsurf &amp; any MCP client.
+  Local-first &middot; Semantic &middot; Temporal &middot; Privacy-aware &middot; Works with Claude Code, Cursor, Windsurf &amp; any MCP client.
 </p>
 
 <p align="center">
@@ -122,11 +122,27 @@ Or add to `~/.claude/settings.json`:
 
 ### 3. Use
 
-Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 prompts** ready to go.
+Restart your AI tool — you'll see **28 tools**, **6 resources**, and **2 prompts** ready to go.
 
 ---
 
 ## Features
+
+### v0.9.0 — The Temporal Intelligence Release
+
+| | Feature | Description |
+|---|---|---|
+| **NEW** | Temporal validity | Memories have `valid_from`/`valid_until` — facts expire, old decisions are preserved for history |
+| **NEW** | Auto-expire contradictions | Storing a new memory auto-expires conflicting old ones (Zep-style temporal knowledge graph) |
+| **NEW** | `memory_expire` | Mark a memory as no longer valid — preserved for "what was true when?" queries |
+| **NEW** | Multi-strategy retrieval | `memory_multi_recall` — combines semantic + FTS5 + knowledge graph traversal + temporal recency |
+| **NEW** | Memory tiers | `memory_tier` — core (always injected), working (session-scoped), archival (searchable) |
+| **NEW** | Privacy tags | `<private>...</private>` blocks stripped before storage; auto-redaction of API keys/secrets |
+| **NEW** | Automatic capture | `amem hooks` — installs Claude Code lifecycle hooks (PostToolUse, Stop) for passive observation |
+| **NEW** | Session summaries | `memory_summarize` + `memory_history` — structured session digests with key decisions/corrections |
+| **NEW** | Config system | `~/.amem/config.json` — retrieval weights, privacy rules, tier budgets, hook settings |
+| **NEW** | Dashboard v2 | Tier filter, expired badges, temporal validity display, session summaries section |
+| **PERF** | Configurable scale | `maxCandidates` configurable up to 50K (was hardcoded 5K) |
 
 ### v0.8.0
 
@@ -135,6 +151,9 @@ Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 promp
 | **NEW** | `amem init` | Auto-detect and configure Claude Code, Cursor, Windsurf, GitHub Copilot in one command |
 | **NEW** | `amem rules` | Generate auto-extraction rules so your AI uses amem proactively (CLAUDE.md, .cursorrules, etc.) |
 | **NEW** | `amem dashboard` | Beautiful dark-themed web dashboard — memory list, knowledge graph, stats, reminders, log |
+
+<details>
+<summary><strong>View all features across versions</strong></summary>
 
 ### v0.7.0
 
@@ -146,23 +165,21 @@ Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 promp
 | **NEW** | Embedding cache | LRU cache (128 entries) avoids recomputing identical query embeddings |
 | **NEW** | Content-hash dedup | Exact duplicates caught even without embeddings (SHA-256 prefix) |
 | **FIX** | FTS5 sync | Delete/update triggers use explicit rowid — no more stale FTS index after delete or patch |
-| **FIX** | Short ID everywhere | `memory_forget`, CLI `forget` now support 8-char prefix matching |
 | **FIX** | Multi-process safe | `busy_timeout=5000` — Claude Code + Cursor can share the same DB |
-| **FIX** | Project collision | Scope uses full path, not just directory basename |
-| **PERF** | Scale protections | Store/extract caps at 5k embeddings, consolidation caps at 500/group, stats uses SQL aggregation |
+| **PERF** | Scale protections | Consolidation caps at 500/group, stats uses SQL aggregation |
 
 ### v0.5.1
 
 | | Feature | Description |
 |---|---|---|
-| **NEW** | Progressive disclosure | `memory_recall` with `compact=true` returns ~50-100 token index instead of ~500-1000 tokens. ~10x savings. |
+| **NEW** | Progressive disclosure | `memory_recall` with `compact=true` returns ~50-100 token index (~10x savings) |
 | **NEW** | On-demand detail | `memory_detail` retrieves full content by ID (supports partial 8-char match) |
 
 ### v0.5.0
 
 | | Feature | Description |
 |---|---|---|
-| **NEW** | Reminders system | `reminder_set` / `reminder_list` / `reminder_check` / `reminder_complete` — persistent cross-session reminders with deadline tracking |
+| **NEW** | Reminders system | `reminder_set` / `reminder_list` / `reminder_check` / `reminder_complete` — persistent cross-session reminders |
 
 ### v0.4.0
 
@@ -175,20 +192,15 @@ Restart your AI tool — you'll see **23 tools**, **6 resources**, and **2 promp
 | **NEW** | Temporal queries | `memory_since` — natural language time ranges (`7d`, `2w`, `1h`) |
 | **NEW** | Full-text search | `memory_search` — FTS5 exact match, auto-synced on every write |
 
-<details>
-<summary><strong>View all features across versions</strong></summary>
-
 ### v0.3.0
 
 - Memory consolidation engine (merge, prune, promote)
 - Project detection and scope-aware filtering
-- Auto-migration for scope fields
 
 ### v0.2.0
 
 - Structured output with Zod schemas
 - `memory_inject` for proactive context surfacing
-- Evaluation suite
 
 ### v0.1.0
 
@@ -220,11 +232,11 @@ Memories are scored and prioritized automatically:
 
 ## Tools Reference
 
-### Core Memory
+### Core Memory (7 tools)
 
 | Tool | Description |
 |---|---|
-| `memory_store` | Store a memory with type, tags, and confidence |
+| `memory_store` | Store a memory with type, tags, confidence. Auto-redacts `<private>` tags and sensitive patterns. Auto-expires contradicting old memories. |
 | `memory_recall` | Semantic search — supports `compact` mode for progressive disclosure (~10x token savings) |
 | `memory_detail` | Retrieve full content by ID — use after compact recall for on-demand detail |
 | `memory_context` | Load all relevant context for a topic, organized by type |
@@ -232,7 +244,7 @@ Memories are scored and prioritized automatically:
 | `memory_forget` | Delete memories by ID or query (confirmation required) |
 | `memory_inject` | Proactively surface corrections + decisions before coding |
 
-### Precision & History
+### Precision & History (5 tools)
 
 | Tool | Description |
 |---|---|
@@ -242,7 +254,17 @@ Memories are scored and prioritized automatically:
 | `memory_since` | Temporal query with natural language ranges |
 | `memory_relate` | Build a knowledge graph between memories |
 
-### Reminders
+### Advanced (5 tools) — new in v0.9.0
+
+| Tool | Description |
+|---|---|
+| `memory_multi_recall` | Multi-strategy search: semantic + FTS5 + knowledge graph + temporal, with configurable weights |
+| `memory_tier` | Move memories between tiers: **core** (always injected), **working** (session), **archival** (searchable) |
+| `memory_expire` | Mark a memory as no longer valid — preserved for historical queries, excluded from recall |
+| `memory_summarize` | Store a structured session summary with key decisions, corrections, and metrics |
+| `memory_history` | View past session summaries — what happened, what was decided, what was extracted |
+
+### Reminders (4 tools)
 
 | Tool | Description |
 |---|---|
@@ -251,7 +273,7 @@ Memories are scored and prioritized automatically:
 | `reminder_check` | Check for overdue, today, and upcoming reminders (next 7 days) |
 | `reminder_complete` | Mark a reminder as done (supports partial ID matching) |
 
-### Log & Maintenance
+### Log & Maintenance (7 tools)
 
 | Tool | Description |
 |---|---|
@@ -405,6 +427,96 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 
 </details>
 
+<details>
+<summary><strong>Temporal validity & expiry (v0.9.0)</strong></summary>
+
+```js
+// Mark an outdated decision as expired (preserved for history)
+memory_expire({
+  id: "a1b2c3d4",
+  reason: "Migrated from REST to GraphQL"
+})
+
+// Store the new decision — old one auto-expired if contradicting
+memory_store({
+  content: "API uses GraphQL with Apollo Server",
+  type: "decision",
+  tags: ["api", "graphql"],
+  confidence: 0.9
+})
+
+// Query what was true at a specific time
+memory_since({ since: "2025-01-01", until: "2025-03-01", type: "decision" })
+```
+
+</details>
+
+<details>
+<summary><strong>Memory tiers (v0.9.0)</strong></summary>
+
+```js
+// Promote critical correction to core tier (always injected)
+memory_tier({ id: "a1b2c3d4", tier: "core" })
+
+// List all core memories
+memory_tier({ tier: "core", action: "list" })
+
+// Demote back to archival
+memory_tier({ id: "a1b2c3d4", tier: "archival" })
+```
+
+</details>
+
+<details>
+<summary><strong>Multi-strategy recall (v0.9.0)</strong></summary>
+
+```js
+// Combines 4 strategies: semantic + FTS5 + graph traversal + temporal
+memory_multi_recall({
+  query: "authentication architecture",
+  limit: 10,
+  weights: { semantic: 0.4, fts: 0.3, graph: 0.15, temporal: 0.15 }
+})
+```
+
+</details>
+
+<details>
+<summary><strong>Privacy tags (v0.9.0)</strong></summary>
+
+```js
+// Private blocks are stripped before storage
+memory_store({
+  content: "DB password is <private>hunter2</private>, connect to prod at db.example.com",
+  type: "topology",
+  tags: ["database"]
+})
+// Stored as: "DB password is [REDACTED], connect to prod at db.example.com"
+
+// API keys/secrets are auto-redacted by pattern matching
+```
+
+</details>
+
+<details>
+<summary><strong>Session summaries (v0.9.0)</strong></summary>
+
+```js
+// Summarize at session end
+memory_summarize({
+  session_id: "sess-2025-03-25",
+  summary: "Redesigned auth flow from session tokens to JWT",
+  key_decisions: ["Use RS256 signing", "Store refresh tokens in httpOnly cookies"],
+  key_corrections: ["Don't use localStorage for tokens"],
+  memories_extracted: 7
+})
+
+// Review past sessions
+memory_history({ limit: 5 })
+```
+
+</details>
+
 ---
 
 ## Architecture
@@ -413,25 +525,30 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ┌──────────────────────────────────────────────┐
 │              Your AI Tool                    │
 │     Claude Code · Cursor · Windsurf · any    │
-└─────────────────┬────────────────────────────┘
-                  │ MCP Protocol (stdio)
-┌─────────────────▼────────────────────────────┐
-│           amem MCP Server                    │
+└────────┬─────────────────────┬───────────────┘
+         │ MCP Protocol        │ Lifecycle Hooks
+         │ (stdio)             │ (PostToolUse, Stop)
+┌────────▼─────────────────────▼───────────────┐
+│           amem MCP Server  v0.9.0            │
 │                                              │
-│   23 Tools  ·  6 Resources  ·  2 Prompts    │
+│   28 Tools  ·  6 Resources  ·  2 Prompts    │
+│                                              │
+│   Multi-Strategy Retrieval Pipeline          │
+│   [Semantic] + [FTS5] + [Graph] + [Temporal] │
 │                                              │
 │   ┌────────────────────────────────────┐     │
 │   │  SQLite + WAL + FTS5               │     │
 │   │  ~/.amem/memory.db                 │     │
 │   │                                    │     │
-│   │  memories          (scored)        │     │
+│   │  memories          (tiered,temporal│     │
 │   │  conversation_log  (lossless)      │     │
 │   │  memory_versions   (history)       │     │
-│   │  memory_relations  (graph)         │     │
+│   │  memory_relations  (temporal graph)│     │
+│   │  session_summaries (digests)       │     │
 │   │  reminders         (cross-session) │     │
-│   │  memories_fts      (FTS5 index)    │     │
 │   └────────────────────────────────────┘     │
 │                                              │
+│   Config: ~/.amem/config.json                │
 │   Local Embeddings (all-MiniLM-L6-v2, 80MB)  │
 └──────────────────────────────────────────────┘
 ```
@@ -469,6 +586,8 @@ score = relevance × recency × confidence × importance
 ```bash
 amem-cli init                          # Auto-configure AI tools
 amem-cli rules                         # Generate auto-extraction rules
+amem-cli hooks                         # Install automatic memory capture hooks
+amem-cli hooks --uninstall             # Remove hooks
 amem-cli dashboard                     # Open web dashboard
 amem-cli recall "authentication"       # Semantic search
 amem-cli stats                         # Statistics
@@ -476,17 +595,47 @@ amem-cli list                          # List all memories
 amem-cli list --type correction        # Filter by type
 amem-cli export --file memories.md     # Export to file
 amem-cli forget abc12345               # Delete by short ID
+amem-cli reset --confirm               # Wipe all data
 ```
 
 ---
 
 ## Configuration
 
+**Environment Variables**
+
 | Variable | Default | Description |
 |---|---|---|
 | `AMEM_DIR` | `~/.amem` | Storage directory |
 | `AMEM_DB` | `~/.amem/memory.db` | Database path |
 | `AMEM_PROJECT` | *(auto from git)* | Project scope |
+
+**Config File** (`~/.amem/config.json`)
+
+```json
+{
+  "retrieval": {
+    "semanticWeight": 0.4,
+    "ftsWeight": 0.3,
+    "graphWeight": 0.15,
+    "temporalWeight": 0.15,
+    "maxCandidates": 50000
+  },
+  "privacy": {
+    "enablePrivateTags": true,
+    "redactPatterns": ["(?:api[_-]?key|secret|token|password)\\s*[:=]\\s*['\"]?[A-Za-z0-9_\\-\\.]{8,}"]
+  },
+  "tiers": {
+    "coreMaxTokens": 500,
+    "workingMaxTokens": 2000
+  },
+  "hooks": {
+    "enabled": true,
+    "captureToolUse": true,
+    "captureSessionEnd": true
+  }
+}
+```
 
 ---
 
@@ -499,7 +648,7 @@ amem-cli forget abc12345               # Delete by short ID
 | Database | SQLite + WAL + FTS5 |
 | Embeddings | HuggingFace Xenova/all-MiniLM-L6-v2 (local, 80MB) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 262 tests across 17 suites |
+| Testing | Vitest — 294 tests across 18 suites |
 | CI/CD | GitHub Actions → npm publish on release |
 
 ---
@@ -510,7 +659,7 @@ amem-cli forget abc12345               # Delete by short ID
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 262 tests pass
+npm test        # 294 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
