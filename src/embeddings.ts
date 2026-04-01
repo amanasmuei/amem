@@ -69,25 +69,64 @@ function cachePut(key: string, val: Float32Array): void {
   embeddingCache.set(key, val);
 }
 
+/** Whether the first embedding load has completed (success or failure). */
+let pipelineReady = false;
+
+/** Skip embedding loading entirely (useful for CLI commands that need fast exit). */
+let embeddingDisabled = false;
+
+export function disableEmbeddings(): void {
+  embeddingDisabled = true;
+}
+
 async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
+  if (embeddingDisabled) return null;
   if (pipelineInstance) return pipelineInstance;
   if (pipelineLoading) return pipelineLoading;
 
   pipelineLoading = (async () => {
     try {
-      const mod = await import("@huggingface/transformers");
-      pipelineInstance = await mod.pipeline(
-        "feature-extraction",
-        "Xenova/all-MiniLM-L6-v2",
-      ) as unknown as FeatureExtractor;
-      return pipelineInstance;
+      // Race with a timeout to avoid hanging on slow model downloads
+      const loadPromise = (async () => {
+        const mod = await import("@huggingface/transformers");
+        return await mod.pipeline(
+          "feature-extraction",
+          "Xenova/all-MiniLM-L6-v2",
+        ) as unknown as FeatureExtractor;
+      })();
+
+      const LOAD_TIMEOUT_MS = 30000;
+      const result = await Promise.race([
+        loadPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)),
+      ]);
+
+      if (result) {
+        pipelineInstance = result;
+        pipelineReady = true;
+        return pipelineInstance;
+      }
+      pipelineReady = true;
+      console.error("[amem] Embedding model load timed out — using keyword matching");
+      return null;
     } catch (error) {
-      console.error("[amem] Failed to load embedding pipeline — falling back to keyword matching:", error instanceof Error ? error.message : String(error));
+      pipelineReady = true;
+      console.error("[amem] Embeddings unavailable — using keyword matching (still works great!):", error instanceof Error ? error.message : String(error));
+      console.error("[amem] To enable semantic search: npm install @huggingface/transformers");
       return null;
     }
   })();
 
   return pipelineLoading;
+}
+
+/**
+ * Pre-warm the embedding pipeline in the background.
+ * Call this at startup so the model is ready when the first query arrives.
+ */
+export function preloadEmbeddings(): void {
+  // Fire-and-forget — don't block startup
+  getEmbeddingPipeline().catch(() => {});
 }
 
 export async function generateEmbedding(
