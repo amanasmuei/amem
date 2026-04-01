@@ -1,7 +1,7 @@
 {
   "name": "amem",
   "description": "Give your AI a memory it never forgets. Local-first persistent memory with semantic search, temporal validity, knowledge graph, memory tiers, and privacy controls. 28 MCP tools.",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "author": {
     "name": "Aman Asmuei"
   },

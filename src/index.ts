@@ -99,6 +99,15 @@ async function backfillEmbeddings(): Promise<void> {
 // Run after a short delay to not block startup
 setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
 
+// Build ANN index after embeddings are loaded
+import { buildANNIndex } from "./memory.js";
+setTimeout(() => {
+  try {
+    const index = buildANNIndex(db);
+    console.error(`[amem] ANN index built: ${index.size()} vectors`);
+  } catch {}
+}, 5000);
+
 const server = new McpServer({
   name: "amem-mcp-server",
   version: pkg.version,
@@ -427,6 +436,41 @@ server.registerResource(
     } catch (error) {
       console.error("[amem] Resource 'graph-overview' failed:", error instanceof Error ? error.message : String(error));
       return { contents: [{ uri: "amem://graph", mimeType: "text/plain", text: "Error loading graph." }] };
+    }
+  },
+);
+
+server.registerResource(
+  "last-session",
+  "amem://last-session",
+  { mimeType: "text/plain", description: "Previous session summary — what happened, key decisions, and corrections. Load this to continue where you left off." },
+  () => {
+    try {
+      const summaries = db.getRecentSummaries(currentProject, 1);
+      if (summaries.length === 0) {
+        return { contents: [{ uri: "amem://last-session", mimeType: "text/plain", text: "No previous session found." }] };
+      }
+      const s = summaries[0];
+      const lines = [
+        `# Last Session (${new Date(s.createdAt).toISOString().slice(0, 16)})`,
+        "",
+        s.summary,
+      ];
+      if (s.keyDecisions.length > 0) {
+        lines.push("", "## Decisions");
+        for (const d of s.keyDecisions) lines.push(`- ${d}`);
+      }
+      if (s.keyCorrections.length > 0) {
+        lines.push("", "## Corrections");
+        for (const c of s.keyCorrections) lines.push(`- ${c}`);
+      }
+      lines.push("", `Memories extracted: ${s.memoriesExtracted}`);
+      return {
+        contents: [{ uri: "amem://last-session", mimeType: "text/plain", text: lines.join("\n") }],
+      };
+    } catch (error) {
+      console.error("[amem] Resource 'last-session' failed:", error instanceof Error ? error.message : String(error));
+      return { contents: [{ uri: "amem://last-session", mimeType: "text/plain", text: "Error loading last session." }] };
     }
   },
 );

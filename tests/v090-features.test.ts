@@ -301,7 +301,7 @@ describe("Config system", () => {
     resetConfigCache();
     // loadConfig will try to read ~/.amem/config.json, which may or may not exist
     const config = loadConfig();
-    expect(config.embeddingModel).toBe("Xenova/all-MiniLM-L6-v2");
+    expect(config.embeddingModel).toBe("Xenova/bge-small-en-v1.5");
     expect(config.retrieval).toBeDefined();
   });
 });

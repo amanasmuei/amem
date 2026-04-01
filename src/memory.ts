@@ -1,5 +1,7 @@
 import type { AmemDatabase } from "./database.js";
 import { cosineSimilarity, rerankWithCrossEncoder } from "./embeddings.js";
+import { expandQuery } from "./query-expand.js";
+import { ANNIndex } from "./ann.js";
 
 export const MemoryType = {
   CORRECTION: "correction",
@@ -49,7 +51,12 @@ export interface ScoreInput {
 export function computeScore(input: ScoreInput): number {
   const hoursSinceAccess = (input.now - input.lastAccessed) / (1000 * 60 * 60);
   const recency = Math.pow(0.995, Math.max(0, hoursSinceAccess));
-  return input.relevance * recency * input.confidence * input.importance;
+  return (
+    input.relevance * 0.45 +
+    recency * 0.2 +
+    input.confidence * 0.2 +
+    input.importance * 0.15
+  );
 }
 
 export interface ConflictResult {
@@ -145,10 +152,12 @@ export function recallMemories(
 
   // When query exists but no embeddings, filter to keyword matches only
   if (query && !queryEmbedding) {
-    const q = query.toLowerCase();
-    const keywordMatches = candidates.filter(
-      (m) => m.content.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q)),
-    );
+    const expanded = expandQuery(query);
+    const keywordMatches = candidates.filter((m) => {
+      const lower = m.content.toLowerCase();
+      const tagStr = m.tags.join(" ").toLowerCase();
+      return expanded.some(term => lower.includes(term) || tagStr.includes(term));
+    });
     if (keywordMatches.length > 0) {
       candidates = keywordMatches;
     }
@@ -169,7 +178,13 @@ export function recallMemories(
     const importance = IMPORTANCE_WEIGHTS[memory.type] ?? 0.4;
     const hoursSinceAccess = (now - memory.lastAccessed) / (1000 * 60 * 60);
     const recency = Math.pow(0.995, Math.max(0, hoursSinceAccess));
-    const score = relevance * recency * memory.confidence * importance;
+    const score = computeScore({
+      relevance,
+      confidence: memory.confidence,
+      lastAccessed: memory.lastAccessed,
+      importance,
+      now,
+    });
 
     if (explain) {
       return {
@@ -377,6 +392,26 @@ export function consolidateMemories(
   };
 }
 
+// ── ANN Index ────────────────────────────────────────
+
+let annIndex: ANNIndex | null = null;
+
+export function buildANNIndex(db: AmemDatabase): ANNIndex {
+  const index = new ANNIndex(384);
+  const memories = db.getAllWithEmbeddings();
+  index.buildFrom(
+    memories
+      .filter(m => m.embedding !== null)
+      .map(m => ({ id: m.id, embedding: m.embedding! }))
+  );
+  annIndex = index;
+  return index;
+}
+
+export function getANNIndex(): ANNIndex | null {
+  return annIndex;
+}
+
 // ── Multi-strategy retrieval pipeline ──────────────────
 
 export interface MultiStrategyOptions {
@@ -418,16 +453,31 @@ export async function multiStrategyRecall(
     return scoreMap.get(m.id)!;
   };
 
-  // Strategy 1: Semantic search (embedding similarity)
+  // Strategy 1: Semantic search via ANN index (or full scan fallback)
   if (queryEmbedding) {
-    const candidates = scope ? db.getAllForProject(scope) : db.getAll();
-    const validCandidates = candidates.filter(m => m.validUntil === null || m.validUntil > now);
-    for (const m of validCandidates) {
-      if (!m.embedding) continue;
-      const sim = Math.max(0, cosineSimilarity(queryEmbedding, m.embedding));
-      if (sim > 0.2) {
-        const entry = initEntry(m);
-        entry.scores.semantic = sim;
+    const index = getANNIndex();
+    if (index && index.size() > 0) {
+      // Fast path: in-memory ANN index lookup
+      const annResults = index.search(queryEmbedding, limit * 3, 0.2);
+      for (const r of annResults) {
+        const mem = db.getById(r.id);
+        if (!mem) continue;
+        if (mem.validUntil !== null && mem.validUntil <= now) continue;
+        if (scope && mem.scope !== "global" && mem.scope !== scope) continue;
+        const entry = initEntry(mem);
+        entry.scores.semantic = r.similarity;
+      }
+    } else {
+      // Fallback: full scan when index isn't built yet
+      const candidates = scope ? db.getAllForProject(scope) : db.getAll();
+      const validCandidates = candidates.filter(m => m.validUntil === null || m.validUntil > now);
+      for (const m of validCandidates) {
+        if (!m.embedding) continue;
+        const sim = Math.max(0, cosineSimilarity(queryEmbedding, m.embedding));
+        if (sim > 0.2) {
+          const entry = initEntry(m);
+          entry.scores.semantic = sim;
+        }
       }
     }
   }

@@ -415,8 +415,8 @@ describe("New Features", () => {
       expect(e.relevanceSource).toBe("keyword");
       expect(e.relevance).toBe(0.75);
 
-      // Score should equal the product of all factors
-      const expected = e.relevance * e.recency * e.confidence * e.importance;
+      // Score should equal the additive weighted combination
+      const expected = e.relevance * 0.45 + e.recency * 0.2 + e.confidence * 0.2 + e.importance * 0.15;
       expect(e.finalScore).toBeCloseTo(expected, 3);
     }
 

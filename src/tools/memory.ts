@@ -1,9 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
-import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions } from "../memory.js";
+import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions, getANNIndex } from "../memory.js";
 import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
 import { sanitizeContent, loadConfig } from "../config.js";
+import { autoRelateMemory } from "../auto-relate.js";
 import {
   RecallResultSchema,
   ContextResultSchema,
@@ -121,6 +122,18 @@ Returns:
 
           const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
 
+          // Keep ANN index in sync
+          if (embedding) {
+            const annIdx = getANNIndex();
+            if (annIdx) annIdx.add(id, embedding);
+          }
+
+          // Auto-relate to similar existing memories
+          const autoRelated = autoRelateMemory(db, id);
+          const graphNote = autoRelated.created > 0
+            ? ` Auto-linked to ${autoRelated.created} related memories.`
+            : "";
+
           // Apply boosts and reinforcements collected in the single pass
           for (const b of toBoostConfidence) {
             db.updateConfidence(b.id, Math.min(1.0, b.confidence + 0.1));
@@ -134,7 +147,7 @@ Returns:
           return {
             content: [{
               type: "text" as const,
-              text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}`,
+              text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${evolvedNote}${graphNote}`,
             }],
             structuredContent: {
               action: "stored" as const,
@@ -166,11 +179,15 @@ Returns:
           };
         }
         const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
+        const autoRelated = autoRelateMemory(db, id);
+        const graphNote = autoRelated.created > 0
+          ? ` Auto-linked to ${autoRelated.created} related memories.`
+          : "";
         const stats = db.getStats();
         return {
           content: [{
             type: "text" as const,
-            text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.`,
+            text: `Stored ${type} memory (${shortId(id)}). Confidence: ${confidence}. Tags: [${tags.join(", ")}]. Total memories: ${stats.total}.${graphNote}`,
           }],
           structuredContent: {
             action: "stored" as const,
@@ -563,6 +580,9 @@ Error Handling:
             };
           }
           db.deleteMemory(fullId);
+          // Keep ANN index in sync
+          const annIdx = getANNIndex();
+          if (annIdx) annIdx.remove(fullId);
           return {
             content: [{ type: "text" as const, text: `Deleted memory: "${memory.content}" (${memory.type})` }],
             structuredContent: {
@@ -608,7 +628,12 @@ Error Handling:
             };
           }
 
-          for (const m of matches) db.deleteMemory(m.id);
+          for (const m of matches) {
+            db.deleteMemory(m.id);
+            // Keep ANN index in sync
+            const annIdx2 = getANNIndex();
+            if (annIdx2) annIdx2.remove(m.id);
+          }
           return {
             content: [{ type: "text" as const, text: `Deleted ${matches.length} memories matching "${query}".` }],
             structuredContent: {
@@ -752,6 +777,11 @@ Returns:
                 embedding: pending.embedding,
                 scope: autoScope(pending.input.type as MemoryTypeValue),
               });
+              // Keep ANN index in sync
+              if (pending.embedding) {
+                const annIdx = getANNIndex();
+                if (annIdx) annIdx.add(id, pending.embedding);
+              }
               stored++;
               details.push(`  + Stored [${pending.input.type}]: "${pending.input.content}" (${shortId(id)})`);
               structuredDetails.push({
@@ -1065,10 +1095,29 @@ Returns:
         }
 
         // Only touch access for memories actually surfaced to the user
+        const injectedIds = new Set<string>();
         for (const r of results) {
           if (r.type === MemoryType.CORRECTION || r.type === MemoryType.DECISION) {
             db.touchAccess(r.id);
+            injectedIds.add(r.id);
           }
+        }
+
+        // Graph-aware injection: surface 1-hop neighbors of top results
+        const graphContext: string[] = [];
+        const topResults = results.filter(r => r.type === MemoryType.CORRECTION || r.type === MemoryType.DECISION).slice(0, 5);
+        for (const r of topResults) {
+          const related = db.getRelatedMemories(r.id);
+          for (const rel of related.slice(0, 2)) {
+            if (injectedIds.has(rel.id)) continue;
+            if (rel.validUntil !== null && rel.validUntil <= Date.now()) continue;
+            injectedIds.add(rel.id);
+            graphContext.push(`- [${rel.type}] ${rel.content}`);
+          }
+        }
+        if (graphContext.length > 0) {
+          context += "\n\n## Related Context (from knowledge graph)\n";
+          context += graphContext.join("\n");
         }
 
         return {
@@ -1078,7 +1127,7 @@ Returns:
             corrections,
             decisions,
             context: context.trim(),
-            memoriesUsed: corrections.length + decisions.length,
+            memoriesUsed: corrections.length + decisions.length + graphContext.length,
           },
         };
       } catch (error) {
@@ -1267,7 +1316,12 @@ Args:
         // Regenerate embedding if content changed
         if (field === "content" && typeof value === "string") {
           const newEmbedding = await generateEmbedding(value);
-          if (newEmbedding) db.updateEmbedding(fullId, newEmbedding);
+          if (newEmbedding) {
+            db.updateEmbedding(fullId, newEmbedding);
+            // Keep ANN index in sync
+            const annIdx = getANNIndex();
+            if (annIdx) annIdx.add(fullId, newEmbedding);
+          }
         }
 
         const displayValue = Array.isArray(value) ? `[${(value as string[]).join(", ")}]` : String(value);
@@ -1377,6 +1431,11 @@ Returns:
               embedding,
               scope: autoScope(input.type as MemoryTypeValue),
             });
+            // Keep ANN index in sync
+            if (embedding) {
+              const annIdx = getANNIndex();
+              if (annIdx) annIdx.add(id, embedding);
+            }
             stored++;
             details.push({
               action: "stored",

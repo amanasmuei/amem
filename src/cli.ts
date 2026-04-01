@@ -84,6 +84,40 @@ if (command === "sync") {
 }
 
 // ── Commands that need a database ───────────────────────
+if (command === "doctor") {
+  if (!fs.existsSync(DB_PATH)) {
+    console.error(`No memory database found at ${DB_PATH}`);
+    process.exit(1);
+  }
+  const { runDiagnostics } = await import("./doctor.js");
+  const doctorDb = createDatabase(DB_PATH);
+  try {
+    const report = runDiagnostics(doctorDb);
+    const icon = report.status === "healthy" ? "\u2713" : report.status === "warning" ? "!" : "\u2717";
+    console.log(`\namem doctor — ${icon} ${report.status.toUpperCase()}\n`);
+    console.log(`  Memories:    ${report.stats.totalMemories}`);
+    console.log(`  Embeddings:  ${report.stats.embeddingCoverage}% coverage`);
+    console.log(`  Core tier:   ${report.stats.coreTierTokens}/${report.stats.coreTierBudget} tokens`);
+    console.log(`  Graph edges: ${report.stats.graphEdges}`);
+    console.log(`  Stale:       ${report.stats.staleCount}`);
+    if (report.stats.remindersOverdue > 0) {
+      console.log(`  Overdue:     ${report.stats.remindersOverdue} reminder(s)`);
+    }
+    if (report.issues.length > 0) {
+      console.log(`\n  Issues:`);
+      for (const issue of report.issues) {
+        const sev = issue.severity === "critical" ? "\u2717" : issue.severity === "warning" ? "!" : "\u00b7";
+        console.log(`    ${sev} ${issue.message}`);
+        console.log(`      \u2192 ${issue.suggestion}`);
+      }
+    }
+    console.log();
+  } finally {
+    doctorDb.close();
+  }
+  process.exit(0);
+}
+
 if (command === "dashboard") {
   if (!fs.existsSync(DB_PATH)) {
     console.error(`No memory database found at ${DB_PATH}`);
@@ -160,6 +194,7 @@ SETUP
   rules [--tool NAME]  Generate auto-extraction rules for AI tools
   hooks [--uninstall]  Install/uninstall automatic memory capture hooks
   sync [--dry-run]     Import Claude Code auto-memory into amem
+  doctor               Run health diagnostics on your memory database
   dashboard [--port=N] Open the memory dashboard in your browser (default: 3333)
 
 MEMORY
