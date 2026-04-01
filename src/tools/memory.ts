@@ -85,14 +85,22 @@ Returns:
             const sim = cosineSimilarity(embedding, mem.embedding);
 
             if (sim > 0.85) {
-              // Near-duplicate — conflict resolution
+              // Near-duplicate — smart conflict resolution
               const conflict = detectConflict(content, mem.content, sim);
               if (conflict.isConflict) {
+                // If the new memory is a correction or higher confidence, supersede the old one
+                const isSuperseding = type === "correction" || confidence > mem.confidence;
+                if (isSuperseding) {
+                  // Auto-expire the old memory and store the new one
+                  db.expireMemory(mem.id);
+                  db.snapshotVersion(mem.id, `superseded by new ${type} memory`);
+                  break; // Fall through to store the new memory below
+                }
                 db.updateConfidence(mem.id, Math.max(mem.confidence, confidence));
                 return {
                   content: [{
                     type: "text" as const,
-                    text: `Memory conflict detected. Similar memory exists (${(sim * 100).toFixed(0)}% match): "${mem.content}" — updated its confidence instead of creating duplicate.\n\nIf these are genuinely different memories, rephrase to be more distinct.`,
+                    text: `Similar memory exists (${(sim * 100).toFixed(0)}% match):\n  OLD: "${mem.content}"\n  NEW: "${content}"\n\nUpdated confidence of existing memory. To replace it, store as a correction or with higher confidence. To keep both, rephrase to be more distinct.`,
                   }],
                   structuredContent: {
                     action: "conflict_resolved" as const,

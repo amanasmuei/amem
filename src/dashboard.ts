@@ -119,6 +119,13 @@ a{color:var(--decision);text-decoration:none}
 .log-time{flex-shrink:0;color:var(--muted);font-size:0.75rem;white-space:nowrap}
 
 .empty{color:var(--muted);font-style:italic;font-size:0.85rem;padding:20px 0;text-align:center}
+
+.timeline{position:relative;padding-left:30px;max-height:500px;overflow-y:auto}
+.timeline::before{content:'';position:absolute;left:12px;top:0;bottom:0;width:2px;background:var(--border)}
+.timeline-item{position:relative;margin-bottom:16px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+.timeline-dot{position:absolute;left:-24px;top:16px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg)}
+.timeline-date{font-size:0.75rem;color:var(--muted);margin-bottom:4px}
+.timeline-group{font-size:0.8rem;font-weight:600;color:var(--decision);margin:20px 0 10px;padding-left:10px}
 </style>
 </head>
 <body>
@@ -186,6 +193,12 @@ a{color:var(--decision);text-decoration:none}
   <div class="card full" id="summary-card">
     <h2>Session Summaries</h2>
     <div class="summary-list" id="summary-list"></div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="card full" id="timeline-card">
+    <h2>Memory Timeline</h2>
+    <div class="timeline" id="timeline"></div>
   </div>
 
   <!-- Recent log -->
@@ -433,6 +446,7 @@ a{color:var(--decision);text-decoration:none}
     fetchJSON('/api/memories?limit=200').then(function(m){
       allMemories=m;
       filterMemories();
+      renderTimeline(allMemories);
     }).catch(function(){});
 
     fetchJSON('/api/graph').then(renderGraph).catch(function(){});
@@ -459,6 +473,32 @@ a{color:var(--decision);text-decoration:none}
         (corrections?'<div class="mem-meta"><strong>Corrections:</strong></div><ul style="margin:4px 0 8px 20px;font-size:0.85rem">'+corrections+'</ul>':'')+
       '</div>';
     }).join(''));
+  }
+
+  function renderTimeline(memories){
+    var el=$('timeline');
+    if(!el) return;
+    if(!memories.length){setHTML(el,'<div class="empty">No memories to display</div>');return}
+    var sorted=memories.slice().sort(function(a,b){return b.createdAt-a.createdAt});
+    var html='';
+    var lastDay='';
+    for(var i=0;i<Math.min(sorted.length,100);i++){
+      var m=sorted[i];
+      var d=new Date(m.createdAt);
+      var dayKey=d.toISOString().slice(0,10);
+      if(dayKey!==lastDay){
+        html+='<div class="timeline-group">'+esc(dayKey)+'</div>';
+        lastDay=dayKey;
+      }
+      var color=TYPE_COLORS[m.type]||'#8b949e';
+      html+='<div class="timeline-item">'+
+        '<div class="timeline-dot" style="background:'+color+'"></div>'+
+        '<div class="timeline-date">'+esc(d.toLocaleTimeString())+'</div>'+
+        '<div class="mem-content" style="font-size:0.85rem;margin-bottom:4px">'+esc(m.content)+'</div>'+
+        '<span class="type-badge" style="background:'+color+'">'+esc(m.type)+'</span>'+
+      '</div>';
+    }
+    setHTML(el,html);
   }
 
   // -- Event listeners --
@@ -836,6 +876,35 @@ function handleSummaries(
   );
 }
 
+function handleTimeline(
+  db: AmemDatabase,
+  res: http.ServerResponse,
+  query: Record<string, string>,
+): void {
+  const limit = Math.min(
+    500,
+    Math.max(1, parseInt(query.limit || "100", 10) || 100),
+  );
+  const memories = db.getAll();
+  memories.sort((a, b) => b.createdAt - a.createdAt);
+
+  const result = memories.slice(0, limit).map((m) => {
+    const dayGroup = new Date(m.createdAt).toISOString().slice(0, 10);
+    return {
+      id: m.id,
+      content: m.content,
+      type: m.type,
+      confidence: m.confidence,
+      createdAt: m.createdAt,
+      tier: m.tier,
+      tags: m.tags,
+      dayGroup,
+    };
+  });
+
+  jsonResponse(res, result);
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -868,6 +937,9 @@ export function startDashboard(db: AmemDatabase, port: number): void {
           break;
         case "/api/summaries":
           handleSummaries(db, res, query);
+          break;
+        case "/api/timeline":
+          handleTimeline(db, res, query);
           break;
         case "/api/action/tier":
           handleActionTier(db, res, query);
