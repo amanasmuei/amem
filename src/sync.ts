@@ -272,3 +272,147 @@ export async function syncFromClaude(
 
   return result;
 }
+
+// ── Team sync ──────────────────────────────────────────
+
+export interface TeamExportOptions {
+  userId: string;
+  includeTypes?: string[];
+  minConfidence?: number;
+}
+
+export interface TeamImportOptions {
+  dryRun?: boolean;
+}
+
+export interface TeamImportResult {
+  imported: number;
+  skipped: number;
+  from: string;
+}
+
+interface TeamExportEntry {
+  content: string;
+  type: MemoryTypeValue;
+  tags: string[];
+  confidence: number;
+  source: string;
+  scope: string;
+  createdAt: number;
+}
+
+interface TeamExportFile {
+  version: 1;
+  userId: string;
+  exportedAt: number;
+  memories: TeamExportEntry[];
+}
+
+/**
+ * Export shareable memories as a JSON file for team sync.
+ * Filters out private/personal memories (type=preference with non-global scope).
+ */
+export async function exportForTeam(
+  db: AmemDatabase,
+  outputDir: string,
+  options: TeamExportOptions,
+): Promise<{ file: string; count: number }> {
+  const { userId, includeTypes, minConfidence } = options;
+  const allowedTypes = includeTypes ?? ["correction", "decision", "pattern", "topology", "fact"];
+
+  const all = db.getAll();
+
+  const filtered = all.filter((m) => {
+    // Filter out private/personal preferences (non-global scope)
+    if (m.type === "preference" && m.scope !== "global") return false;
+
+    // Only include allowed types
+    if (!allowedTypes.includes(m.type)) return false;
+
+    // Min confidence filter
+    if (minConfidence !== undefined && m.confidence < minConfidence) return false;
+
+    return true;
+  });
+
+  const memories: TeamExportEntry[] = filtered.map((m) => ({
+    content: m.content,
+    type: m.type,
+    tags: m.tags,
+    confidence: m.confidence,
+    source: m.source,
+    scope: m.scope,
+    createdAt: m.createdAt,
+  }));
+
+  const exportData: TeamExportFile = {
+    version: 1,
+    userId,
+    exportedAt: Date.now(),
+    memories,
+  };
+
+  const timestamp = Date.now();
+  const fileName = `amem-team-${userId}-${timestamp}.json`;
+  const filePath = path.join(outputDir, fileName);
+
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2) + "\n");
+
+  return { file: filePath, count: memories.length };
+}
+
+/**
+ * Import a teammate's exported memory file.
+ * Deduplicates by content hash and lowers confidence by 0.1 for second-hand memories.
+ */
+export async function importFromTeam(
+  db: AmemDatabase,
+  filePath: string,
+  options?: TeamImportOptions,
+): Promise<TeamImportResult> {
+  const dryRun = options?.dryRun ?? false;
+
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const data = JSON.parse(raw) as TeamExportFile;
+
+  const fromUser = data.userId;
+  let imported = 0;
+  let skipped = 0;
+
+  for (const entry of data.memories) {
+    // Dedup: skip if content already exists
+    const existing = db.findByContentHash(entry.content);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    if (dryRun) {
+      imported++;
+      continue;
+    }
+
+    // Lower confidence by 0.1 for second-hand memories, floor at 0.1
+    const confidence = Math.max(0.1, entry.confidence - 0.1);
+
+    // Tag with team-sync and the original userId
+    const tags = [...entry.tags, "team-sync", `from:${fromUser}`];
+
+    const embedding = await generateEmbedding(entry.content);
+
+    db.insertMemory({
+      content: entry.content,
+      type: entry.type,
+      tags,
+      confidence,
+      source: `team-sync:${fromUser}`,
+      embedding,
+      scope: entry.scope,
+    });
+
+    imported++;
+  }
+
+  return { imported, skipped, from: fromUser };
+}

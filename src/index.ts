@@ -71,6 +71,34 @@ const db = createDatabase(DB_PATH);
 ensureSecurePermissions(DB_PATH);
 const currentProject = detectProject();
 
+// Pre-warm embeddings in the background so first query is fast
+import { preloadEmbeddings, generateEmbedding } from "./embeddings.js";
+preloadEmbeddings();
+
+// Background task: generate embeddings for memories that don't have them yet
+async function backfillEmbeddings(): Promise<void> {
+  try {
+    const all = db.getAll();
+    const missing = all.filter(m => !m.embedding);
+    if (missing.length === 0) return;
+    let filled = 0;
+    for (const mem of missing.slice(0, 50)) { // Process up to 50 per startup
+      const emb = await generateEmbedding(mem.content);
+      if (emb) {
+        db.updateEmbedding(mem.id, emb);
+        filled++;
+      } else {
+        break; // Embeddings not available
+      }
+    }
+    if (filled > 0) {
+      console.error(`[amem] Backfilled embeddings for ${filled} memories`);
+    }
+  } catch {}
+}
+// Run after a short delay to not block startup
+setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
+
 const server = new McpServer({
   name: "amem-mcp-server",
   version: pkg.version,
