@@ -2,7 +2,6 @@
 
 import { createDatabase } from "./database.js";
 import { recallMemories, MemoryType, type MemoryTypeValue } from "./memory.js";
-import { generateEmbedding } from "./embeddings.js";
 import { formatAge, TYPE_ORDER } from "./tools/index.js";
 import path from "node:path";
 import os from "node:os";
@@ -129,6 +128,12 @@ if (command === "dashboard") {
       case "reset":
         handleReset(db, args.slice(1));
         break;
+      case "team-export":
+        await handleTeamExport(db, args.slice(1));
+        break;
+      case "team-import":
+        await handleTeamImport(db, args.slice(1));
+        break;
       default:
         console.error(`Unknown command: ${command}`);
         printHelp();
@@ -164,6 +169,13 @@ MEMORY
   list [--type TYPE]   List memories, optionally filtered by type
   forget <id>          Delete a memory by ID
   reset [--confirm]    Wipe ALL data and start fresh (requires --confirm)
+
+TEAM
+  team-export          Export shareable memories for teammates
+    --dir <path>         Output directory (default: current directory)
+    --user <id>          Your user identifier
+  team-import <file>   Import a teammate's exported memories
+    --dry-run            Preview without writing
 
 OTHER
   help                 Show this help
@@ -365,14 +377,17 @@ async function handleHooks(args: string[]) {
   const result = installHooks({
     captureToolUse: true,
     captureSessionEnd: true,
+    captureSessionStart: true,
   });
 
   console.log(`  Installed hook scripts: ${result.installed.join(", ")}`);
   console.log(`  Updated Claude Code settings: ${result.configPath}`);
   console.log();
   console.log("Hooks installed! Claude Code will now automatically:");
-  console.log("  - Log significant tool calls (PostToolUse)");
-  console.log("  - Mark session end for summarization (Stop)");
+  console.log("  - Inject core memories at session start (SessionStart)");
+  console.log("  - Capture tool observations with pattern detection (PostToolUse)");
+  console.log("  - Auto-extract corrections/decisions/preferences from conversation");
+  console.log("  - Summarize sessions on end (Stop)");
   console.log();
   console.log("Use 'amem-cli hooks --uninstall' to remove hooks.");
 }
@@ -439,31 +454,37 @@ async function handleRecall(db: AmemDatabase, args: string[]) {
 
   console.log(`Searching for: "${query}"\n`);
 
-  const queryEmbedding = await generateEmbedding(query);
-  const results = recallMemories(db, {
-    query,
-    queryEmbedding,
-    limit: 20,
-  });
+  try {
+    // CLI uses keyword-only matching for instant results.
+    // Semantic search (with embeddings) is available via the MCP server.
+    const results = recallMemories(db, {
+      query,
+      queryEmbedding: null,
+      limit: 20,
+    });
 
-  if (results.length === 0) {
-    console.log("No memories found.");
-    return;
-  }
-
-  for (const r of results) {
-    const age = formatAge(r.createdAt);
-    const conf = (r.confidence * 100).toFixed(0);
-    const typeTag = r.type.toUpperCase().padEnd(11);
-    console.log(`  ${typeTag} ${r.content}`);
-    console.log(`             Score: ${r.score.toFixed(3)} | Confidence: ${conf}% | Age: ${age} | ID: ${r.id.slice(0, 8)}`);
-    if (r.tags.length > 0) {
-      console.log(`             Tags: ${r.tags.join(", ")}`);
+    if (results.length === 0) {
+      console.log("No memories found.");
+      return;
     }
-    console.log();
-  }
 
-  console.log(`${results.length} memories found.`);
+    for (const r of results) {
+      const age = formatAge(r.createdAt);
+      const conf = (r.confidence * 100).toFixed(0);
+      const typeTag = r.type.toUpperCase().padEnd(11);
+      console.log(`  ${typeTag} ${r.content}`);
+      console.log(`             Score: ${r.score.toFixed(3)} | Confidence: ${conf}% | Age: ${age} | ID: ${r.id.slice(0, 8)}`);
+      if (r.tags.length > 0) {
+        console.log(`             Tags: ${r.tags.join(", ")}`);
+      }
+      console.log();
+    }
+
+    console.log(`${results.length} memories found.`);
+  } catch (error) {
+    console.error(`Recall error: ${error instanceof Error ? error.message : String(error)}`);
+    console.log("No memories found.");
+  }
 }
 
 function handleStats(db: AmemDatabase) {
@@ -608,4 +629,54 @@ function handleReset(db: AmemDatabase, args: string[]) {
 
   console.log("All amem data has been wiped. Starting fresh.");
   console.log(`Deleted: ${DB_PATH}`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TEAM SYNC
+// ═══════════════════════════════════════════════════════════
+
+async function handleTeamExport(db: AmemDatabase, args: string[]) {
+  const outputDir = getFlag(args, "--dir", "-d") || process.cwd();
+  const userId = getFlag(args, "--user", "-u");
+
+  if (!userId) {
+    console.error("Usage: amem team-export --user <id> [--dir <path>]");
+    console.error("  --user is required to identify your exports.");
+    process.exit(1);
+  }
+
+  const { exportForTeam } = await import("./sync.js");
+  const result = await exportForTeam(db, outputDir, { userId });
+
+  console.log(`Exported ${result.count} memories to ${result.file}`);
+}
+
+async function handleTeamImport(db: AmemDatabase, args: string[]) {
+  const dryRun = args.includes("--dry-run") || args.includes("-n");
+
+  // File path is the first non-flag argument
+  const filePath = args.find((a) => !a.startsWith("-"));
+
+  if (!filePath) {
+    console.error("Usage: amem team-import <file> [--dry-run]");
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`File not found: ${filePath}`);
+    process.exit(1);
+  }
+
+  const { importFromTeam } = await import("./sync.js");
+
+  if (dryRun) console.log("(dry run — no changes will be made)\n");
+
+  const result = await importFromTeam(db, filePath, { dryRun });
+
+  console.log(`From: ${result.from}`);
+  console.log(`Imported: ${result.imported} | Skipped: ${result.skipped}`);
+
+  if (dryRun && result.imported > 0) {
+    console.log("\nRun without --dry-run to import these memories.");
+  }
 }
