@@ -74,6 +74,11 @@ if (command === "rules") {
   process.exit(0);
 }
 
+if (command === "hooks") {
+  await handleHooks(args.slice(1));
+  process.exit(0);
+}
+
 // ── Commands that need a database ───────────────────────
 if (command === "dashboard") {
   if (!fs.existsSync(DB_PATH)) {
@@ -143,6 +148,7 @@ USAGE
 SETUP
   init                 Auto-configure amem for detected AI tools
   rules [--tool NAME]  Generate auto-extraction rules for AI tools
+  hooks [--uninstall]  Install/uninstall automatic memory capture hooks
   dashboard [--port=N] Open the memory dashboard in your browser (default: 3333)
 
 MEMORY
@@ -167,6 +173,7 @@ MEMORY TYPES
 EXAMPLES
   amem init
   amem rules
+  amem hooks
   amem dashboard
   amem recall "authentication approach"
   amem stats
@@ -327,6 +334,40 @@ function handleRules(args: string[]) {
   } else {
     console.log("No rules written. Use --path to write to a custom location.");
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// HOOKS — Automatic memory capture
+// ═══════════════════════════════════════════════════════════
+
+async function handleHooks(args: string[]) {
+  const { installHooks, uninstallHooks } = await import("./hooks.js");
+
+  if (args.includes("--uninstall") || args.includes("--remove")) {
+    const result = uninstallHooks();
+    if (result.removed.length > 0) {
+      console.log(`Removed amem hooks: ${result.removed.join(", ")}`);
+      console.log("Hooks have been uninstalled from Claude Code settings.");
+    } else {
+      console.log("No amem hooks found to remove.");
+    }
+    return;
+  }
+
+  console.log("Installing amem hooks for automatic memory capture...\n");
+  const result = installHooks({
+    captureToolUse: true,
+    captureSessionEnd: true,
+  });
+
+  console.log(`  Installed hook scripts: ${result.installed.join(", ")}`);
+  console.log(`  Updated Claude Code settings: ${result.configPath}`);
+  console.log();
+  console.log("Hooks installed! Claude Code will now automatically:");
+  console.log("  - Log significant tool calls (PostToolUse)");
+  console.log("  - Mark session end for summarization (Stop)");
+  console.log();
+  console.log("Use 'amem-cli hooks --uninstall' to remove hooks.");
 }
 
 // ═══════════════════════════════════════════════════════════

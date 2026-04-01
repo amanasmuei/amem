@@ -136,6 +136,12 @@ a{color:var(--decision);text-decoration:none}
         <option value="topology">topology</option>
         <option value="fact">fact</option>
       </select>
+      <select id="mem-tier">
+        <option value="">All tiers</option>
+        <option value="core">core</option>
+        <option value="working">working</option>
+        <option value="archival">archival</option>
+      </select>
     </div>
     <div class="mem-list" id="mem-list"></div>
   </div>
@@ -150,6 +156,12 @@ a{color:var(--decision);text-decoration:none}
   <div class="card" id="reminder-card">
     <h2>Reminders</h2>
     <div class="reminder-list" id="reminder-list"></div>
+  </div>
+
+  <!-- Session summaries -->
+  <div class="card full" id="summary-card">
+    <h2>Session Summaries</h2>
+    <div class="summary-list" id="summary-list"></div>
   </div>
 
   <!-- Recent log -->
@@ -223,9 +235,13 @@ a{color:var(--decision);text-decoration:none}
     setHTML(el, memories.slice(0,50).map(function(m){
       var color=TYPE_COLORS[m.type]||'#8b949e';
       var tags=(m.tags||[]).map(function(t){return '<span class="tag">#'+esc(t)+'</span>'}).join(' ');
-      return '<div class="mem-card">'+
+      var tierBadge = m.tier && m.tier !== 'archival' ? '<span class="type-badge" style="background:'+(m.tier==='core'?'#f0883e':'#58a6ff')+'">'+esc(m.tier)+'</span>' : '';
+      var expiredBadge = m.validUntil ? '<span class="type-badge" style="background:#f85149;opacity:0.7">expired</span>' : '';
+      var validInfo = m.validFrom ? '<span>Valid: '+new Date(m.validFrom).toISOString().slice(0,10)+(m.validUntil?' → '+new Date(m.validUntil).toISOString().slice(0,10):' → now')+'</span>' : '';
+      return '<div class="mem-card"'+(m.validUntil?' style="opacity:0.6"':'')+'>'+
         '<div class="mem-head">'+
           '<span class="type-badge" style="background:'+color+'">'+esc(m.type)+'</span>'+
+          tierBadge+expiredBadge+
           '<code class="mono" style="color:var(--muted);font-size:0.7rem">'+esc(m.id.slice(0,8))+'</code>'+
         '</div>'+
         '<div class="mem-content">'+esc(m.content)+'</div>'+
@@ -234,6 +250,7 @@ a{color:var(--decision);text-decoration:none}
           '<span>'+timeAgo(m.createdAt)+'</span>'+
           '<span>Accessed '+m.accessCount+'x</span>'+
           (m.scope?'<span>Scope: '+esc(m.scope)+'</span>':'')+
+          validInfo+
           (tags?' '+tags:'')+
         '</div></div>';
     }).join(''));
@@ -242,9 +259,11 @@ a{color:var(--decision);text-decoration:none}
   function filterMemories(){
     var q=($('mem-search').value||'').toLowerCase();
     var t=$('mem-type').value;
+    var tier=$('mem-tier')?$('mem-tier').value:'';
     var list=allMemories;
     if(q) list=list.filter(function(m){return m.content.toLowerCase().indexOf(q)!==-1});
     if(t) list=list.filter(function(m){return m.type===t});
+    if(tier) list=list.filter(function(m){return m.tier===tier});
     renderMemories(list);
   }
 
@@ -370,6 +389,27 @@ a{color:var(--decision);text-decoration:none}
     fetchJSON('/api/graph').then(renderGraph).catch(function(){});
     fetchJSON('/api/reminders').then(renderReminders).catch(function(){});
     fetchJSON('/api/log?limit=30').then(renderLog).catch(function(){});
+    fetchJSON('/api/summaries?limit=10').then(renderSummaries).catch(function(){});
+  }
+
+  function renderSummaries(summaries){
+    var el=$('summary-list');
+    if(!el) return;
+    if(!summaries||!summaries.length){setHTML(el,'<div class="empty">No session summaries yet. Use memory_summarize at session end.</div>');return}
+    setHTML(el, summaries.map(function(s){
+      var decisions=(s.keyDecisions||[]).map(function(d){return '<li>'+esc(d)+'</li>'}).join('');
+      var corrections=(s.keyCorrections||[]).map(function(c){return '<li style="color:var(--correction)">'+esc(c)+'</li>'}).join('');
+      return '<div class="mem-card">'+
+        '<div class="mem-head">'+
+          '<span class="type-badge" style="background:var(--decision)">session</span>'+
+          '<code class="mono" style="color:var(--muted);font-size:0.7rem">'+esc(s.sessionId.slice(0,16))+'</code>'+
+          '<span style="color:var(--muted);font-size:0.75rem;margin-left:auto">'+timeAgo(s.createdAt)+' | '+s.memoriesExtracted+' memories extracted</span>'+
+        '</div>'+
+        '<div class="mem-content">'+esc(s.summary)+'</div>'+
+        (decisions?'<div class="mem-meta"><strong>Decisions:</strong></div><ul style="margin:4px 0 8px 20px;font-size:0.85rem">'+decisions+'</ul>':'')+
+        (corrections?'<div class="mem-meta"><strong>Corrections:</strong></div><ul style="margin:4px 0 8px 20px;font-size:0.85rem">'+corrections+'</ul>':'')+
+      '</div>';
+    }).join(''));
   }
 
   // -- Event listeners --
@@ -379,6 +419,7 @@ a{color:var(--decision);text-decoration:none}
     debounce=setTimeout(filterMemories,300);
   });
   $('mem-type').addEventListener('change',filterMemories);
+  if($('mem-tier')) $('mem-tier').addEventListener('change',filterMemories);
 
   // -- Init --
   loadAll();
@@ -491,6 +532,9 @@ function handleMemories(
     createdAt: m.createdAt,
     lastAccessed: m.lastAccessed,
     scope: m.scope,
+    tier: m.tier,
+    validFrom: m.validFrom,
+    validUntil: m.validUntil,
   }));
 
   jsonResponse(res, result);
@@ -561,6 +605,28 @@ function handleLog(
   );
 }
 
+function handleSummaries(
+  db: AmemDatabase,
+  res: http.ServerResponse,
+  query: Record<string, string>,
+): void {
+  const limit = Math.min(50, Math.max(1, parseInt(query.limit || "10", 10) || 10));
+  const project = query.project || "global";
+  const summaries = db.getRecentSummaries(project, limit);
+  jsonResponse(
+    res,
+    summaries.map((s) => ({
+      id: s.id,
+      sessionId: s.sessionId,
+      summary: s.summary,
+      keyDecisions: s.keyDecisions,
+      keyCorrections: s.keyCorrections,
+      memoriesExtracted: s.memoriesExtracted,
+      createdAt: s.createdAt,
+    })),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -590,6 +656,9 @@ export function startDashboard(db: AmemDatabase, port: number): void {
           break;
         case "/api/log":
           handleLog(db, res, query);
+          break;
+        case "/api/summaries":
+          handleSummaries(db, res, query);
           break;
         default:
           errorResponse(res, "Not found", 404);

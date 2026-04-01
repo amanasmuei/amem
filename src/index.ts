@@ -122,13 +122,35 @@ Call memory_extract with an array of memories. Each memory should be:
 
 - Ephemeral task details ("currently debugging X")
 - Things obvious from the code itself
-- Sensitive data (API keys, passwords)
+- Sensitive data (API keys, passwords) — these are auto-redacted but avoid storing them
 - Exact file contents (just reference the path)
+
+## Privacy
+
+- Wrap sensitive text in \`<private>...</private>\` tags — it will be stripped before storage
+- API keys, tokens, and passwords are auto-redacted by pattern matching
+- Never store credentials even if the user provides them
+
+## Temporal Validity
+
+When a fact or decision changes:
+- Use **memory_expire** to mark the old memory as no longer valid (preserved for history)
+- Store the new memory — contradictions are auto-detected and old versions auto-expired
+- Don't delete old memories — expiry preserves the timeline for "what was true when?"
+
+## Memory Tiers
+
+Promote critical memories to higher tiers:
+- **core** — Always injected at session start. Only the most important corrections/decisions (~500 tokens max)
+- **working** — Session-scoped context, auto-surfaced for the current task
+- **archival** — Default. Searchable but not auto-injected
+Use memory_tier to move memories between tiers.
 
 ## Patching vs. Storing
 
 - Memory mostly right but has a wrong detail → **memory_patch** (surgical, auto-versioned)
 - Memory completely wrong → memory_forget then memory_store
+- Memory outdated → **memory_expire** (preserves history) then memory_store
 - Always check with memory_search or memory_recall before creating a duplicate
 
 ## Building the Knowledge Graph
@@ -138,11 +160,17 @@ After storing decisions, link connected memories with memory_relate:
 - Correction "caused_by" Decision (why something is off-limits)
 - Topology "depends_on" Topology (how modules relate)
 
-## Lossless Log
+## Advanced Recall
 
-For raw exchanges not yet ready to distill:
+- **memory_recall** — Fast semantic search (default)
+- **memory_multi_recall** — Combines 4 strategies: semantic + FTS + graph traversal + temporal. Use when standard recall misses something.
+- **memory_search** — Exact full-text keyword matching
+
+## Session Management
+
 - Use memory_log to preserve turns verbatim (append-only, nothing lost)
-- Search later with memory_log_recall and promote to proper memories`,
+- At session end, call **memory_summarize** with key decisions, corrections, and a summary
+- Use **memory_history** to review past session summaries`,
       },
     }],
   }),
@@ -160,11 +188,13 @@ server.registerPrompt(
         type: "text",
         text: `You have access to Amem memory. At the start of this conversation:
 
-1. Call memory_inject with the likely topic — this surfaces corrections (hard constraints) and decisions first
-2. Call memory_context for broader preferences, patterns, and topology
-3. Apply corrections as absolute constraints — they override everything else
-4. Reference memories naturally: "I remember you prefer X" not "According to my memory database..."
-5. If continuing previous work, call memory_log_recall with the session ID or a keyword to replay raw history
+1. Call **memory_inject** with the likely topic — surfaces corrections (hard constraints) and decisions first
+2. Call **reminder_check** — shows overdue and upcoming reminders
+3. Check **core tier** memories with memory_tier action:list tier:core — these are always-on context
+4. Call memory_context for broader preferences, patterns, and topology
+5. Apply corrections as absolute constraints — they override everything else
+6. Reference memories naturally: "I remember you prefer X" not "According to my memory database..."
+7. If continuing previous work, call memory_log_recall or memory_history to review past sessions
 
 ## Tool Quick Reference
 
@@ -172,11 +202,15 @@ server.registerPrompt(
 |------|------|
 | Load context for a task | memory_inject, memory_context |
 | Find something specific | memory_recall (semantic), memory_search (exact) |
+| Deep search (4 strategies) | memory_multi_recall |
 | Store a new memory | memory_store or memory_extract (batch) |
 | Fix an existing memory | memory_patch (surgical, versioned) |
+| Mark as outdated | memory_expire (preserves history) |
+| Manage priority | memory_tier (core/working/archival) |
 | See what changed | memory_since "7d" |
 | Preserve raw conversation | memory_log |
-| Replay a past session | memory_log_recall |
+| Summarize a session | memory_summarize |
+| Review past sessions | memory_history |
 | Link related memories | memory_relate |
 | View edit history | memory_versions |
 | Clean up the database | memory_consolidate |`,

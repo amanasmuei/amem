@@ -1,0 +1,235 @@
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
+
+export interface HookConfig {
+  captureToolUse: boolean;
+  captureSessionEnd: boolean;
+}
+
+/**
+ * Generate Claude Code hook configuration for automatic memory capture.
+ */
+export function generateHooksConfig(config: HookConfig): Record<string, unknown[]> {
+  const hooks: Record<string, unknown[]> = {};
+
+  if (config.captureToolUse) {
+    hooks.PostToolUse = [{
+      type: "command",
+      command: getPostToolUseCommand(),
+      timeout: 10000,
+      description: "amem: capture tool observations for persistent memory",
+    }];
+  }
+
+  if (config.captureSessionEnd) {
+    hooks.Stop = [{
+      type: "command",
+      command: getStopCommand(),
+      timeout: 15000,
+      description: "amem: summarize session and extract final memories",
+    }];
+  }
+
+  return hooks;
+}
+
+function getPostToolUseCommand(): string {
+  const scriptPath = getHookScriptPath("post-tool-use.mjs");
+  return `node "${scriptPath}"`;
+}
+
+function getStopCommand(): string {
+  const scriptPath = getHookScriptPath("session-end.mjs");
+  return `node "${scriptPath}"`;
+}
+
+function getHookScriptPath(name: string): string {
+  const amemDir = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+  return path.join(amemDir, "hooks", name);
+}
+
+/**
+ * Install hook scripts to ~/.amem/hooks/ and configure Claude Code settings.
+ */
+export function installHooks(config: HookConfig): { installed: string[]; configPath: string } {
+  const amemDir = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+  const hooksDir = path.join(amemDir, "hooks");
+  fs.mkdirSync(hooksDir, { recursive: true });
+
+  const installed: string[] = [];
+  const dbPath = process.env.AMEM_DB || path.join(amemDir, "memory.db");
+
+  if (config.captureToolUse) {
+    const scriptPath = path.join(hooksDir, "post-tool-use.mjs");
+    fs.writeFileSync(scriptPath, getPostToolUseScript(dbPath));
+    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    installed.push("post-tool-use.mjs");
+  }
+
+  if (config.captureSessionEnd) {
+    const scriptPath = path.join(hooksDir, "session-end.mjs");
+    fs.writeFileSync(scriptPath, getSessionEndScript(dbPath));
+    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    installed.push("session-end.mjs");
+  }
+
+  // Update Claude Code settings.json with hook configuration
+  const claudeDir = path.join(os.homedir(), ".claude");
+  const settingsPath = path.join(claudeDir, "settings.json");
+
+  let settings: Record<string, unknown> = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const raw = fs.readFileSync(settingsPath, "utf-8").trim();
+      if (raw) settings = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Start fresh if corrupted
+    }
+  }
+
+  const hooksConfig = generateHooksConfig(config);
+  const existingHooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
+
+  // Merge amem hooks with existing hooks (don't overwrite user hooks)
+  for (const [event, newHooks] of Object.entries(hooksConfig)) {
+    const existing = (existingHooks[event] ?? []) as Array<Record<string, unknown>>;
+    // Remove any previous amem hooks
+    const filtered = existing.filter(h => !String(h.description ?? "").includes("amem:"));
+    existingHooks[event] = [...filtered, ...newHooks];
+  }
+
+  settings.hooks = existingHooks;
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+
+  return { installed, configPath: settingsPath };
+}
+
+/**
+ * Remove amem hooks from Claude Code settings and delete hook scripts.
+ */
+export function uninstallHooks(): { removed: string[] } {
+  const amemDir = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+  const hooksDir = path.join(amemDir, "hooks");
+  const removed: string[] = [];
+
+  for (const name of ["post-tool-use.mjs", "session-end.mjs"]) {
+    const scriptPath = path.join(hooksDir, name);
+    if (fs.existsSync(scriptPath)) {
+      fs.unlinkSync(scriptPath);
+      removed.push(name);
+    }
+  }
+
+  // Remove amem hooks from Claude Code settings
+  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const raw = fs.readFileSync(settingsPath, "utf-8").trim();
+      if (raw) {
+        const settings = JSON.parse(raw) as Record<string, unknown>;
+        const hooks = (settings.hooks ?? {}) as Record<string, Array<Record<string, unknown>>>;
+        for (const event of Object.keys(hooks)) {
+          hooks[event] = hooks[event].filter(h => !String(h.description ?? "").includes("amem:"));
+          if (hooks[event].length === 0) delete hooks[event];
+        }
+        settings.hooks = hooks;
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+      }
+    } catch {
+      // Can't parse settings — skip
+    }
+  }
+
+  return { removed };
+}
+
+// ── Hook Script Templates ──────────────────────────────
+
+function getPostToolUseScript(dbPath: string): string {
+  const escaped = dbPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  return `#!/usr/bin/env node
+// amem PostToolUse hook - captures tool observations for persistent memory
+// Auto-generated by amem. Do not edit manually.
+
+import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
+
+const toolName = process.env.TOOL_NAME || '';
+const toolInput = process.env.TOOL_INPUT || '';
+
+// Skip amem's own tools to avoid infinite loops
+if (toolName.startsWith('memory_') || toolName.startsWith('reminder_')) {
+  process.exit(0);
+}
+
+// Skip noisy/low-value tools
+const SKIP_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'Bash']);
+if (SKIP_TOOLS.has(toolName)) {
+  process.exit(0);
+}
+
+if (!toolName || !toolInput || toolInput.length < 10) {
+  process.exit(0);
+}
+
+try {
+  const require = createRequire(import.meta.url);
+  const Database = require('better-sqlite3');
+  const db = new Database('${escaped}');
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 2000');
+
+  const id = randomUUID();
+  const now = Date.now();
+  const sessionId = process.env.CLAUDE_SESSION_ID || 'hook-' + new Date().toISOString().slice(0, 10);
+  const project = process.env.AMEM_PROJECT || 'global';
+
+  const content = 'Tool: ' + toolName + '\\nInput: ' + toolInput.slice(0, 500);
+  const metadata = JSON.stringify({ hook: 'PostToolUse', tool: toolName });
+
+  db.prepare(
+    'INSERT INTO conversation_log (id, session_id, role, content, timestamp, project, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, sessionId, 'system', content, now, project, metadata);
+
+  db.close();
+} catch {
+  process.exit(0);
+}
+`;
+}
+
+function getSessionEndScript(dbPath: string): string {
+  const escaped = dbPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  return `#!/usr/bin/env node
+// amem Stop hook - logs session end marker for later summarization
+// Auto-generated by amem. Do not edit manually.
+
+import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
+
+try {
+  const require = createRequire(import.meta.url);
+  const Database = require('better-sqlite3');
+  const db = new Database('${escaped}');
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 2000');
+
+  const id = randomUUID();
+  const now = Date.now();
+  const sessionId = process.env.CLAUDE_SESSION_ID || 'hook-' + new Date().toISOString().slice(0, 10);
+  const project = process.env.AMEM_PROJECT || 'global';
+
+  const metadata = JSON.stringify({ hook: 'Stop', event: 'session_end' });
+
+  db.prepare(
+    'INSERT INTO conversation_log (id, session_id, role, content, timestamp, project, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, sessionId, 'system', '[SESSION_END] Session completed. Run memory_summarize to extract insights.', now, project, metadata);
+
+  db.close();
+} catch {
+  process.exit(0);
+}
+`;
+}

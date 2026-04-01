@@ -6,6 +6,7 @@ import { registerVersionTools } from "./versions.js";
 import { registerLogTools } from "./log.js";
 import { registerGraphTools } from "./graph.js";
 import { registerReminderTools } from "./reminders.js";
+import { registerAdvancedTools } from "./advanced.js";
 
 // Re-export helpers for external consumers
 export { TYPE_ORDER, formatAge, shortId, SHORT_ID_LENGTH, CHARACTER_LIMIT } from "./helpers.js";
@@ -21,4 +22,5 @@ export function registerTools(server: McpServer, db: AmemDatabase, project: stri
   registerLogTools(server, db, project);
   registerGraphTools(server, db, project);
   registerReminderTools(server, db);
+  registerAdvancedTools(server, db, project);
 }

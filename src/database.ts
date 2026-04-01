@@ -10,6 +10,20 @@ export interface MemoryInput {
   source: string;
   embedding: Float32Array | null;
   scope: string;
+  validFrom?: number;
+  validUntil?: number;
+  tier?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  sessionId: string;
+  summary: string;
+  keyDecisions: string[];
+  keyCorrections: string[];
+  memoriesExtracted: number;
+  project: string;
+  createdAt: number;
 }
 
 export interface MemoryStats {
@@ -51,6 +65,8 @@ export interface MemoryRelation {
   relationshipType: string;
   strength: number;
   createdAt: number;
+  validFrom?: number | null;
+  validUntil?: number | null;
 }
 
 export interface PatchInput {
@@ -112,6 +128,18 @@ export interface AmemDatabase {
   resolveId(partialId: string): string | null;
   resolveReminderId(partialId: string): string | null;
   getAllRelations(): MemoryRelation[];
+  // Temporal validity
+  expireMemory(id: string, timestamp?: number): void;
+  getValidMemories(asOf?: number): Memory[];
+  updateTier(id: string, tier: string): void;
+  getByTier(tier: string, scope?: string): Memory[];
+  // Session summaries
+  insertSummary(input: { sessionId: string; summary: string; keyDecisions: string[]; keyCorrections: string[]; memoriesExtracted: number; project: string }): string;
+  getSummaryBySession(sessionId: string): SessionSummary | null;
+  getRecentSummaries(project: string, limit?: number): SessionSummary[];
+  // Temporal relations
+  expireRelation(relationId: string, timestamp?: number): void;
+  getValidRelations(asOf?: number): MemoryRelation[];
 }
 
 interface LogRow {
@@ -140,6 +168,8 @@ interface RelationRow {
   relationship_type: string;
   strength: number;
   created_at: number;
+  valid_from: number | null;
+  valid_until: number | null;
 }
 
 interface MemoryRow {
@@ -154,6 +184,20 @@ interface MemoryRow {
   source: string;
   embedding: Buffer | null;
   scope: string;
+  valid_from: number | null;
+  valid_until: number | null;
+  tier: string;
+}
+
+interface SummaryRow {
+  id: string;
+  session_id: string;
+  summary: string;
+  key_decisions: string;
+  key_corrections: string;
+  memories_extracted: number;
+  project: string;
+  created_at: number;
 }
 
 function rowToMemory(row: MemoryRow): Memory {
@@ -175,6 +219,35 @@ function rowToMemory(row: MemoryRow): Memory {
         )
       : null,
     scope: row.scope,
+    validFrom: row.valid_from ?? row.created_at,
+    validUntil: row.valid_until ?? null,
+    tier: (row.tier ?? 'archival') as Memory['tier'],
+  };
+}
+
+function rowToSummary(row: SummaryRow): SessionSummary {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    summary: row.summary,
+    keyDecisions: JSON.parse(row.key_decisions) as string[],
+    keyCorrections: JSON.parse(row.key_corrections) as string[],
+    memoriesExtracted: row.memories_extracted,
+    project: row.project,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToRelation(r: RelationRow): MemoryRelation {
+  return {
+    id: r.id,
+    fromId: r.from_id,
+    toId: r.to_id,
+    relationshipType: r.relationship_type,
+    strength: r.strength,
+    createdAt: r.created_at,
+    validFrom: r.valid_from ?? null,
+    validUntil: r.valid_until ?? null,
   };
 }
 
@@ -276,6 +349,21 @@ export function createDatabase(dbPath: string): AmemDatabase {
     );
     CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
     CREATE INDEX IF NOT EXISTS idx_reminders_completed ON reminders(completed);
+
+    -- Session summaries
+    CREATE TABLE IF NOT EXISTS session_summaries (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      key_decisions TEXT NOT NULL DEFAULT '[]',
+      key_corrections TEXT NOT NULL DEFAULT '[]',
+      memories_extracted INTEGER NOT NULL DEFAULT 0,
+      project TEXT NOT NULL DEFAULT 'global',
+      created_at INTEGER NOT NULL,
+      UNIQUE(session_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_summaries_session ON session_summaries(session_id);
+    CREATE INDEX IF NOT EXISTS idx_summaries_project ON session_summaries(project);
   `);
 
   // Migration: add scope column if not present
@@ -299,10 +387,30 @@ export function createDatabase(dbPath: string): AmemDatabase {
   }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_content_hash ON memories(content_hash)`);
 
+  // Migration: add temporal validity + tiers
+  const hasValidFrom = columns.some(c => c.name === 'valid_from');
+  if (!hasValidFrom) {
+    db.exec(`ALTER TABLE memories ADD COLUMN valid_from INTEGER`);
+    db.exec(`ALTER TABLE memories ADD COLUMN valid_until INTEGER`);
+    db.exec(`ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'archival'`);
+    db.exec(`UPDATE memories SET valid_from = created_at WHERE valid_from IS NULL`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_valid_until ON memories(valid_until)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier)`);
+
+  // Migration: add temporal validity to relations
+  const relColumns = db.pragma('table_info(memory_relations)') as { name: string }[];
+  const relHasValidFrom = relColumns.some(c => c.name === 'valid_from');
+  if (!relHasValidFrom) {
+    db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_from INTEGER`);
+    db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_until INTEGER`);
+    db.exec(`UPDATE memory_relations SET valid_from = created_at WHERE valid_from IS NULL`);
+  }
+
   const stmts = {
     insert: db.prepare(`
-      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding, scope, content_hash)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (id, content, type, tags, confidence, access_count, created_at, last_accessed, source, embedding, scope, content_hash, valid_from, valid_until, tier)
+      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare(`SELECT * FROM memories WHERE id = ?`),
     searchByType: db.prepare(`SELECT * FROM memories WHERE type = ? ORDER BY last_accessed DESC`),
@@ -350,8 +458,8 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getVersions: db.prepare(`SELECT * FROM memory_versions WHERE memory_id = ? ORDER BY edited_at DESC`),
     // Relations
     insertRelation: db.prepare(`
-      INSERT OR REPLACE INTO memory_relations (id, from_id, to_id, relationship_type, strength, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO memory_relations (id, from_id, to_id, relationship_type, strength, created_at, valid_from)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `),
     getRelationsFrom: db.prepare(`SELECT * FROM memory_relations WHERE from_id = ?`),
     getRelationsTo: db.prepare(`SELECT * FROM memory_relations WHERE to_id = ?`),
@@ -370,6 +478,19 @@ export function createDatabase(dbPath: string): AmemDatabase {
     resolveReminderIdPrefix: db.prepare("SELECT id FROM reminders WHERE id LIKE ? LIMIT 2"),
     // Batch relation loading
     getAllRelations: db.prepare("SELECT * FROM memory_relations ORDER BY created_at DESC"),
+    // Temporal validity
+    getValidMemories: db.prepare(`SELECT * FROM memories WHERE (valid_until IS NULL OR valid_until > ?) ORDER BY last_accessed DESC`),
+    expireMemory: db.prepare(`UPDATE memories SET valid_until = ? WHERE id = ?`),
+    updateTier: db.prepare(`UPDATE memories SET tier = ?, last_accessed = ? WHERE id = ?`),
+    getByTier: db.prepare(`SELECT * FROM memories WHERE tier = ? ORDER BY last_accessed DESC`),
+    getByTierAndScope: db.prepare(`SELECT * FROM memories WHERE tier = ? AND (scope = 'global' OR scope = ?) ORDER BY last_accessed DESC`),
+    // Session summaries
+    insertSummary: db.prepare(`INSERT OR REPLACE INTO session_summaries (id, session_id, summary, key_decisions, key_corrections, memories_extracted, project, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+    getSummaryBySession: db.prepare(`SELECT * FROM session_summaries WHERE session_id = ?`),
+    getRecentSummaries: db.prepare(`SELECT * FROM session_summaries WHERE project = ? ORDER BY created_at DESC LIMIT ?`),
+    // Temporal relations
+    expireRelation: db.prepare(`UPDATE memory_relations SET valid_until = ? WHERE id = ?`),
+    getValidRelations: db.prepare(`SELECT * FROM memory_relations WHERE (valid_until IS NULL OR valid_until > ?) ORDER BY created_at DESC`),
   };
 
   // Keep FTS index in sync via triggers.
@@ -425,6 +546,9 @@ export function createDatabase(dbPath: string): AmemDatabase {
         embeddingBuffer,
         input.scope,
         contentHash,
+        input.validFrom ?? now,
+        input.validUntil ?? null,
+        input.tier ?? "archival",
       );
       return id;
     },
@@ -659,21 +783,15 @@ export function createDatabase(dbPath: string): AmemDatabase {
     // ── Relations ────────────────────────────────────────────
     addRelation(fromId: string, toId: string, type: string, strength = 0.8): string {
       const id = randomUUID();
-      stmts.insertRelation.run(id, fromId, toId, type, strength, Date.now());
+      const now = Date.now();
+      stmts.insertRelation.run(id, fromId, toId, type, strength, now, now);
       return id;
     },
 
     getRelations(memoryId: string): MemoryRelation[] {
       const from = stmts.getRelationsFrom.all(memoryId) as RelationRow[];
       const to = stmts.getRelationsTo.all(memoryId) as RelationRow[];
-      return [...from, ...to].map(r => ({
-        id: r.id,
-        fromId: r.from_id,
-        toId: r.to_id,
-        relationshipType: r.relationship_type,
-        strength: r.strength,
-        createdAt: r.created_at,
-      }));
+      return [...from, ...to].map(rowToRelation);
     },
 
     removeRelation(relationId: string): void {
@@ -808,14 +926,64 @@ export function createDatabase(dbPath: string): AmemDatabase {
 
     getAllRelations(): MemoryRelation[] {
       const rows = stmts.getAllRelations.all() as RelationRow[];
-      return rows.map(r => ({
-        id: r.id,
-        fromId: r.from_id,
-        toId: r.to_id,
-        relationshipType: r.relationship_type,
-        strength: r.strength,
-        createdAt: r.created_at,
-      }));
+      return rows.map(rowToRelation);
+    },
+
+    // ── Temporal validity ───────────────────────────────────
+    expireMemory(id: string, timestamp?: number): void {
+      stmts.expireMemory.run(timestamp ?? Date.now(), id);
+    },
+
+    getValidMemories(asOf?: number): Memory[] {
+      const rows = stmts.getValidMemories.all(asOf ?? Date.now()) as MemoryRow[];
+      return rows.map(rowToMemory);
+    },
+
+    updateTier(id: string, tier: string): void {
+      stmts.updateTier.run(tier, Date.now(), id);
+    },
+
+    getByTier(tier: string, scope?: string): Memory[] {
+      const rows = scope
+        ? stmts.getByTierAndScope.all(tier, scope) as MemoryRow[]
+        : stmts.getByTier.all(tier) as MemoryRow[];
+      return rows.map(rowToMemory);
+    },
+
+    // ── Session summaries ───────────────────────────────────
+    insertSummary(input: { sessionId: string; summary: string; keyDecisions: string[]; keyCorrections: string[]; memoriesExtracted: number; project: string }): string {
+      const id = randomUUID();
+      stmts.insertSummary.run(
+        id,
+        input.sessionId,
+        input.summary,
+        JSON.stringify(input.keyDecisions),
+        JSON.stringify(input.keyCorrections),
+        input.memoriesExtracted,
+        input.project,
+        Date.now(),
+      );
+      return id;
+    },
+
+    getSummaryBySession(sessionId: string): SessionSummary | null {
+      const row = stmts.getSummaryBySession.get(sessionId) as SummaryRow | undefined;
+      return row ? rowToSummary(row) : null;
+    },
+
+    getRecentSummaries(project: string, limit = 10): SessionSummary[] {
+      const rows = stmts.getRecentSummaries.all(project, limit) as SummaryRow[];
+      return rows.map(rowToSummary);
+    },
+
+    // ── Temporal relations ──────────────────────────────────
+    expireRelation(relationId: string, timestamp?: number): void {
+      stmts.expireRelation.run(timestamp ?? Date.now(), relationId);
+    },
+
+    getValidRelations(asOf?: number): MemoryRelation[] {
+      const rows = stmts.getValidRelations.all(asOf ?? Date.now()) as RelationRow[];
+      return rows.map(rowToRelation);
     },
   };
 }

@@ -1,8 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
-import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories } from "../memory.js";
+import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions } from "../memory.js";
 import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
+import { sanitizeContent, loadConfig } from "../config.js";
 import {
   RecallResultSchema,
   ContextResultSchema,
@@ -49,14 +50,32 @@ Returns:
         openWorldHint: false,
       },
     },
-    async ({ content, type, tags, confidence, source, scope }) => {
+    async ({ content: rawContent, type, tags, confidence, source, scope }) => {
       try {
+        // Privacy: strip <private> tags and redact sensitive patterns
+        const content = sanitizeContent(rawContent) ?? rawContent;
+        if (content !== rawContent && sanitizeContent(rawContent) === null) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Content is entirely private (wrapped in <private> tags). Nothing was stored.",
+            }],
+            structuredContent: { action: "stored" as const, id: "", type, confidence, tags, total: 0, reinforced: 0 },
+          };
+        }
+
         const embedding = await generateEmbedding(content);
+
+        // Auto-expire contradictions before storing
+        const expireResult = autoExpireContradictions(db, content, embedding, type as MemoryTypeValue);
+        if (expireResult.expired.length > 0) {
+          console.error(`[amem] Auto-expired ${expireResult.expired.length} contradicting memories`);
+        }
 
         // Single pass over recent memories: conflict detection, confidence boost, and reinforcement
         // Limit to 5000 most recently accessed to stay fast at scale
         if (embedding) {
-          const existing = db.getRecentWithEmbeddings(5000);
+          const existing = db.getRecentWithEmbeddings(loadConfig().retrieval.maxCandidates);
 
           const toReinforce: string[] = [];
           const toBoostConfidence: Array<{ id: string; confidence: number }> = [];
@@ -665,7 +684,7 @@ Returns:
         }> = [];
 
         // Load existing embeddings once (not per-memory)
-        const existingWithEmbeddings = db.getRecentWithEmbeddings(5000);
+        const existingWithEmbeddings = db.getRecentWithEmbeddings(loadConfig().retrieval.maxCandidates);
 
         // Pre-compute embeddings (async) then batch all DB writes in a transaction
         const pendingOps: Array<

@@ -33,6 +33,9 @@ export interface Memory {
   source: string;
   embedding: Float32Array | null;
   scope: string;
+  validFrom: number;
+  validUntil: number | null;
+  tier: 'core' | 'working' | 'archival';
 }
 
 export interface ScoreInput {
@@ -77,6 +80,10 @@ export interface RecallOptions {
   minConfidence?: number;
   scope?: string;
   explain?: boolean;
+  /** Filter out expired memories (valid_until < now). Default: true */
+  filterExpired?: boolean;
+  /** Only return memories from this tier */
+  tier?: Memory["tier"];
 }
 
 export interface RecalledMemory extends Memory {
@@ -102,7 +109,7 @@ export function recallMemories(
   db: AmemDatabase,
   options: RecallOptions,
 ): (RecalledMemory | ExplainedMemory)[] {
-  const { query, queryEmbedding, limit, type, tag, minConfidence, scope, explain } = options;
+  const { query, queryEmbedding, limit, type, tag, minConfidence, scope, explain, filterExpired = true, tier } = options;
   const now = Date.now();
 
   let candidates: Memory[];
@@ -120,6 +127,16 @@ export function recallMemories(
     candidates = db.getAllForProject(scope);
   } else {
     candidates = db.getAll();
+  }
+
+  // Filter out expired memories (temporal validity)
+  if (filterExpired) {
+    candidates = candidates.filter(m => m.validUntil === null || m.validUntil > now);
+  }
+
+  // Filter by tier
+  if (tier) {
+    candidates = candidates.filter(m => m.tier === tier);
   }
 
   if (minConfidence) {
@@ -359,3 +376,151 @@ export function consolidateMemories(
     after: { total: afterTotal },
   };
 }
+
+// ── Multi-strategy retrieval pipeline ──────────────────
+
+export interface MultiStrategyOptions {
+  query: string;
+  queryEmbedding: Float32Array | null;
+  limit: number;
+  scope?: string;
+  weights?: {
+    semantic: number;
+    fts: number;
+    graph: number;
+    temporal: number;
+  };
+}
+
+/**
+ * Multi-strategy retrieval: combines semantic search, FTS5, knowledge graph traversal,
+ * and temporal recency into a unified ranking. Each strategy votes independently,
+ * then scores are merged with configurable weights.
+ */
+export function multiStrategyRecall(
+  db: AmemDatabase,
+  options: MultiStrategyOptions,
+): RecalledMemory[] {
+  const { query, queryEmbedding, limit, scope } = options;
+  const weights = options.weights ?? { semantic: 0.4, fts: 0.3, graph: 0.15, temporal: 0.15 };
+  const now = Date.now();
+
+  const scoreMap = new Map<string, { memory: Memory; scores: { semantic: number; fts: number; graph: number; temporal: number } }>();
+
+  const initEntry = (m: Memory) => {
+    if (!scoreMap.has(m.id)) {
+      scoreMap.set(m.id, { memory: m, scores: { semantic: 0, fts: 0, graph: 0, temporal: 0 } });
+    }
+    return scoreMap.get(m.id)!;
+  };
+
+  // Strategy 1: Semantic search (embedding similarity)
+  if (queryEmbedding) {
+    const candidates = scope ? db.getAllForProject(scope) : db.getAll();
+    const validCandidates = candidates.filter(m => m.validUntil === null || m.validUntil > now);
+    for (const m of validCandidates) {
+      if (!m.embedding) continue;
+      const sim = Math.max(0, cosineSimilarity(queryEmbedding, m.embedding));
+      if (sim > 0.2) {
+        const entry = initEntry(m);
+        entry.scores.semantic = sim;
+      }
+    }
+  }
+
+  // Strategy 2: Full-text search (FTS5 exact matching)
+  try {
+    const ftsResults = db.fullTextSearch(query, limit * 2, scope);
+    const validFts = ftsResults.filter(m => m.validUntil === null || m.validUntil > now);
+    for (let i = 0; i < validFts.length; i++) {
+      const m = validFts[i];
+      const entry = initEntry(m);
+      // FTS rank: highest rank for first result, decaying
+      entry.scores.fts = Math.max(entry.scores.fts, 1.0 - (i / validFts.length) * 0.5);
+    }
+  } catch {
+    // FTS may fail — skip this strategy
+  }
+
+  // Strategy 3: Knowledge graph traversal
+  // Find memories that are related to high-scoring candidates
+  const topSemanticIds = [...scoreMap.entries()]
+    .sort((a, b) => b[1].scores.semantic - a[1].scores.semantic)
+    .slice(0, 10)
+    .map(([id]) => id);
+
+  for (const id of topSemanticIds) {
+    const related = db.getRelatedMemories(id);
+    for (const m of related) {
+      if (m.validUntil !== null && m.validUntil <= now) continue;
+      const entry = initEntry(m);
+      const parentScore = scoreMap.get(id)?.scores.semantic ?? 0;
+      // Graph neighbors get a fraction of the parent's score
+      entry.scores.graph = Math.max(entry.scores.graph, parentScore * 0.6);
+    }
+  }
+
+  // Strategy 4: Temporal boost (recently accessed/created memories score higher)
+  for (const [, entry] of scoreMap) {
+    const hoursSinceAccess = (now - entry.memory.lastAccessed) / (1000 * 60 * 60);
+    entry.scores.temporal = Math.pow(0.995, Math.max(0, hoursSinceAccess));
+  }
+
+  // Merge scores with weights
+  const results: RecalledMemory[] = [];
+  for (const [, entry] of scoreMap) {
+    const { semantic, fts, graph, temporal } = entry.scores;
+    const importance = IMPORTANCE_WEIGHTS[entry.memory.type] ?? 0.4;
+    const combined = (
+      semantic * weights.semantic +
+      fts * weights.fts +
+      graph * weights.graph +
+      temporal * weights.temporal
+    ) * entry.memory.confidence * importance;
+
+    results.push({ ...entry.memory, score: combined });
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
+}
+
+// ── Auto-expire contradictions ─────────────────────────
+
+/**
+ * When storing a new memory that contradicts an existing one,
+ * auto-expire the old memory instead of requiring manual consolidation.
+ */
+export function autoExpireContradictions(
+  db: AmemDatabase,
+  newContent: string,
+  newEmbedding: Float32Array | null,
+  newType: MemoryTypeValue,
+): { expired: string[]; reason: string } {
+  if (!newEmbedding) return { expired: [], reason: "no embedding" };
+
+  const existing = db.getRecentWithEmbeddings(50000);
+  const expired: string[] = [];
+
+  for (const mem of existing) {
+    if (!mem.embedding) continue;
+    if (mem.type !== newType) continue; // Only expire same-type memories
+    if (mem.validUntil !== null) continue; // Already expired
+
+    const sim = cosineSimilarity(newEmbedding, mem.embedding);
+    if (sim > 0.75 && sim < 0.95) {
+      // High similarity but not exact match = likely contradicting/superseding
+      const conflict = detectConflict(newContent, mem.content, sim);
+      if (conflict.isConflict) {
+        db.expireMemory(mem.id);
+        expired.push(mem.id);
+      }
+    }
+  }
+
+  return { expired, reason: expired.length > 0 ? `auto-expired ${expired.length} contradicting memories` : "no contradictions" };
+}
+
+// ── Privacy helper (re-exported for tools) ─────────────
+
+export { sanitizeContent } from "./config.js";
