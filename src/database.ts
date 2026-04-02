@@ -861,6 +861,15 @@ export function createDatabase(dbPath: string): AmemDatabase {
     // ── Full-text search ─────────────────────────────────────
     fullTextSearch(query: string, limit = 20, scopeProject?: string): Memory[] {
       try {
+        // Sanitize query for FTS5: quote each token to prevent column prefix
+        // interpretation (e.g. "partner:" being parsed as column "partner")
+        const sanitized = query
+          .replace(/["\u201C\u201D]/g, "") // strip existing quotes
+          .split(/\s+/)
+          .filter(Boolean)
+          .map(token => `"${token.replace(/:/g, "")}"`) // quote tokens, strip colons
+          .join(" ");
+        if (!sanitized) throw new Error("empty query after sanitization");
         if (scopeProject) {
           const stmt = db.prepare(`
             SELECT memories.* FROM memories_fts
@@ -869,7 +878,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
             ORDER BY rank
             LIMIT ?
           `);
-          const rows = stmt.all(query, scopeProject, limit) as MemoryRow[];
+          const rows = stmt.all(sanitized, scopeProject, limit) as MemoryRow[];
           return rows.map(rowToMemory);
         }
         const stmt = db.prepare(`
@@ -879,7 +888,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
           ORDER BY rank
           LIMIT ?
         `);
-        const rows = stmt.all(query, limit) as MemoryRow[];
+        const rows = stmt.all(sanitized, limit) as MemoryRow[];
         return rows.map(rowToMemory);
       } catch (error) {
         // FTS may fail on complex queries — fall back to LIKE
