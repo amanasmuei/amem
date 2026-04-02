@@ -82,9 +82,11 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
   if (pipelineLoading) return pipelineLoading;
 
   pipelineLoading = (async () => {
-    const LOAD_TIMEOUT_MS = 30000;
+    const LOAD_TIMEOUT_MS = 120000;
 
     async function attemptLoad(): Promise<FeatureExtractor | null> {
+      console.error("[amem] Loading embedding model — this may take a moment on first run (downloading model)...");
+      const startTime = Date.now();
       const loadPromise = (async () => {
         const { loadConfig } = await import("./config.js");
         const config = loadConfig();
@@ -95,21 +97,31 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractor | null> {
         ) as unknown as FeatureExtractor;
       })();
 
-      return await Promise.race([
-        loadPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)),
-      ]);
+      // Log progress so the user knows we're still working
+      const progressInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        console.error(`[amem] Still loading embedding model... (${elapsed}s elapsed)`);
+      }, 15000);
+
+      try {
+        return await Promise.race([
+          loadPromise,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), LOAD_TIMEOUT_MS)),
+        ]);
+      } finally {
+        clearInterval(progressInterval);
+      }
     }
 
     try {
       const result = await attemptLoad();
       if (result) {
         pipelineInstance = result;
-  
+        console.error("[amem] Embedding model loaded — semantic search enabled");
         return pipelineInstance;
       }
 
-      console.error("[amem] Embedding model load timed out — using keyword matching");
+      console.error("[amem] Embedding model load timed out after 120s — using keyword matching. Try running again once download completes.");
       return null;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
