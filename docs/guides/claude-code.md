@@ -1,6 +1,6 @@
 # amem + Claude Code — Integration Guide
 
-The deepest amem integration. Plugin install gives you 28 MCP tools, 15 AI skills, lifecycle hooks, and auto-memory sync.
+The deepest amem integration. Plugin install gives you 28 MCP tools, 14 AI skills, lifecycle hooks, and auto-memory sync.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Done. Everything is auto-configured.
 | Component | Description |
 |-----------|-------------|
 | **28 MCP tools** | Store, recall, search, patch, expire, relate, and more |
-| **15 AI skills** | `remember`, `recall`, `context`, `sync`, `dashboard`, `stats`, `doctor`, `export`, `list`, `init`, `rules`, `hooks`, `team-import`, `team-export` |
+| **14 AI skills** | `remember`, `recall`, `context`, `sync`, `dashboard`, `stats`, `doctor`, `export`, `list`, `init`, `rules`, `hooks`, `team-import`, `team-export` |
 | **Lifecycle hooks** | PostToolUse (auto-captures tool observations), Stop (auto-summarizes sessions) |
 | **CLAUDE.md** | Injected every session — teaches the AI to use amem proactively |
 | **Auto-memory sync** | Import Claude's built-in auto-memory into amem for unified access |
@@ -97,6 +97,8 @@ Opens at `localhost:3333` with interactive knowledge graph, memory browser, and 
 | `amem:init` | Auto-configure AI tools |
 | `amem:rules` | Generate extraction rules |
 | `amem:hooks` | Install lifecycle hooks |
+| `amem:team-import` | Import team-shared memories |
+| `amem:team-export` | Export memories for team sharing |
 
 ## How Hooks Work
 
