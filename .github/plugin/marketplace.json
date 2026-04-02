@@ -1,0 +1,23 @@
+{
+  "name": "amem",
+  "owner": {
+    "name": "Aman Asmuei",
+    "email": "amanasmuei@gmail.com"
+  },
+  "metadata": {
+    "description": "Persistent memory for AI coding tools — typed, scored, temporal, searchable.",
+    "version": "0.14.0"
+  },
+  "plugins": [
+    {
+      "name": "amem",
+      "source": "./copilot",
+      "description": "28 memory tools, knowledge graph, auto-capture hooks, AI skills, privacy controls.",
+      "version": "0.14.0",
+      "keywords": ["memory", "mcp", "context", "knowledge-graph", "embeddings"],
+      "license": "MIT",
+      "homepage": "https://github.com/amanasmuei/amem",
+      "repository": "https://github.com/amanasmuei/amem"
+    }
+  ]
+}

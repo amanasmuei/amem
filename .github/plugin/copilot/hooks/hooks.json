@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node \"$(dirname \"$0\")/../scripts/ensure-deps.mjs\"",
+        "timeoutSec": 30
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"$(dirname \"$0\")/../scripts/post-tool-use.mjs\"",
+        "timeoutSec": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "node \"$(dirname \"$0\")/../scripts/session-end.mjs\"",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}
