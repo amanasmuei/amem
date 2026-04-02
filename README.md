@@ -62,6 +62,21 @@ You: "Don't use any type in TypeScript"
 
 No cloud. No API keys. Everything stays on your machine.
 
+### Compatibility
+
+| Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
+|---------|:-----------:|:------------------:|:-------------------------:|
+| One-command plugin install | Yes | Yes | — |
+| 28 MCP tools | Yes | Yes | Yes |
+| AI skills | 15 | 7 | — |
+| Auto-capture hooks | Yes | Yes | — |
+| Session auto-summarize | Yes | Yes | — |
+| Auto-memory sync | Yes | — | — |
+| CLI setup (`amem-cli init`) | Yes | Yes | Yes |
+| Extraction rules | Yes | Yes | Yes |
+
+> **Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second with plugin + hooks. **Other MCP clients** get the full 28-tool MCP server via manual config.
+
 ---
 
 ## Getting Started
@@ -81,16 +96,27 @@ That's it. You get:
 - **5 AI skills** — the AI automatically uses `amem:remember`, `amem:recall`, `amem:context`, `amem:sync`, `amem:dashboard` based on your intent
 - **CLAUDE.md** context injected every session
 
-### Option B: MCP Server (works with any MCP client)
+### Option B: GitHub Copilot CLI Plugin
 
-For Claude Code, Cursor, Windsurf, GitHub Copilot, or any MCP-compatible tool:
+```bash
+copilot plugin marketplace add amanasmuei/amem
+copilot plugin install amem
+```
+
+That's it. You get:
+- **28 MCP tools** auto-registered
+- **Lifecycle hooks** — postToolUse (captures observations) + sessionEnd (auto-summarizes)
+- **7 AI skills** — `remember`, `recall`, `context`, `stats`, `doctor`, `export`, `list`
+- **AGENTS.md** context injected every session
+
+### Option C: MCP Server (any MCP client)
+
+For Cursor, Windsurf, or any other MCP-compatible tool:
 
 ```bash
 npm install -g @aman_asmuei/amem
 amem-cli init      # Detects & configures all installed AI tools
 amem-cli rules     # Generates extraction rules for proactive memory use
-amem-cli hooks     # Installs automatic capture hooks (Claude Code only)
-amem-cli sync      # Imports Claude auto-memory into amem
 ```
 
 <details>
@@ -144,17 +170,22 @@ Start a **new** conversation and ask:
 
 It should recall the correction instantly.
 
-### AI Skills (Plugin only)
+### AI Skills
 
-The plugin includes 5 skills that the AI invokes automatically based on your intent. Just speak naturally:
+The plugin includes skills that the AI invokes automatically based on your intent:
 
-| What you say | Skill triggered | What happens |
-|---|---|---|
-| *"Remember never use any type"* | `amem:remember` | Stores as a correction with confidence 1.0 |
-| *"What do you remember about auth?"* | `amem:recall` | Searches memories with progressive disclosure |
-| *"Load context for this task"* | `amem:context` | Injects corrections, decisions, and core memories |
-| *"Sync my Claude memory"* | `amem:sync` | Imports Claude auto-memory into amem |
-| *"Open the memory dashboard"* | `amem:dashboard` | Launches web dashboard at localhost:3333 |
+| What you say | Skill | Claude Code | Copilot CLI |
+|---|---|:---:|:---:|
+| *"Remember never use any type"* | `remember` | Yes | Yes |
+| *"What do you remember about auth?"* | `recall` | Yes | Yes |
+| *"Load context for this task"* | `context` | Yes | Yes |
+| *"Show memory stats"* | `stats` | Yes | Yes |
+| *"Run memory doctor"* | `doctor` | Yes | Yes |
+| *"Export my memories"* | `export` | Yes | Yes |
+| *"List all corrections"* | `list` | Yes | Yes |
+| *"Sync my Claude memory"* | `sync` | Yes | — |
+| *"Open the memory dashboard"* | `dashboard` | Yes | — |
+| *"Install hooks"* | `hooks` | Yes | — |
 
 ---
 
@@ -681,7 +712,7 @@ amem-cli reset --confirm               # Wipe all data
 ```
 ┌──────────────────────────────────────────────┐
 │              Your AI Tool                    │
-│     Claude Code · Cursor · Windsurf · any    │
+│  Claude Code · GitHub Copilot CLI · any MCP  │
 └────────┬─────────────────────┬───────────────┘
          │ MCP Protocol        │ Lifecycle Hooks
          │ (stdio)             │ (PostToolUse, Stop)
