@@ -23,7 +23,7 @@ const AI_TOOLS: ToolConfig[] = [
   { name: "Claude Code", configDir: path.join(os.homedir(), ".claude"), configFile: "settings.json", configKey: "mcpServers" },
   { name: "Cursor", configDir: path.join(os.homedir(), ".cursor"), configFile: "mcp.json", configKey: "mcpServers" },
   { name: "Windsurf", configDir: path.join(os.homedir(), ".windsurf"), configFile: "mcp.json", configKey: "mcpServers" },
-  { name: "GitHub Copilot CLI", configDir: path.join(os.homedir(), ".github-copilot"), configFile: "mcp.json", configKey: "mcpServers" },
+  { name: "GitHub Copilot CLI", configDir: path.join(os.homedir(), ".copilot"), configFile: "mcp-config.json", configKey: "mcpServers" },
 ];
 
 interface RulesTarget {
@@ -37,7 +37,7 @@ const RULES_TARGETS: RulesTarget[] = [
   { name: "Claude Code", configDir: path.join(os.homedir(), ".claude"), rulesFile: "CLAUDE.md" },
   { name: "Cursor", configDir: path.join(os.homedir(), ".cursor"), rulesFile: ".cursorrules" },
   { name: "Windsurf", configDir: path.join(os.homedir(), ".windsurf"), rulesFile: ".windsurfrules" },
-  { name: "GitHub Copilot", configDir: path.join(os.homedir(), ".github-copilot"), rulesFile: ".github/copilot-instructions.md", dirInProject: true },
+  { name: "GitHub Copilot", configDir: path.join(os.homedir(), ".copilot"), rulesFile: ".github/copilot-instructions.md", dirInProject: true },
 ];
 
 function getFlag(args: string[], long: string, short: string): string | undefined {
