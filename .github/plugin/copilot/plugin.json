@@ -1,0 +1,15 @@
+{
+  "name": "amem",
+  "description": "Persistent memory layer for AI — typed, scored, temporal, searchable. 28 MCP tools with knowledge graph, auto-capture hooks, and privacy controls.",
+  "version": "0.14.0",
+  "author": {
+    "name": "Aman Asmuei"
+  },
+  "homepage": "https://github.com/amanasmuei/amem",
+  "repository": "https://github.com/amanasmuei/amem",
+  "license": "MIT",
+  "keywords": ["memory", "mcp", "context", "knowledge-graph", "embeddings", "sqlite"],
+  "skills": "skills/",
+  "hooks": "hooks/hooks.json",
+  "mcpServers": ".mcp.json"
+}
