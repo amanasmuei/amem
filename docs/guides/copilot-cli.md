@@ -84,14 +84,14 @@ Copilot runs: `memory_inject` → `reminder_check` → core tier → `memory_con
 | Feature | Claude Code | Copilot CLI |
 |---------|:-----------:|:-----------:|
 | MCP tools | 28 | 28 |
-| AI skills | 15 | 7 |
+| AI skills | 14 | 7 |
 | Auto-capture hooks | Yes | Yes |
 | Session summarize | Yes | Yes |
 | Auto-memory sync | Yes | — |
 | Dashboard skill | Yes | — |
 | Plugin marketplace | Yes | Yes |
 
-The 8 extra Claude Code skills are Claude-specific features (sync, hooks, init, rules, dashboard, team-import, team-export) or available via CLI commands.
+The 7 extra Claude Code skills are Claude-specific features (sync, hooks, init, rules, dashboard, team-import, team-export) or available via CLI commands.
 
 ## CLI Commands (Work Everywhere)
 

@@ -68,7 +68,7 @@ No cloud. No API keys. Everything stays on your machine.
 |---------|:-----------:|:------------------:|:-------------------------:|
 | One-command plugin install | Yes | Yes | — |
 | 28 MCP tools | Yes | Yes | Yes |
-| AI skills | 15 | 7 | — |
+| AI skills | 14 | 7 | — |
 | Auto-capture hooks | Yes | Yes | — |
 | Session auto-summarize | Yes | Yes | — |
 | Auto-memory sync | Yes | — | — |
@@ -93,7 +93,7 @@ One command — gives you MCP tools + lifecycle hooks + slash commands + auto-co
 That's it. You get:
 - **28 MCP tools** auto-registered
 - **Lifecycle hooks** — PostToolUse (captures observations) + Stop (auto-summarizes sessions)
-- **5 AI skills** — the AI automatically uses `amem:remember`, `amem:recall`, `amem:context`, `amem:sync`, `amem:dashboard` based on your intent
+- **14 AI skills** — `remember`, `recall`, `context`, `sync`, `dashboard`, `stats`, `doctor`, `export`, `list`, `init`, `rules`, `hooks`, `team-import`, `team-export`
 - **CLAUDE.md** context injected every session
 
 ### Option B: GitHub Copilot CLI Plugin
