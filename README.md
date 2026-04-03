@@ -22,36 +22,42 @@
 
 <p align="center">
   Tell your AI something once — it remembers across Claude Code, GitHub Copilot, Cursor, Windsurf, and any MCP client.<br/>
-  Local-first &middot; Semantic search &middot; Temporal validity &middot; Privacy-aware &middot; No cloud required.
+  Local-first &middot; Semantic search &middot; Knowledge graph &middot; Privacy-aware &middot; No cloud required.
 </p>
 
+<br/>
+
+<table align="center">
+  <tr>
+    <td><strong>72% Recall@5</strong><br/><sub>Semantic accuracy</sub></td>
+    <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
+    <td><strong>28 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
+    <td><strong>357 tests</strong><br/><sub>All passing</sub></td>
+  </tr>
+</table>
+
+<br/>
+
 <p align="center">
-  <a href="#-getting-started">Getting Started</a> &bull;
+  <a href="#-quick-start">Quick Start</a> &bull;
   <a href="#-how-it-works">How It Works</a> &bull;
-  <a href="#-features">Features</a> &bull;
-  <a href="#%EF%B8%8F-tools-reference">Tools</a> &bull;
+  <a href="#-benchmarks">Benchmarks</a> &bull;
+  <a href="#-tools-reference">Tools</a> &bull;
   <a href="#-usage-guide">Usage Guide</a> &bull;
-  <a href="#-architecture">Architecture</a> &bull;
-  <a href="#-contributing">Contributing</a>
+  <a href="#-architecture">Architecture</a>
 </p>
 
 ---
 
-## The Problem
+## Why amem?
 
-You use Claude Code at work, Copilot on side projects, Cursor when pairing. Each tool starts from zero — every session, every tool.
+Every AI tool starts from zero. Every session. Every tool.
 
 > *"Don't use `any` in TypeScript"* — told Claude three times. Copilot still doesn't know.
 >
 > *"We chose PostgreSQL over MongoDB"* — explained in Cursor. Claude has no idea.
->
-> *"I prefer early returns and pnpm"* — repeated in every tool. Every session.
 
-**Your preferences, decisions, and corrections are trapped inside each tool's memory silo.**
-
-## The Solution
-
-**amem** gives all your AI tools a shared, persistent memory. Tell it once — every tool remembers.
+**amem** gives all your AI tools a shared, persistent memory.
 
 ```
 You (in Claude Code):  "Don't use any type in TypeScript"
@@ -63,56 +69,37 @@ You (switch to Copilot): starts coding
 
 No cloud. No API keys. Everything stays on your machine.
 
-### Compatibility
-
-| Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
-|---------|:-----------:|:------------------:|:-------------------------:|
-| One-command plugin install | Yes | Yes | — |
-| 28 MCP tools | Yes | Yes | Yes |
-| AI skills | 14 | 7 | — |
-| Auto-capture hooks | Yes | Yes | — |
-| Session auto-summarize | Yes | Yes | — |
-| Auto-memory sync | Yes | — | — |
-| CLI setup (`amem-cli init`) | Yes | Yes | Yes |
-| Extraction rules | Yes | Yes | Yes |
-
-> **Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second with plugin + hooks. **Other MCP clients** get the full 28-tool MCP server via manual config.
-
 ---
 
-## Getting Started
+## Quick Start
 
-### Option A: Claude Code Plugin (recommended for Claude Code users)
+<table>
+<tr>
+<td width="50%">
 
-One command — gives you MCP tools + lifecycle hooks + slash commands + auto-config:
+**Claude Code** (recommended)
 
 ```bash
 /plugin marketplace add amanasmuei/amem
 /plugin install amem
 ```
 
-That's it. You get:
-- **28 MCP tools** auto-registered
-- **Lifecycle hooks** — PostToolUse (captures observations) + Stop (auto-summarizes sessions)
-- **14 AI skills** — `remember`, `recall`, `context`, `sync`, `dashboard`, `stats`, `doctor`, `export`, `list`, `init`, `rules`, `hooks`, `team-import`, `team-export`
-- **CLAUDE.md** context injected every session
+</td>
+<td width="50%">
 
-### Option B: GitHub Copilot CLI Plugin
+**GitHub Copilot CLI**
 
 ```bash
 copilot plugin marketplace add amanasmuei/amem
 copilot plugin install amem
 ```
 
-That's it. You get:
-- **28 MCP tools** auto-registered
-- **Lifecycle hooks** — postToolUse (captures observations) + sessionEnd (auto-summarizes)
-- **7 AI skills** — `remember`, `recall`, `context`, `stats`, `doctor`, `export`, `list`
-- **AGENTS.md** context injected every session
+</td>
+</tr>
+</table>
 
-### Option C: MCP Server (any MCP client)
-
-For Cursor, Windsurf, or any other MCP-compatible tool:
+<details>
+<summary><strong>Cursor / Windsurf / Any MCP Client</strong></summary>
 
 ```bash
 npm install -g @aman_asmuei/amem
@@ -120,27 +107,8 @@ amem-cli init      # Detects & configures all installed AI tools
 amem-cli rules     # Generates extraction rules for proactive memory use
 ```
 
-<details>
-<summary><strong>What does each command do?</strong></summary>
+Or configure manually:
 
-| Command | What it does |
-|---|---|
-| `amem-cli init` | Finds your installed AI tools and adds amem to their MCP server config. Works with Claude Code, Cursor, Windsurf, and GitHub Copilot. |
-| `amem-cli rules` | Writes extraction guidelines to your tool's rules file (`CLAUDE.md`, `.cursorrules`, etc.). Teaches the AI *when* and *how* to store memories. |
-| `amem-cli hooks` | Installs Claude Code lifecycle hooks for passive capture (PostToolUse + Stop). |
-| `amem-cli sync` | Imports Claude Code auto-memory files into amem for unified structured access. |
-
-</details>
-
-<details>
-<summary><strong>Manual MCP configuration</strong></summary>
-
-**Claude Code:**
-```bash
-claude mcp add amem -- npx -y @aman_asmuei/amem
-```
-
-**Cursor / Windsurf / Other MCP Clients:**
 ```json
 {
   "mcpServers": {
@@ -154,184 +122,109 @@ claude mcp add amem -- npx -y @aman_asmuei/amem
 
 </details>
 
-### Verify Installation
+**Verify it works:**
 
 ```bash
-amem-cli stats       # Should show "0 memories" initially
-amem-cli dashboard   # Opens web dashboard at localhost:3333
+amem-cli stats     # Should show "0 memories" initially
 ```
 
-Start a conversation and tell your AI:
+Tell your AI: *"Remember: always use strict TypeScript, never use any type"*
 
-> *"Remember: always use strict TypeScript, never use any type"*
-
-Start a **new** conversation and ask:
-
-> *"What do you remember about TypeScript?"*
-
-It should recall the correction instantly.
-
-### AI Skills
-
-The plugin includes skills that the AI invokes automatically based on your intent:
-
-| What you say | Skill | Claude Code | Copilot CLI |
-|---|---|:---:|:---:|
-| *"Remember never use any type"* | `remember` | Yes | Yes |
-| *"What do you remember about auth?"* | `recall` | Yes | Yes |
-| *"Load context for this task"* | `context` | Yes | Yes |
-| *"Show memory stats"* | `stats` | Yes | Yes |
-| *"Run memory doctor"* | `doctor` | Yes | Yes |
-| *"Export my memories"* | `export` | Yes | Yes |
-| *"List all corrections"* | `list` | Yes | Yes |
-| *"Sync my Claude memory"* | `sync` | Yes | — |
-| *"Open the memory dashboard"* | `dashboard` | Yes | — |
-| *"Install hooks"* | `hooks` | Yes | — |
+Start a **new** session: *"What do you remember about TypeScript?"* — it recalls instantly.
 
 ---
 
 ## How It Works
 
-amem captures knowledge in **three ways** — you choose how hands-on you want to be:
+amem captures knowledge in **three layers** — from fully automatic to fully manual:
 
-### 1. Automatic (zero effort)
+| Layer | How | What it does |
+|---|---|---|
+| **Automatic** | Lifecycle hooks | Captures tool observations, auto-extracts corrections/decisions/patterns at session end |
+| **AI-driven** | Extraction rules | Your AI proactively calls `memory_store` when you correct it, make decisions, or express preferences |
+| **Manual** | Natural language | *"Remember: we use PostgreSQL"* or *"Forget the Redis memory"* |
 
-With hooks installed (`amem-cli hooks`), amem passively:
-- Logs significant tool calls via the **PostToolUse** hook
-- Auto-summarizes sessions on exit via the **Stop** hook
-- Auto-extracts corrections, decisions, preferences, and patterns using heuristic detection
+### Memory Types
 
-### 2. Proactive (AI-driven)
+| Priority | Type | Example |
+|:---:|---|---|
+| **1.0** | **correction** | *"Don't mock the DB in integration tests"* |
+| **0.85** | **decision** | *"Chose Postgres over Mongo for ACID"* |
+| **0.7** | **pattern** | *"Prefers early returns over nesting"* |
+| **0.7** | **preference** | *"Uses pnpm, not npm"* |
+| **0.5** | **topology** | *"Auth module lives in src/auth/"* |
+| **0.4** | **fact** | *"API launched January 2025"* |
 
-With rules installed (`amem-cli rules`), your AI will:
-- Call `memory_inject` at session start to load corrections & decisions
-- Call `memory_extract` every ~10 exchanges to batch-save insights
-- Call `memory_store` when you correct it or make a decision
-- Call `reminder_check` to surface overdue reminders
-
-### 3. Manual (you decide)
-
-You can always tell your AI directly:
-- *"Store this as a correction: never mock the database in integration tests"*
-- *"What do you remember about our auth architecture?"*
-- *"Forget the memory about Redis — we switched to Memcached"*
-- *"Promote that correction to core tier so it's always loaded"*
-
----
-
-## Memory Types
-
-Memories are scored and prioritized automatically:
-
-| Priority | Type | When to use | Example |
-|:---:|---|---|---|
-| `1.0` | **correction** | User corrects the AI | *"Don't mock the DB in integration tests"* |
-| `0.85` | **decision** | Architecture/design choice made | *"Chose Postgres over Mongo for ACID"* |
-| `0.7` | **pattern** | Recurring coding style | *"Prefers early returns over nesting"* |
-| `0.7` | **preference** | Tool or workflow choice | *"Uses pnpm, not npm"* |
-| `0.5` | **topology** | Codebase structure | *"Auth module lives in src/auth/"* |
-| `0.4` | **fact** | General project knowledge | *"API launched January 2025"* |
-
-> **Corrections always surface first.** They are your AI's hard constraints — the things it must never get wrong again.
+Corrections always surface first — they are your AI's hard constraints.
 
 ### Memory Tiers
 
-Memories live in one of three tiers:
-
-| Tier | Behavior | Use for |
-|---|---|---|
-| **Core** | Always injected at session start (~500 tokens max) | Your most critical corrections and decisions |
-| **Working** | Session-scoped, auto-surfaced for current task | Context relevant to what you're doing now |
-| **Archival** | Searchable but not auto-injected (default) | Everything else — the long-term store |
+| Tier | Behavior |
+|---|---|
+| **Core** | Always injected at session start (~500 tokens). Your most critical corrections. |
+| **Working** | Session-scoped, auto-surfaced for current task. |
+| **Archival** | Default. Searchable but not auto-injected. |
 
 ### Temporal Validity
 
 Memories aren't forever. When facts change:
 - Old memories get **expired** (not deleted) — preserved for *"what was true in March?"*
-- Contradictions are **auto-detected** — storing a new decision auto-expires the conflicting old one
-- You can query any point in time with `memory_since`
+- Contradictions are **auto-detected** — storing a new decision auto-expires the old one
+- Query any point in time with `memory_since`
 
 ---
 
-## Features
+## Benchmarks
 
-### v0.18.0 — Progressive Disclosure & Scale
+### Recall Accuracy
 
-| Feature | Description |
-|---|---|
-| HNSW vector index | Replaced brute-force with HNSW (hnswlib-node) — sub-50ms search at 10k+ memories |
-| Progressive disclosure | `compact` mode is now default on `memory_recall`, `memory_multi_recall`, `memory_search` — ~10x token savings |
-| DB repair CLI | `amem-cli repair` detects corruption, auto-restores from backups |
-| Concurrent access safety | WAL mode validated for multi-tool access (Claude Code + Copilot + Cursor simultaneously) |
-| Conversation extractor | Heuristic pattern detection auto-extracts corrections, decisions, preferences from session conversations |
-| Session-end auto-extraction | Stop hook now auto-stores detected memories with content-hash dedup |
+<table>
+<tr>
+<td>
 
-### v0.13.0 — World-Class Recall
+| Strategy | Recall@5 | MRR |
+|---|---|---|
+| FTS5 keyword only | 31.3% | 31.3% |
+| **Semantic** (default) | **72.4%** | **82.5%** |
+| **Multi-strategy** | **74.5%** | **76.2%** |
+| + reranking (opt-in) | ~80%+ | ~85%+ |
 
-| Feature | Description |
-|---|---|
-| Upgraded embedding model | `bge-small-en-v1.5` — better MTEB retrieval scores, same 384-dim |
-| Additive weighted scoring | Fair ranking — no single low factor kills the score |
-| Query expansion | Dev-domain synonyms (`auth` → `authentication`, `login`, `session`) + stemming |
-| Auto-relate | New memories automatically link to similar ones — graph builds itself |
-| Graph-aware injection | `memory_inject` surfaces 1-hop knowledge graph neighbors |
-| In-memory vector index | Pre-loaded vectors for fast semantic search (vs SQLite BLOB scan) |
-| `amem doctor` | Health diagnostics CLI — embedding coverage, core budget, stale memories |
-| Cross-session continuity | `amem://last-session` resource for previous session summary |
-| CI benchmarks | Recall regression detection in CI pipeline |
+</td>
+<td>
 
-<details>
-<summary><strong>View all features across versions</strong></summary>
+Corpus: 34 developer memories, 16 queries, 5 graph edges.
 
-### v0.12.0
-- Passive capture and auto-injection
-- Dashboard timeline
-- Auto-recover corrupted embedding cache
-- Team sync foundation (import/export — full team sync is on the roadmap)
+Reproduce: `npx vitest run benchmarks/`
 
-### v0.9.x — The Temporal Intelligence Release
-- Temporal validity (`valid_from`/`valid_until`) — facts expire, history preserved
-- Auto-expire contradicting memories on store
-- Multi-strategy retrieval: semantic + FTS5 + knowledge graph + temporal recency
-- Cross-encoder reranking (optional 2nd-pass for highest accuracy)
-- Memory tiers: core (always loaded) / working (session) / archival (searchable)
-- Privacy tags `<private>...</private>` stripped; API keys auto-redacted
-- Lifecycle hooks for passive observation
-- Session summaries with key decisions and corrections
-- Interactive dashboard with drag-and-drop graph, memory editing, export
-- Config system (`~/.amem/config.json`)
-- Benchmark suite (Recall@K / MRR / Precision)
+**Default: 72% Recall@5, 82% MRR** with local embeddings. Degrades gracefully to keyword matching (~31%) before model downloads.
 
-### v0.8.0
-- `amem init` — auto-configure all AI tools in one command
-- `amem rules` — generate extraction rules
-- `amem dashboard` — web-based memory browser
+</td>
+</tr>
+</table>
 
-### v0.7.0
-- Memory import/export with content-hash dedup
-- Confidence decay for stale memories
-- Embedding cache (LRU, 128 entries)
-- Multi-process safe database
+### Search Latency — HNSW Vector Index
 
-### v0.5.x
-- Progressive disclosure (`compact` mode, ~10x token savings)
-- Persistent cross-session reminders with deadlines
+<table>
+<tr>
+<td>
 
-### v0.4.0
-- Lossless conversation log (append-only)
-- Surgical patch system with version history
-- Knowledge graph with typed relations
-- Temporal queries with natural language ranges
-- Full-text search (FTS5)
+| Memories | HNSW | Brute-force | Speedup |
+|---|---|---|---|
+| 100 | 0.05ms | 0.10ms | 2x |
+| 1,000 | 0.06ms | 0.50ms | **8x** |
+| 5,000 | 0.08ms | 2.44ms | **30x** |
+| 10,000 | 0.08ms | 5.35ms | **67x** |
 
-### v0.1.0 — v0.3.0
-- Core store/recall with semantic search
-- Local embeddings (HuggingFace)
-- SQLite + WAL persistence
-- Memory consolidation engine
-- Project-aware scoping
+</td>
+<td>
 
-</details>
+Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
+
+**Sub-0.1ms at any scale** — effectively O(log n). HNSW is an optional dependency; brute-force is used as fallback when unavailable.
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -341,143 +234,123 @@ Memories aren't forever. When facts change:
 
 | Tool | Description |
 |---|---|
-| `memory_store` | Store a memory with type, tags, confidence. Auto-redacts private content and auto-expires contradictions. |
-| `memory_recall` | Semantic search with `compact` mode for progressive disclosure (~10x token savings) |
-| `memory_detail` | Retrieve full content by ID after compact recall |
-| `memory_context` | Load all relevant context for a topic, organized by type |
-| `memory_extract` | Batch-save multiple memories from conversation |
-| `memory_forget` | Delete by ID or query (with confirmation) |
-| `memory_inject` | Surface corrections + decisions before coding starts |
+| `memory_store` | Store a memory with type, tags, confidence. Auto-redacts private content, auto-expires contradictions. |
+| `memory_recall` | Semantic search — compact mode by default (~10x token savings). Use `memory_detail` for full content. |
+| `memory_detail` | Retrieve full content by ID after compact recall. |
+| `memory_context` | Load all relevant context for a topic, organized by type with token budgeting. |
+| `memory_extract` | Batch-save multiple memories from conversation. |
+| `memory_forget` | Delete by ID or query (with confirmation). |
+| `memory_inject` | Surface corrections + decisions + graph neighbors before coding starts. |
+
+<details>
+<summary><strong>Precision, History, Advanced, Reminders, and Maintenance tools (21 more)</strong></summary>
 
 ### Precision & History (5 tools)
 
 | Tool | Description |
 |---|---|
-| `memory_patch` | Surgical field-level edit with auto-snapshot |
-| `memory_versions` | View full edit history or restore any version |
-| `memory_search` | Exact full-text search via FTS5 with `compact` mode |
-| `memory_since` | Temporal query with natural language ranges (`7d`, `2w`, `1h`) |
-| `memory_relate` | Build a typed knowledge graph between memories |
+| `memory_patch` | Surgical field-level edit with auto-snapshot. |
+| `memory_versions` | View full edit history or restore any version. |
+| `memory_search` | Exact full-text search via FTS5 with compact mode. |
+| `memory_since` | Temporal query with natural language ranges (`7d`, `2w`, `1h`). |
+| `memory_relate` | Build a typed knowledge graph between memories. |
 
 ### Advanced (5 tools)
 
 | Tool | Description |
 |---|---|
-| `memory_multi_recall` | Multi-strategy search with `compact` mode: semantic + FTS5 + graph + temporal |
-| `memory_tier` | Move memories between tiers: core / working / archival |
-| `memory_expire` | Mark as no longer valid — preserved for history, excluded from recall |
-| `memory_summarize` | Store structured session summary with decisions, corrections, metrics |
-| `memory_history` | View past session summaries |
+| `memory_multi_recall` | Multi-strategy search with compact mode: semantic + FTS5 + graph + temporal. |
+| `memory_tier` | Move memories between tiers: core / working / archival. |
+| `memory_expire` | Mark as no longer valid — preserved for history, excluded from recall. |
+| `memory_summarize` | Store structured session summary with decisions, corrections, metrics. |
+| `memory_history` | View past session summaries. |
 
 ### Reminders (4 tools)
 
 | Tool | Description |
 |---|---|
-| `reminder_set` | Create reminder with optional deadline and scope |
-| `reminder_list` | List active (or all) reminders, filterable by scope |
-| `reminder_check` | Show overdue, today, and upcoming (7 days) |
-| `reminder_complete` | Mark as done (supports partial ID) |
+| `reminder_set` | Create reminder with optional deadline and scope. |
+| `reminder_list` | List active (or all) reminders, filterable by scope. |
+| `reminder_check` | Show overdue, today, and upcoming (7 days). |
+| `reminder_complete` | Mark as done (supports partial ID). |
 
 ### Log & Maintenance (7 tools)
 
 | Tool | Description |
 |---|---|
-| `memory_log` | Append raw conversation turns (lossless, append-only) |
-| `memory_log_recall` | Search or replay log by session, keyword, or recency |
-| `memory_log_cleanup` | Prune old entries with configurable retention |
-| `memory_stats` | Counts, type breakdown, confidence distribution |
-| `memory_export` | Export as Markdown or JSON |
-| `memory_import` | Bulk import from JSON with automatic dedup |
-| `memory_consolidate` | Merge duplicates, prune stale, promote frequent, decay idle |
+| `memory_log` | Append raw conversation turns (lossless, append-only). |
+| `memory_log_recall` | Search or replay log by session, keyword, or recency. |
+| `memory_log_cleanup` | Prune old entries with configurable retention. |
+| `memory_stats` | Counts, type breakdown, confidence distribution. |
+| `memory_export` | Export as Markdown or JSON. |
+| `memory_import` | Bulk import from JSON with automatic dedup. |
+| `memory_consolidate` | Merge duplicates, prune stale, promote frequent, decay idle. |
+
+</details>
 
 ---
 
 ## Usage Guide
 
-### Starting a Session
-
-Your AI will automatically load context if rules are installed. You can also ask:
-
-> *"Load context for authentication"*
-> *"What corrections do you have for this project?"*
-> *"Check my reminders"*
-
 ### Storing Memories
 
-<details open>
-<summary><strong>Natural language (easiest)</strong></summary>
+<table>
+<tr>
+<td width="50%">
 
-Just tell your AI:
+**Natural language** (easiest)
 
 ```
 "Remember: we use PostgreSQL, not MongoDB"
 "Store a correction: never use console.log in production"
-"Note that the auth module is in src/auth/ and uses JWT"
+"Note that the auth module is in src/auth/"
 ```
 
-</details>
+</td>
+<td width="50%">
 
-<details>
-<summary><strong>Explicit tool calls</strong></summary>
+**Explicit tool calls**
 
 ```js
-// Store a correction — highest priority
 memory_store({
-  content: "Never use 'any' type — always define proper interfaces",
+  content: "Never use 'any' — define proper interfaces",
   type: "correction",
-  tags: ["typescript", "types"],
+  tags: ["typescript"],
   confidence: 1.0
-})
-
-// Batch extract from conversation
-memory_extract({
-  memories: [
-    { content: "Uses pnpm, not npm", type: "preference", tags: ["tooling"], confidence: 0.9 },
-    { content: "Auth uses OAuth2 with PKCE", type: "decision", tags: ["auth"], confidence: 0.9 },
-  ]
 })
 ```
 
-</details>
+</td>
+</tr>
+</table>
 
 ### Recalling Memories
-
-<details open>
-<summary><strong>Progressive disclosure (recommended)</strong></summary>
 
 ```js
 // Step 1: Compact index — ~50-100 tokens (default)
 memory_recall({ query: "auth decisions", limit: 5 })
-// → a1b2c3d4 [decision] Auth service uses JWT tokens... (92%)
-// → e5f6g7h8 [correction] Never store tokens in localStorage... (100%)
+// -> a1b2c3d4 [decision] Auth service uses JWT tokens... (92%)
+// -> e5f6g7h8 [correction] Never store tokens in localStorage... (100%)
 
-// Step 2: Full details only for what you need — ~500 tokens
+// Step 2: Full details only for what you need
 memory_detail({ ids: ["a1b2c3d4", "e5f6g7h8"] })
 ```
 
-</details>
-
 <details>
-<summary><strong>Multi-strategy search (most thorough)</strong></summary>
+<summary><strong>More search options</strong></summary>
 
 ```js
-// Combines 4 strategies: semantic + FTS5 + graph traversal + temporal
+// Multi-strategy: semantic + FTS5 + graph + temporal
 memory_multi_recall({
   query: "authentication architecture",
   limit: 10,
   weights: { semantic: 0.4, fts: 0.3, graph: 0.15, temporal: 0.15 }
 })
-```
 
-</details>
-
-<details>
-<summary><strong>Exact keyword search</strong></summary>
-
-```js
-memory_search({ query: "OAuth PKCE" })           // exact terms
-memory_search({ query: '"event sourcing"' })      // phrase match
-memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
+// Exact keyword search (FTS5 syntax)
+memory_search({ query: "OAuth PKCE" })
+memory_search({ query: '"event sourcing"' })     // phrase match
+memory_search({ query: "auth* NOT legacy" })      // boolean
 ```
 
 </details>
@@ -485,81 +358,23 @@ memory_search({ query: "auth* NOT legacy" })      // FTS5 boolean syntax
 ### Managing Memories
 
 <details>
-<summary><strong>Edit a memory (surgical, versioned)</strong></summary>
+<summary><strong>Edit, expire, promote, link</strong></summary>
 
 ```js
-// Patch a single field — auto-snapshots for rollback
-memory_patch({
-  id: "a1b2c3d4",
-  field: "content",
-  value: "Never use 'any' — use interfaces or 'unknown'",
-  reason: "added unknown guidance"
-})
+// Surgical edit with auto-snapshot for rollback
+memory_patch({ id: "a1b2c3d4", field: "content", value: "Updated text", reason: "clarified" })
 
-// View history
+// View edit history / restore
 memory_versions({ memory_id: "a1b2c3d4" })
 
-// Restore a previous version
-memory_versions({ memory_id: "a1b2c3d4", restore_version_id: "v1b2c3d4" })
-```
+// Expire (preserve for history, exclude from recall)
+memory_expire({ id: "a1b2c3d4", reason: "Migrated to GraphQL" })
 
-</details>
-
-<details>
-<summary><strong>Expire outdated memories</strong></summary>
-
-```js
-// Mark as expired — preserved for history, excluded from recall
-memory_expire({ id: "a1b2c3d4", reason: "Migrated from REST to GraphQL" })
-
-// Store the replacement — contradictions are also auto-detected
-memory_store({
-  content: "API uses GraphQL with Apollo Server",
-  type: "decision",
-  tags: ["api", "graphql"],
-  confidence: 0.9
-})
-
-// Query what was true at a specific time
-memory_since({ since: "2025-01-01", until: "2025-03-01", type: "decision" })
-```
-
-</details>
-
-<details>
-<summary><strong>Promote to core tier</strong></summary>
-
-```js
-// Core memories are always injected at session start
+// Promote to core tier (always loaded at session start)
 memory_tier({ id: "a1b2c3d4", tier: "core" })
 
-// List all core memories
-memory_tier({ tier: "core", action: "list" })
-
-// Demote back to archival
-memory_tier({ id: "a1b2c3d4", tier: "archival" })
-```
-
-</details>
-
-### Knowledge Graph
-
-> **New in v0.13.0:** The graph builds itself. When you store a memory, amem automatically finds and links the top-3 most similar existing memories. You can also link manually:
-
-<details>
-<summary><strong>Link related memories</strong></summary>
-
-```js
-memory_relate({
-  action: "relate",
-  from_id: "decision-abc",
-  to_id: "pattern-xyz",
-  relation_type: "supports",
-  strength: 0.9
-})
-
-// View all connections for a memory
-memory_relate({ action: "graph", memory_id: "decision-abc" })
+// Link related memories (graph builds itself, but you can add manual links)
+memory_relate({ action: "relate", from_id: "abc", to_id: "xyz", relation_type: "supports" })
 ```
 
 Relation types: `supports`, `contradicts`, `depends_on`, `supersedes`, `related_to`, `caused_by`, `implements` — or define your own.
@@ -572,17 +387,12 @@ Relation types: `supports`, `contradicts`, `depends_on`, `supersedes`, `related_
 <summary><strong>Cross-session deadline tracking</strong></summary>
 
 ```js
-reminder_set({
-  content: "Review PR #42",
-  due_at: 1743033600000,
-  scope: "global"
-})
+reminder_set({ content: "Review PR #42", due_at: 1743033600000, scope: "global" })
 
-// Check what's due (your AI does this automatically at session start)
 reminder_check({})
-// → [OVERDUE] Review PR #42
-// → [TODAY] Deploy auth service
-// → [upcoming] Write quarterly report
+// -> [OVERDUE] Review PR #42
+// -> [TODAY] Deploy auth service
+// -> [upcoming] Write quarterly report
 
 reminder_complete({ id: "a1b2c3d4" })
 ```
@@ -592,49 +402,58 @@ reminder_complete({ id: "a1b2c3d4" })
 ### Privacy
 
 <details>
-<summary><strong>Protect sensitive data</strong></summary>
+<summary><strong>Automatic redaction</strong></summary>
 
 ```js
-// Private blocks are stripped before storage
+// Private blocks stripped before storage
 memory_store({
   content: "DB password is <private>hunter2</private>, connect to prod at db.example.com",
-  type: "topology",
-  tags: ["database"]
+  type: "topology", tags: ["database"]
 })
-// Stored as: "DB password is [REDACTED], connect to prod at db.example.com"
+// Stored: "DB password is [REDACTED], connect to prod at db.example.com"
 
-// API keys, tokens, and passwords are auto-redacted by pattern matching
+// API keys, tokens, passwords auto-redacted by pattern matching
 // Configure patterns in ~/.amem/config.json
-```
-
-</details>
-
-### Session Summaries
-
-<details>
-<summary><strong>Structured session digests</strong></summary>
-
-```js
-// Summarize at session end (also done automatically by Stop hook)
-memory_summarize({
-  session_id: "sess-2025-03-25",
-  summary: "Redesigned auth flow from session tokens to JWT",
-  key_decisions: ["Use RS256 signing", "Store refresh tokens in httpOnly cookies"],
-  key_corrections: ["Don't use localStorage for tokens"],
-  memories_extracted: 7
-})
-
-// Review what happened in past sessions
-memory_history({ limit: 5 })
 ```
 
 </details>
 
 ---
 
+## Platform Compatibility
+
+| Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
+|---|:---:|:---:|:---:|
+| One-command plugin install | Yes | Yes | -- |
+| 28 MCP tools | Yes | Yes | Yes |
+| AI skills | 14 | 7 | -- |
+| Auto-capture hooks | Yes | Yes | -- |
+| Session auto-summarize | Yes | Yes | -- |
+| Auto-memory sync | Yes | -- | -- |
+| CLI setup (`amem-cli init`) | Yes | Yes | Yes |
+
+**Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second. **Other MCP clients** get the full 28-tool server via manual config.
+
+### AI Skills
+
+| What you say | Skill | Claude Code | Copilot CLI |
+|---|---|:---:|:---:|
+| *"Remember never use any type"* | `remember` | Yes | Yes |
+| *"What do you remember about auth?"* | `recall` | Yes | Yes |
+| *"Load context for this task"* | `context` | Yes | Yes |
+| *"Show memory stats"* | `stats` | Yes | Yes |
+| *"Run memory doctor"* | `doctor` | Yes | Yes |
+| *"Export my memories"* | `export` | Yes | Yes |
+| *"List all corrections"* | `list` | Yes | Yes |
+| *"Sync my Claude memory"* | `sync` | Yes | -- |
+| *"Open the memory dashboard"* | `dashboard` | Yes | -- |
+| *"Install hooks"* | `hooks` | Yes | -- |
+
+---
+
 ## Working with Claude Code Auto-Memory
 
-Claude Code has a built-in auto-memory feature that stores a flat markdown file per project. **amem is designed to complement it, not replace it.**
+amem complements Claude's built-in auto-memory — it doesn't replace it.
 
 | | Claude auto-memory | amem |
 |---|---|---|
@@ -644,20 +463,16 @@ Claude Code has a built-in auto-memory feature that stores a flat markdown file 
 | **History** | Overwritten on update | Versioned, temporal validity |
 | **Search** | None | Semantic + FTS5 + graph + reranking |
 
-### Recommended Setup: Use Both
+**Recommended:** Keep both enabled. Run `amem-cli sync` to import Claude's memories into amem for unified, structured access.
 
-1. **Keep Claude auto-memory enabled** — it captures the broad project overview automatically
-2. **Run `amem-cli sync`** — imports Claude's memories into amem for unified, structured access
-3. **amem handles the specifics** — corrections, decisions, patterns get typed, scored, and searchable
+<details>
+<summary><strong>Sync details</strong></summary>
 
 ```bash
-# Import Claude auto-memory into amem (one-time or periodic)
 amem-cli sync              # Import all projects
 amem-cli sync --dry-run    # Preview what would be imported
-amem-cli sync --project myapp  # Import specific project only
+amem-cli sync --project myapp  # Import specific project
 ```
-
-Type mapping when syncing:
 
 | Claude type | amem type | Confidence |
 |---|---|---|
@@ -666,29 +481,18 @@ Type mapping when syncing:
 | `user` | `preference` | 0.8 |
 | `reference` | `topology` | 0.7 |
 
-> When both memory sources are active, amem's MCP prompts teach the AI to prefer amem's structured recall over loading the entire auto-memory file, while respecting both sources.
+</details>
 
 ---
 
 ## Dashboard
-
-Launch the interactive web dashboard:
 
 ```bash
 amem-cli dashboard              # Opens at localhost:3333
 amem-cli dashboard --port=8080  # Custom port
 ```
 
-**Features:**
-- Memory list with search, type filter, and tier filter
-- Search term highlighting
-- Inline actions: Promote to Core, Demote, Expire
-- Export as JSON or Markdown with one click
-- Interactive knowledge graph (drag nodes, click to inspect)
-- Confidence distribution and type breakdown charts
-- Session summaries timeline
-- Reminders with status badges
-- Recent conversation log
+Memory list with search and filters, inline actions (promote, demote, expire), interactive knowledge graph, confidence charts, session timeline, reminders, and conversation log.
 
 ---
 
@@ -700,20 +504,17 @@ amem-cli init                          # Auto-configure AI tools
 amem-cli rules                         # Generate extraction rules
 amem-cli hooks                         # Install automatic capture hooks
 amem-cli hooks --uninstall             # Remove hooks
-amem-cli sync                          # Import Claude auto-memory into amem
-amem-cli sync --dry-run                # Preview sync without importing
+amem-cli sync                          # Import Claude auto-memory
 amem-cli doctor                        # Health diagnostics
 amem-cli repair                        # Repair corrupted database from backups
 
 # Dashboard
 amem-cli dashboard                     # Web dashboard (localhost:3333)
-amem-cli dashboard --port=8080         # Custom port
 
 # Memory operations
 amem-cli recall "authentication"       # Semantic search
 amem-cli stats                         # Statistics
-amem-cli list                          # List all memories
-amem-cli list --type correction        # Filter by type
+amem-cli list --type correction        # List by type
 amem-cli export --file memories.md     # Export to file
 amem-cli forget abc12345               # Delete by short ID
 amem-cli reset --confirm               # Wipe all data
@@ -724,102 +525,59 @@ amem-cli reset --confirm               # Wipe all data
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────┐
-│              Your AI Tool                    │
-│  Claude Code · GitHub Copilot CLI · any MCP  │
-└────────┬─────────────────────┬───────────────┘
-         │ MCP Protocol        │ Lifecycle Hooks
-         │ (stdio)             │ (PostToolUse, Stop)
-┌────────▼─────────────────────▼───────────────┐
-│             amem MCP Server                  │
-│                                              │
-│   28 Tools  ·  7 Resources  ·  2 Prompts    │
-│                                              │
-│   Multi-Strategy Retrieval Pipeline          │
-│   [HNSW Vector] + [FTS5] + [Graph] + [Temporal] │
-│        ↓ query expansion + cross-encoder     │
-│                                              │
-│   ┌────────────────────────────────────┐     │
-│   │  SQLite + WAL + FTS5               │     │
-│   │  ~/.amem/memory.db                 │     │
-│   │                                    │     │
-│   │  memories          (tiered+temporal│     │
-│   │  conversation_log  (lossless)      │     │
-│   │  memory_versions   (edit history)  │     │
-│   │  memory_relations  (temporal graph)│     │
-│   │  session_summaries (digests)       │     │
-│   │  reminders         (cross-session) │     │
-│   └────────────────────────────────────┘     │
-│                                              │
-│   Config: ~/.amem/config.json                │
-│   Local Embeddings (bge-small-en-v1.5, 80MB)  │
-└──────────────────────────────────────────────┘
+                        Your AI Tool
+           Claude Code / Copilot CLI / any MCP client
+                    |                |
+                    | MCP (stdio)    | Lifecycle Hooks
+                    v                v
+          +---------------------------------+
+          |        amem MCP Server          |
+          |                                 |
+          |  28 Tools . 7 Resources . 2 Prompts
+          |                                 |
+          |  Multi-Strategy Retrieval       |
+          |  [HNSW] + [FTS5] + [Graph] + [Temporal]
+          |       + query expansion         |
+          |       + cross-encoder (opt-in)  |
+          |                                 |
+          |  +---------------------------+  |
+          |  | SQLite + WAL + FTS5       |  |
+          |  | ~/.amem/memory.db         |  |
+          |  |                           |  |
+          |  | memories      (tiered)    |  |
+          |  | conversation_log (raw)    |  |
+          |  | memory_versions (history) |  |
+          |  | memory_relations (graph)  |  |
+          |  | session_summaries         |  |
+          |  | reminders                 |  |
+          |  +---------------------------+  |
+          |                                 |
+          |  Embeddings: bge-small-en-v1.5  |
+          |  Config: ~/.amem/config.json    |
+          +---------------------------------+
 ```
 
 ### Ranking Formula
 
 ```
-score = relevance × 0.45 + recency × 0.2 + confidence × 0.2 + importance × 0.15
+score = relevance x 0.45 + recency x 0.2 + confidence x 0.2 + importance x 0.15
 ```
 
 | Factor | How it works |
 |---|---|
-| **Relevance** | Cosine similarity via in-memory vector index; query-expanded keyword fallback |
+| **Relevance** | Cosine similarity via HNSW index; query-expanded keyword fallback |
 | **Recency** | Exponential decay (`0.995^hours`) |
 | **Confidence** | Reinforced by repeated confirmation (0-1) |
-| **Importance** | Type-based: corrections `1.0` → facts `0.4` |
+| **Importance** | Type-based: corrections `1.0` ... facts `0.4` |
 
-> **Additive weighted scoring** ensures no single low factor kills the ranking. A memory with low confidence but high relevance still surfaces — unlike multiplicative scoring where one zero kills everything.
-
-### Benchmark Results
-
-#### Recall Accuracy
-
-Run `npx vitest run benchmarks/` to reproduce. Corpus: 34 realistic developer memories, 16 queries (exact, paraphrased, topical), 5 graph edges.
-
-| Strategy | Recall@5 | Recall@10 | MRR | Precision@5 |
-|---|---|---|---|---|
-| FTS5-only (keyword exact) | 31.3% | 31.3% | 31.3% | --- |
-| **Semantic** (embeddings, default) | **72.4%** | **78.6%** | **82.5%** | **23.8%** |
-| **Multi-strategy** (semantic + FTS + graph + temporal) | **74.5%** | **76.6%** | **76.2%** | **25.0%** |
-| + cross-encoder reranking (opt-in) | ~80%+ | ~90%+ | ~85%+ | ~45%+ |
-
-> **Default out-of-box: 72% Recall@5, 82% MRR** with embeddings. Without embeddings (first run before model downloads), retrieval gracefully degrades to FTS5 keyword matching (~31%).
-
-#### Search Latency (HNSW Vector Index)
-
-Measured: 100 searches averaged, 384-dim embeddings, top-10 results, Apple M-series CPU.
-
-| Memories | HNSW (v0.18) | Brute-force (pre-v0.16) | Speedup |
-|---|---|---|---|
-| 100 | 0.05ms | 0.10ms | 2x |
-| 1,000 | 0.06ms | 0.50ms | 8x |
-| 5,000 | 0.08ms | 2.44ms | 30x |
-| 10,000 | 0.08ms | 5.35ms | 67x |
-
-> HNSW search is **sub-0.1ms at any scale** — effectively O(log n). Brute-force is O(n) and degrades linearly. At 10k memories the difference is 67x. HNSW is an optional dependency; if unavailable, brute-force is used as fallback.
-
----
-
-## MCP Resources
-
-These are automatically available to your AI tool:
-
-| URI | Description |
-|---|---|
-| `amem://corrections` | All active corrections (hard constraints) |
-| `amem://decisions` | Architectural decisions |
-| `amem://profile` | Preferences and coding patterns |
-| `amem://summary` | Memory count and type breakdown |
-| `amem://log/recent` | Last 50 raw conversation log entries |
-| `amem://graph` | Knowledge graph overview |
-| `amem://last-session` | Previous session summary — decisions, corrections, and metrics |
+Additive scoring ensures no single low factor kills the ranking.
 
 ---
 
 ## Configuration
 
-### Environment Variables
+<details>
+<summary><strong>Environment variables</strong></summary>
 
 | Variable | Default | Description |
 |---|---|---|
@@ -827,9 +585,12 @@ These are automatically available to your AI tool:
 | `AMEM_DB` | `~/.amem/memory.db` | Database path |
 | `AMEM_PROJECT` | *(auto from git)* | Project scope override |
 
-### Config File (`~/.amem/config.json`)
+</details>
 
-Created automatically with defaults. Edit to customize:
+<details>
+<summary><strong>Config file (~/.amem/config.json)</strong></summary>
+
+Created automatically with defaults:
 
 ```json
 {
@@ -838,15 +599,11 @@ Created automatically with defaults. Edit to customize:
     "ftsWeight": 0.3,
     "graphWeight": 0.15,
     "temporalWeight": 0.15,
-    "maxCandidates": 50000,
-    "rerankerEnabled": false,
-    "rerankerTopK": 20
+    "rerankerEnabled": false
   },
   "privacy": {
     "enablePrivateTags": true,
-    "redactPatterns": [
-      "(?:api[_-]?key|secret|token|password)\\s*[:=]\\s*['\"]?[A-Za-z0-9_\\-\\.]{8,}"
-    ]
+    "redactPatterns": ["..."]
   },
   "tiers": {
     "coreMaxTokens": 500,
@@ -860,6 +617,28 @@ Created automatically with defaults. Edit to customize:
 }
 ```
 
+</details>
+
+<details>
+<summary><strong>Version history</strong></summary>
+
+### v0.18.0 — Progressive Disclosure & Scale
+HNSW vector index (67x faster at 10k), compact mode default on recall/search, DB repair CLI, concurrent access safety, heuristic conversation extractor, session-end auto-extraction.
+
+### v0.13.0 — World-Class Recall
+bge-small-en-v1.5 embeddings, additive scoring, query expansion, auto-relate knowledge graph, graph-aware injection, amem doctor, CI benchmarks.
+
+### v0.9.x — Temporal Intelligence
+Temporal validity, auto-expire contradictions, multi-strategy retrieval, cross-encoder reranking, memory tiers, privacy tags, lifecycle hooks, session summaries, dashboard, config system.
+
+### v0.7.0 — v0.8.0
+Import/export, confidence decay, embedding cache, multi-process safety, auto-configure CLI, dashboard.
+
+### v0.1.0 — v0.5.x
+Core store/recall, local embeddings, SQLite + WAL, consolidation, project scoping, reminders, conversation log, knowledge graph, FTS5, progressive disclosure.
+
+</details>
+
 ---
 
 ## Tech Stack
@@ -869,11 +648,11 @@ Created automatically with defaults. Edit to customize:
 | Protocol | MCP SDK ^1.25 |
 | Language | TypeScript 5.6+, strict mode |
 | Database | SQLite + WAL + FTS5 |
-| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
-| Reranking | Xenova/ms-marco-MiniLM-L-6-v2 (optional, local) |
+| Embeddings | HuggingFace bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
+| Reranking | ms-marco-MiniLM-L-6-v2 (optional, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
 | Testing | Vitest — 357 tests across 28 suites + recall benchmarks |
-| CI/CD | GitHub Actions → npm publish on release, recall regression in CI |
+| CI/CD | GitHub Actions, npm publish on release |
 
 ---
 
@@ -883,7 +662,7 @@ Created automatically with defaults. Edit to customize:
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 337 tests pass
+npm test        # 357 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
