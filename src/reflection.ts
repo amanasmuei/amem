@@ -184,7 +184,7 @@ export function isReflectionDue(db: AmemDatabase): { due: boolean; reason: strin
 
   // Check if many new memories since last reflection
   if (lastCount) {
-    const currentCount = db.getAll().length;
+    const currentCount = db.getStats().total;
     const delta = currentCount - Number(lastCount);
     if (delta >= 50) {
       return { due: true, reason: `${delta} new memories since last reflection` };

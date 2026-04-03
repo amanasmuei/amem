@@ -594,7 +594,7 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getLineageBySrc: db.prepare(`SELECT DISTINCT synthesis_id FROM synthesis_lineage WHERE source_id = ?`),
     findGapByPattern: db.prepare(`SELECT * FROM knowledge_gaps WHERE query_pattern = ? AND resolved = 0 LIMIT 1`),
     insertGap: db.prepare(`INSERT INTO knowledge_gaps (id, query_pattern, hit_count, avg_confidence, avg_results, first_seen, last_seen, resolved) VALUES (?, ?, 1, ?, ?, ?, ?, 0)`),
-    updateGap: db.prepare(`UPDATE knowledge_gaps SET hit_count = hit_count + 1, avg_confidence = ?, avg_results = ?, last_seen = ? WHERE id = ?`),
+    updateGap: db.prepare(`UPDATE knowledge_gaps SET avg_confidence = (avg_confidence * hit_count + ?) / (hit_count + 1), avg_results = (avg_results * hit_count + ?) / (hit_count + 1), hit_count = hit_count + 1, last_seen = ? WHERE id = ?`),
     getActiveGaps: db.prepare(`SELECT * FROM knowledge_gaps WHERE resolved = 0 ORDER BY hit_count DESC LIMIT ?`),
     resolveGap: db.prepare(`UPDATE knowledge_gaps SET resolved = 1 WHERE id = ?`),
     bumpUtility: db.prepare(`UPDATE memories SET utility_score = utility_score + 1 WHERE id = ?`),

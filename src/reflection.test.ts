@@ -422,7 +422,7 @@ describe("reflect — knowledge gaps (Gap 5)", () => {
     // Create some knowledge gaps
     db.upsertKnowledgeGap("kubernetes deployment", 0.3, 1);
     db.upsertKnowledgeGap("database migration strategy", 0.2, 0);
-    db.upsertKnowledgeGap("kubernetes deployment", 0.35, 2); // hit again
+    db.upsertKnowledgeGap("kubernetes deployment", 0.4, 2); // hit again
 
     const report = reflect(db);
     expect(report.knowledgeGaps.length).toBeGreaterThanOrEqual(2);
@@ -430,6 +430,7 @@ describe("reflect — knowledge gaps (Gap 5)", () => {
     const k8sGap = report.knowledgeGaps.find((g) => g.queryPattern === "kubernetes deployment");
     expect(k8sGap).toBeDefined();
     expect(k8sGap!.hitCount).toBe(2); // hit twice
+    expect(k8sGap!.avgConfidence).toBeCloseTo(0.35, 2); // running avg: (0.3 + 0.4) / 2
   });
 
   it("resolving a gap removes it from the report", () => {
@@ -527,16 +528,18 @@ describe("isReflectionDue (Gap 1)", () => {
 });
 
 describe("knowledge gap DB methods (Gap 5)", () => {
-  it("upserts and increments hit count", () => {
+  it("upserts and increments hit count with running average", () => {
     db.upsertKnowledgeGap("test query", 0.4, 2);
-    db.upsertKnowledgeGap("test query", 0.5, 3); // second hit
+    db.upsertKnowledgeGap("test query", 0.6, 4); // second hit
 
     const gaps = db.getActiveKnowledgeGaps();
     const gap = gaps.find((g) => g.queryPattern === "test query");
     expect(gap).toBeDefined();
     expect(gap!.hitCount).toBe(2);
-    expect(gap!.avgConfidence).toBe(0.5); // updated
-    expect(gap!.avgResults).toBe(3); // updated
+    // Running average: (0.4*1 + 0.6) / 2 = 0.5
+    expect(gap!.avgConfidence).toBeCloseTo(0.5, 2);
+    // Running average: (2*1 + 4) / 2 = 3
+    expect(gap!.avgResults).toBeCloseTo(3, 1);
   });
 
   it("resolveKnowledgeGap hides from active list", () => {

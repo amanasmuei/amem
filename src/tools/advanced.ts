@@ -359,9 +359,9 @@ Args:
           .describe("Maximum synthesis prompts to return"),
       }).strict(),
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
