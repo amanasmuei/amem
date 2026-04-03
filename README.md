@@ -22,7 +22,7 @@
 
 <p align="center">
   Tell your AI something once — it remembers across Claude Code, GitHub Copilot, Cursor, Windsurf, and any MCP client.<br/>
-  Local-first &middot; Semantic search &middot; Knowledge graph &middot; Privacy-aware &middot; No cloud required.
+  Local-first &middot; Semantic search &middot; Knowledge graph &middot; Self-evolving &middot; Privacy-aware &middot; No cloud required.
 </p>
 
 <br/>
@@ -31,8 +31,8 @@
   <tr>
     <td><strong>72% Recall@5</strong><br/><sub>Semantic accuracy</sub></td>
     <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
-    <td><strong>28 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
-    <td><strong>357 tests</strong><br/><sub>All passing</sub></td>
+    <td><strong>29 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
+    <td><strong>388 tests</strong><br/><sub>All passing</sub></td>
   </tr>
 </table>
 
@@ -169,8 +169,70 @@ Corrections always surface first — they are your AI's hard constraints.
 
 Memories aren't forever. When facts change:
 - Old memories get **expired** (not deleted) — preserved for *"what was true in March?"*
-- Contradictions are **auto-detected** — storing a new decision auto-expires the old one
+- Contradictions are **auto-detected** ��� storing a new decision auto-expires the old one
 - Query any point in time with `memory_since`
+
+### Self-Evolving Memory Loop
+
+Your memory doesn't just store — it **learns from its own structure**. Call `memory_reflect` to trigger the reflection engine:
+
+```
+memory_reflect → Analyzes your entire memory graph
+  │
+  ├─ Clusters related memories (HNSW neighbor graph)
+  ├─ Detects contradictions (negation pairs, numerical, low-overlap)
+  ├─ Identifies synthesis candidates
+  ├─ Surfaces knowledge gaps (topics with sparse recall)
+  └─ Returns a structured report with suggested actions
+```
+
+**The evolution loop:**
+
+1. **Reflect** — `memory_reflect` clusters your memories and finds patterns
+2. **Synthesize** — AI merges related clusters into higher-order principles via `memory_store`
+3. **Link** — `memory_relate` connects syntheses to source memories (tracked via synthesis lineage)
+4. **Repeat** — each cycle, the graph becomes more coherent and abstract
+
+The system auto-nudges when reflection is due (>7 days or >50 new memories since last run).
+
+<details>
+<summary><strong>What the reflection report looks like</strong></summary>
+
+```
+# Memory Reflection Report
+Analyzed 127 memories in 12ms
+Health Score: 68/100
+
+## Stats
+- Clusters: 8 (avg size: 4.2)
+- Clustered: 34 | Orphans: 93
+- Contradictions: 2
+- Synthesis candidates: 3
+- Knowledge gaps: 4
+
+## Contradictions Found
+⚠ Opposing language detected (23d apart, 87% similar)
+  A: a1b2c3d4 "Always use semicolons in JavaScript..."
+  B: e5f6g7h8 "Never use semicolons in JavaScript..."
+  → Expire older memory a1b2c3d4 — newer supersedes it
+
+## Synthesis Candidates
+### cluster-0 (4 patterns)
+  "These 4 related memories form a cluster about 'typescript, types':
+  [patterns]:
+    - 'Always use strict TypeScript types'
+    - 'Prefer strict null checks'
+    - 'Use unknown instead of any'
+    - 'Enable strictNullChecks in tsconfig'
+
+  Synthesize into a higher-order principle..."
+
+## Knowledge Gaps
+- "kubernetes deployment" — asked 3x, avg 25% confidence
+- "database migration strategy" — asked 2x, avg 0% confidence
+```
+
+</details>
 
 ---
 
@@ -243,7 +305,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 | `memory_inject` | Surface corrections + decisions + graph neighbors before coding starts. |
 
 <details>
-<summary><strong>Precision, History, Advanced, Reminders, and Maintenance tools (21 more)</strong></summary>
+<summary><strong>Precision, History, Advanced, Reminders, and Maintenance tools (22 more)</strong></summary>
 
 ### Precision & History (5 tools)
 
@@ -255,7 +317,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 | `memory_since` | Temporal query with natural language ranges (`7d`, `2w`, `1h`). |
 | `memory_relate` | Build a typed knowledge graph between memories. |
 
-### Advanced (5 tools)
+### Advanced (6 tools)
 
 | Tool | Description |
 |---|---|
@@ -264,6 +326,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 | `memory_expire` | Mark as no longer valid — preserved for history, excluded from recall. |
 | `memory_summarize` | Store structured session summary with decisions, corrections, metrics. |
 | `memory_history` | View past session summaries. |
+| `memory_reflect` | Self-evolving reflection engine — clusters memories, detects contradictions, identifies synthesis candidates, surfaces knowledge gaps. |
 
 ### Reminders (4 tools)
 
@@ -425,7 +488,7 @@ memory_store({
 | Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
 |---|:---:|:---:|:---:|
 | One-command plugin install | Yes | Yes | -- |
-| 28 MCP tools | Yes | Yes | Yes |
+| 29 MCP tools | Yes | Yes | Yes |
 | AI skills | 14 | 7 | -- |
 | Auto-capture hooks | Yes | Yes | -- |
 | Session auto-summarize | Yes | Yes | -- |
@@ -533,12 +596,16 @@ amem-cli reset --confirm               # Wipe all data
           +---------------------------------+
           |        amem MCP Server          |
           |                                 |
-          |  28 Tools . 7 Resources . 2 Prompts
+          |  29 Tools . 7 Resources . 2 Prompts
           |                                 |
           |  Multi-Strategy Retrieval       |
           |  [HNSW] + [FTS5] + [Graph] + [Temporal]
           |       + query expansion         |
           |       + cross-encoder (opt-in)  |
+          |                                 |
+          |  Self-Evolving Reflection       |
+          |  [Clustering] + [Contradictions]|
+          |  + [Synthesis] + [Gap Detection]|
           |                                 |
           |  +---------------------------+  |
           |  | SQLite + WAL + FTS5       |  |
@@ -548,6 +615,8 @@ amem-cli reset --confirm               # Wipe all data
           |  | conversation_log (raw)    |  |
           |  | memory_versions (history) |  |
           |  | memory_relations (graph)  |  |
+          |  | synthesis_lineage         |  |
+          |  | knowledge_gaps            |  |
           |  | session_summaries         |  |
           |  | reminders                 |  |
           |  +---------------------------+  |
