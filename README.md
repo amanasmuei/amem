@@ -773,17 +773,31 @@ score = relevance × 0.45 + recency × 0.2 + confidence × 0.2 + importance × 0
 
 ### Benchmark Results
 
-Run `npx vitest run benchmarks/` to reproduce. Corpus: 34 realistic developer memories, 16 queries (exact, paraphrased, topical).
+#### Recall Accuracy
+
+Run `npx vitest run benchmarks/` to reproduce. Corpus: 34 realistic developer memories, 16 queries (exact, paraphrased, topical), 5 graph edges.
 
 | Strategy | Recall@5 | Recall@10 | MRR | Precision@5 |
 |---|---|---|---|---|
-| Keyword-only (no embeddings) | 34.4% | 62.0% | 36.7% | 13.8% |
-| FTS5-only | 31.3% | 31.3% | 31.3% | --- |
-| Multi-strategy (FTS + graph + temporal) | 31.3% | 31.3% | 31.3% | 25.0% |
-| **Multi-strategy + embeddings** (default) | **~70%+** | **~85%+** | **~75%+** | **~35%+** |
+| FTS5-only (keyword exact) | 31.3% | 31.3% | 31.3% | --- |
+| **Semantic** (embeddings, default) | **72.4%** | **78.6%** | **82.5%** | **23.8%** |
+| **Multi-strategy** (semantic + FTS + graph + temporal) | **74.5%** | **76.6%** | **76.2%** | **25.0%** |
 | + cross-encoder reranking (opt-in) | ~80%+ | ~90%+ | ~85%+ | ~45%+ |
 
-> **Default out-of-box performance is ~70% Recall@5** with embeddings. Cross-encoder reranking improves this to ~80%+ but is opt-in — enable it with `"rerankerEnabled": true` in `~/.amem/config.json`. Without embeddings (first run before model downloads), retrieval gracefully degrades to keyword-only (~34%).
+> **Default out-of-box: 72% Recall@5, 82% MRR** with embeddings. Without embeddings (first run before model downloads), retrieval gracefully degrades to FTS5 keyword matching (~31%).
+
+#### Search Latency (HNSW Vector Index)
+
+Measured: 100 searches averaged, 384-dim embeddings, top-10 results, Apple M-series CPU.
+
+| Memories | HNSW (v0.18) | Brute-force (pre-v0.16) | Speedup |
+|---|---|---|---|
+| 100 | 0.05ms | 0.10ms | 2x |
+| 1,000 | 0.06ms | 0.50ms | 8x |
+| 5,000 | 0.08ms | 2.44ms | 30x |
+| 10,000 | 0.08ms | 5.35ms | 67x |
+
+> HNSW search is **sub-0.1ms at any scale** — effectively O(log n). Brute-force is O(n) and degrades linearly. At 10k memories the difference is 67x. HNSW is an optional dependency; if unavailable, brute-force is used as fallback.
 
 ---
 
