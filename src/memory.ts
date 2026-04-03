@@ -1,7 +1,7 @@
 import type { AmemDatabase } from "./database.js";
 import { cosineSimilarity, rerankWithCrossEncoder } from "./embeddings.js";
 import { expandQuery } from "./query-expand.js";
-import { ANNIndex } from "./ann.js";
+import { VectorIndex } from "./ann.js";
 
 export const MemoryType = {
   CORRECTION: "correction",
@@ -392,24 +392,24 @@ export function consolidateMemories(
   };
 }
 
-// ── ANN Index ────────────────────────────────────────
+// ── Vector Index ─────────────────────────────────────
 
-let annIndex: ANNIndex | null = null;
+let vectorIndex: VectorIndex | null = null;
 
-export function buildANNIndex(db: AmemDatabase): ANNIndex {
-  const index = new ANNIndex(384);
+export function buildVectorIndex(db: AmemDatabase): VectorIndex {
+  const index = new VectorIndex(384);
   const memories = db.getAllWithEmbeddings();
   index.buildFrom(
     memories
       .filter(m => m.embedding !== null)
       .map(m => ({ id: m.id, embedding: m.embedding! }))
   );
-  annIndex = index;
+  vectorIndex = index;
   return index;
 }
 
-export function getANNIndex(): ANNIndex | null {
-  return annIndex;
+export function getVectorIndex(): VectorIndex | null {
+  return vectorIndex;
 }
 
 // ── Multi-strategy retrieval pipeline ──────────────────
@@ -453,13 +453,13 @@ export async function multiStrategyRecall(
     return scoreMap.get(m.id)!;
   };
 
-  // Strategy 1: Semantic search via ANN index (or full scan fallback)
+  // Strategy 1: Semantic search via vector index (or full scan fallback)
   if (queryEmbedding) {
-    const index = getANNIndex();
+    const index = getVectorIndex();
     if (index && index.size() > 0) {
-      // Fast path: in-memory ANN index lookup
-      const annResults = index.search(queryEmbedding, limit * 3, 0.2);
-      for (const r of annResults) {
+      // Fast path: in-memory vector index lookup
+      const vectorResults = index.search(queryEmbedding, limit * 3, 0.2);
+      for (const r of vectorResults) {
         const mem = db.getById(r.id);
         if (!mem) continue;
         if (mem.validUntil !== null && mem.validUntil <= now) continue;

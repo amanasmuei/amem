@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ANNIndex } from "../src/ann.js";
+import { VectorIndex } from "../src/ann.js";
 
 function randomVec(dims: number): Float32Array {
   const v = new Float32Array(dims);
@@ -16,9 +16,9 @@ function normalize(v: Float32Array): Float32Array {
   return out;
 }
 
-describe("ANNIndex", () => {
+describe("VectorIndex", () => {
   it("returns nearest neighbors correctly", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     const query = new Float32Array([1, 0, 0]);
     index.add("a", new Float32Array([1, 0, 0]));      // identical to query
     index.add("b", new Float32Array([0.9, 0.1, 0]));  // very close
@@ -34,13 +34,13 @@ describe("ANNIndex", () => {
   });
 
   it("handles empty index", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     const results = index.search(new Float32Array([1, 0, 0]), 5);
     expect(results).toHaveLength(0);
   });
 
   it("remove works", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     index.add("a", new Float32Array([1, 0, 0]));
     index.add("b", new Float32Array([0, 1, 0]));
     expect(index.size()).toBe(2);
@@ -56,7 +56,7 @@ describe("ANNIndex", () => {
   });
 
   it("size() is accurate", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     expect(index.size()).toBe(0);
     index.add("a", new Float32Array([1, 0, 0]));
     expect(index.size()).toBe(1);
@@ -68,7 +68,7 @@ describe("ANNIndex", () => {
   });
 
   it("respects minSimilarity filter", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     index.add("close", new Float32Array([1, 0, 0]));
     index.add("far", new Float32Array([0, 1, 0]));
     index.add("opposite", new Float32Array([-1, 0, 0]));
@@ -79,7 +79,7 @@ describe("ANNIndex", () => {
   });
 
   it("buildFrom clears and bulk loads", () => {
-    const index = new ANNIndex(3);
+    const index = new VectorIndex(3);
     index.add("old", new Float32Array([1, 0, 0]));
     expect(index.size()).toBe(1);
 
@@ -95,7 +95,7 @@ describe("ANNIndex", () => {
 
   it("works with higher dimensional vectors", () => {
     const dims = 384;
-    const index = new ANNIndex(dims);
+    const index = new VectorIndex(dims);
 
     // Create a known vector and a slightly perturbed version
     const base = normalize(randomVec(dims));

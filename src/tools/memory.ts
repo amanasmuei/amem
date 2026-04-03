@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AmemDatabase } from "../database.js";
-import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions, getANNIndex } from "../memory.js";
+import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions, getVectorIndex } from "../memory.js";
 import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
 import { sanitizeContent, loadConfig } from "../config.js";
 import { autoRelateMemory } from "../auto-relate.js";
@@ -122,10 +122,10 @@ Returns:
 
           const id = db.insertMemory({ content, type: type as MemoryTypeValue, tags, confidence, source, embedding, scope: scope ?? autoScope(type as MemoryTypeValue) });
 
-          // Keep ANN index in sync
+          // Keep vector index in sync
           if (embedding) {
-            const annIdx = getANNIndex();
-            if (annIdx) annIdx.add(id, embedding);
+            const vecIdx = getVectorIndex();
+            if (vecIdx) vecIdx.add(id, embedding);
           }
 
           // Auto-relate to similar existing memories
@@ -580,9 +580,9 @@ Error Handling:
             };
           }
           db.deleteMemory(fullId);
-          // Keep ANN index in sync
-          const annIdx = getANNIndex();
-          if (annIdx) annIdx.remove(fullId);
+          // Keep vector index in sync
+          const vecIdx = getVectorIndex();
+          if (vecIdx) vecIdx.remove(fullId);
           return {
             content: [{ type: "text" as const, text: `Deleted memory: "${memory.content}" (${memory.type})` }],
             structuredContent: {
@@ -630,9 +630,9 @@ Error Handling:
 
           for (const m of matches) {
             db.deleteMemory(m.id);
-            // Keep ANN index in sync
-            const annIdx2 = getANNIndex();
-            if (annIdx2) annIdx2.remove(m.id);
+            // Keep vector index in sync
+            const vecIdx2 = getVectorIndex();
+            if (vecIdx2) vecIdx2.remove(m.id);
           }
           return {
             content: [{ type: "text" as const, text: `Deleted ${matches.length} memories matching "${query}".` }],
@@ -777,10 +777,10 @@ Returns:
                 embedding: pending.embedding,
                 scope: autoScope(pending.input.type as MemoryTypeValue),
               });
-              // Keep ANN index in sync
+              // Keep vector index in sync
               if (pending.embedding) {
-                const annIdx = getANNIndex();
-                if (annIdx) annIdx.add(id, pending.embedding);
+                const vecIdx = getVectorIndex();
+                if (vecIdx) vecIdx.add(id, pending.embedding);
               }
               stored++;
               details.push(`  + Stored [${pending.input.type}]: "${pending.input.content}" (${shortId(id)})`);
@@ -1318,9 +1318,9 @@ Args:
           const newEmbedding = await generateEmbedding(value);
           if (newEmbedding) {
             db.updateEmbedding(fullId, newEmbedding);
-            // Keep ANN index in sync
-            const annIdx = getANNIndex();
-            if (annIdx) annIdx.add(fullId, newEmbedding);
+            // Keep vector index in sync
+            const vecIdx = getVectorIndex();
+            if (vecIdx) vecIdx.add(fullId, newEmbedding);
           }
         }
 
@@ -1431,10 +1431,10 @@ Returns:
               embedding,
               scope: autoScope(input.type as MemoryTypeValue),
             });
-            // Keep ANN index in sync
+            // Keep vector index in sync
             if (embedding) {
-              const annIdx = getANNIndex();
-              if (annIdx) annIdx.add(id, embedding);
+              const vecIdx = getVectorIndex();
+              if (vecIdx) vecIdx.add(id, embedding);
             }
             stored++;
             details.push({

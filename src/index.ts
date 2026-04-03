@@ -116,12 +116,12 @@ async function backfillEmbeddings(): Promise<void> {
 // Run after a short delay to not block startup
 setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
 
-// Build ANN index after embeddings are loaded
-import { buildANNIndex } from "./memory.js";
+// Build vector index after embeddings are loaded
+import { buildVectorIndex } from "./memory.js";
 setTimeout(() => {
   try {
-    const index = buildANNIndex(db);
-    console.error(`[amem] ANN index built: ${index.size()} vectors`);
+    const index = buildVectorIndex(db);
+    console.error(`[amem] Vector index built: ${index.size()} vectors`);
   } catch {}
 }, 5000);
 

@@ -1,11 +1,11 @@
 import { cosineSimilarity } from "./embeddings.js";
 
-export interface ANNResult {
+export interface VectorSearchResult {
   id: string;
   similarity: number;
 }
 
-export class ANNIndex {
+export class VectorIndex {
   private entries: Map<string, Float32Array> = new Map();
   private dims: number;
 
@@ -29,8 +29,8 @@ export class ANNIndex {
     return this.entries.size;
   }
 
-  search(query: Float32Array, k: number, minSimilarity = 0.0): ANNResult[] {
-    const results: ANNResult[] = [];
+  search(query: Float32Array, k: number, minSimilarity = 0.0): VectorSearchResult[] {
+    const results: VectorSearchResult[] = [];
     for (const [id, embedding] of this.entries) {
       const similarity = cosineSimilarity(query, embedding);
       if (similarity >= minSimilarity) {
