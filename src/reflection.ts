@@ -1,17 +1,17 @@
 /**
  * Self-Evolving Memory Loop — Reflection Engine
  *
- * Pure computation on existing data. No database schema changes.
- * Produces a structured report the AI acts on using existing tools
- * (memory_store, memory_expire, memory_relate).
- *
  * Three layers:
  *   Layer 1 — Mechanical: clustering, contradiction detection, gap analysis
  *   Layer 2 — LLM-powered: synthesis candidates (prompts for the AI to complete)
  *   Layer 3 — Adaptive: health scoring, evolution metrics
+ *
+ * Uses synthesis_lineage to prevent re-synthesizing clusters.
+ * Uses knowledge_gaps to surface what the system doesn't know.
+ * Records reflection metadata for auto-trigger timing.
  */
 
-import type { AmemDatabase } from "./database.js";
+import type { AmemDatabase, KnowledgeGap } from "./database.js";
 import type { Memory, MemoryTypeValue } from "./memory.js";
 import { getVectorIndex } from "./memory.js";
 import { cosineSimilarity } from "./embeddings.js";
@@ -58,6 +58,7 @@ export interface ReflectionStats {
   avgClusterSize: number;
   contradictionsFound: number;
   synthesisCandidates: number;
+  knowledgeGaps: number;
   healthScore: number;
 }
 
@@ -65,6 +66,7 @@ export interface ReflectionReport {
   clusters: MemoryCluster[];
   contradictions: ContradictionCandidate[];
   synthesisCandidates: SynthesisCandidate[];
+  knowledgeGaps: KnowledgeGap[];
   orphans: number;
   stats: ReflectionStats;
   timestamp: number;
@@ -122,22 +124,30 @@ export function reflect(
   // 3. Find connected components (clusters)
   const clusters = findClusters(adjacency, memoryMap, cfg);
 
-  // 4. Detect contradictions within clusters
+  // 4. Detect contradictions within clusters (enhanced: negation + numerical + low-overlap)
   const contradictions = detectContradictions(clusters, memoryMap, cfg);
 
-  // 5. Identify synthesis candidates
-  const synthesisCandidates = findSynthesisCandidates(clusters, cfg);
+  // 5. Identify synthesis candidates (uses synthesis_lineage to skip already-synthesized)
+  const synthesisCandidates = findSynthesisCandidates(clusters, db, cfg);
 
-  // 6. Compute stats
+  // 6. Load knowledge gaps
+  const knowledgeGaps = db.getActiveKnowledgeGaps(20);
+
+  // 7. Compute stats
   const clusteredMemories = clusters.reduce(
     (sum, c) => sum + c.members.length,
     0,
   );
 
+  // 8. Record reflection timestamp
+  db.setReflectionMeta("last_reflection_at", String(Date.now()));
+  db.setReflectionMeta("last_memory_count", String(active.length));
+
   return {
     clusters,
     contradictions,
     synthesisCandidates,
+    knowledgeGaps,
     orphans: active.length - clusteredMemories,
     stats: {
       totalMemories: active.length,
@@ -149,11 +159,39 @@ export function reflect(
           : 0,
       contradictionsFound: contradictions.length,
       synthesisCandidates: synthesisCandidates.length,
+      knowledgeGaps: knowledgeGaps.length,
       healthScore: computeHealthScore(active, clusters, contradictions),
     },
     timestamp: Date.now(),
     durationMs: Date.now() - start,
   };
+}
+
+// ── Reflection-due check (for memory_inject nudge) ────
+
+export function isReflectionDue(db: AmemDatabase): { due: boolean; reason: string } {
+  const lastAt = db.getReflectionMeta("last_reflection_at");
+  const lastCount = db.getReflectionMeta("last_memory_count");
+
+  if (!lastAt) {
+    return { due: true, reason: "Reflection has never been run" };
+  }
+
+  const daysSince = (Date.now() - Number(lastAt)) / 86_400_000;
+  if (daysSince > 7) {
+    return { due: true, reason: `Last reflection was ${Math.round(daysSince)}d ago` };
+  }
+
+  // Check if many new memories since last reflection
+  if (lastCount) {
+    const currentCount = db.getAll().length;
+    const delta = currentCount - Number(lastCount);
+    if (delta >= 50) {
+      return { due: true, reason: `${delta} new memories since last reflection` };
+    }
+  }
+
+  return { due: false, reason: "" };
 }
 
 // ── Layer 1: Adjacency graph ───────────────────────────
@@ -220,7 +258,6 @@ function findClusters(
   for (const [nodeId] of adjacency) {
     if (visited.has(nodeId)) continue;
 
-    // BFS for connected component
     const component: string[] = [];
     const queue = [nodeId];
     visited.add(nodeId);
@@ -240,11 +277,10 @@ function findClusters(
 
     if (component.length < cfg.minClusterSize) continue;
 
-    // Build cluster metadata
     const members = toClusterMembers(component, memoryMap);
     const dominantType = findDominantType(members);
     const coherence = computeCoherence(component, memoryMap);
-    const tags = extractCommonTags(members, memoryMap);
+    const tags = extractCommonTags(members);
 
     clusters.push({
       id: `cluster-${clusterIdx++}`,
@@ -315,10 +351,7 @@ function computeCoherence(
   return pairs > 0 ? Number((total / pairs).toFixed(4)) : 0;
 }
 
-function extractCommonTags(
-  members: ClusterMember[],
-  _memoryMap: Map<string, Memory>,
-): string[] {
+function extractCommonTags(members: ClusterMember[]): string[] {
   const tagCounts = new Map<string, number>();
   for (const m of members) {
     for (const tag of m.tags) {
@@ -332,7 +365,7 @@ function extractCommonTags(
     .map(([tag]) => tag);
 }
 
-// ── Layer 1: Contradiction detection ───────────────────
+// ── Layer 1: Enhanced contradiction detection ──────────
 
 const NEGATION_PAIRS: Array<[RegExp, RegExp]> = [
   [/\balways\b/i, /\bnever\b/i],
@@ -344,6 +377,29 @@ const NEGATION_PAIRS: Array<[RegExp, RegExp]> = [
   [/\ballow\b/i, /\bforbid\b|\bprohibit\b|\bblock\b/i],
 ];
 
+/** Extract all numbers from content for numerical contradiction check. */
+function extractNumbers(content: string): number[] {
+  const matches = content.match(/\b\d+(?:\.\d+)?\b/g);
+  return matches ? matches.map(Number) : [];
+}
+
+/** Tokenize content into lowercase words for overlap calculation. */
+function tokenize(content: string): Set<string> {
+  return new Set(
+    content.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter(w => w.length > 2),
+  );
+}
+
+/** Jaccard similarity between two word sets. */
+function wordOverlap(a: Set<string>, b: Set<string>): number {
+  let intersection = 0;
+  for (const word of a) {
+    if (b.has(word)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
 function detectContradictions(
   clusters: MemoryCluster[],
   memoryMap: Map<string, Memory>,
@@ -351,6 +407,7 @@ function detectContradictions(
 ): ContradictionCandidate[] {
   const contradictions: ContradictionCandidate[] = [];
   const msPerDay = 86_400_000;
+  const seen = new Set<string>(); // prevent duplicate pairs
 
   for (const cluster of clusters) {
     for (let i = 0; i < cluster.members.length; i++) {
@@ -363,32 +420,74 @@ function detectContradictions(
         const fullB = memoryMap.get(b.id);
         if (!fullB?.embedding) continue;
 
+        const pairKey = [a.id, b.id].sort().join(":");
+        if (seen.has(pairKey)) continue;
+
         const sim = cosineSimilarity(fullA.embedding!, fullB.embedding!);
         if (sim < cfg.contradictionMinSimilarity) continue;
 
+        const ageDays = Math.abs(a.createdAt - b.createdAt) / msPerDay;
+        const [newer, older] = a.createdAt > b.createdAt ? [a, b] : [b, a];
         const contentA = a.content.toLowerCase();
         const contentB = b.content.toLowerCase();
 
+        // Check 1: Negation-pair keywords
+        let found = false;
         for (const [patA, patB] of NEGATION_PAIRS) {
-          const aHasFirst = patA.test(contentA) && patB.test(contentB);
-          const bHasFirst = patB.test(contentA) && patA.test(contentB);
-
-          if (aHasFirst || bHasFirst) {
-            const ageDays = Math.abs(a.createdAt - b.createdAt) / msPerDay;
-            const [newer, older] =
-              a.createdAt > b.createdAt ? [a, b] : [b, a];
-
+          if (
+            (patA.test(contentA) && patB.test(contentB)) ||
+            (patB.test(contentA) && patA.test(contentB))
+          ) {
+            seen.add(pairKey);
             contradictions.push({
               memoryA: older,
               memoryB: newer,
               similarity: Number(sim.toFixed(4)),
               reason: `Opposing language detected (${ageDays.toFixed(0)}d apart, ${(sim * 100).toFixed(0)}% similar)`,
-              suggestedAction:
-                newer.confidence >= older.confidence
-                  ? `Expire older memory ${older.id.slice(0, 8)} — newer supersedes it`
-                  : `Review: newer has lower confidence (${(newer.confidence * 100).toFixed(0)}%) than older (${(older.confidence * 100).toFixed(0)}%)`,
+              suggestedAction: suggestAction(newer, older),
             });
-            break; // one contradiction per pair
+            found = true;
+            break;
+          }
+        }
+        if (found) continue;
+
+        // Check 2: Numerical contradiction — same topic, different numbers
+        const numsA = extractNumbers(a.content);
+        const numsB = extractNumbers(b.content);
+        if (numsA.length > 0 && numsB.length > 0 && sim > 0.8) {
+          // High semantic similarity + different numbers = likely contradiction
+          const hasConflictingNumber = numsA.some(na =>
+            numsB.some(nb => na !== nb && Math.abs(na - nb) / Math.max(na, nb) > 0.2),
+          );
+          if (hasConflictingNumber) {
+            seen.add(pairKey);
+            contradictions.push({
+              memoryA: older,
+              memoryB: newer,
+              similarity: Number(sim.toFixed(4)),
+              reason: `Numerical disagreement (${numsA.join(",")} vs ${numsB.join(",")}, ${(sim * 100).toFixed(0)}% similar)`,
+              suggestedAction: suggestAction(newer, older),
+            });
+            continue;
+          }
+        }
+
+        // Check 3: Low word overlap despite high semantic similarity
+        // (Same topic, expressed differently = potential update/contradiction)
+        if (sim > 0.85) {
+          const wordsA = tokenize(a.content);
+          const wordsB = tokenize(b.content);
+          const overlap = wordOverlap(wordsA, wordsB);
+          if (overlap < 0.3 && ageDays > 7) {
+            seen.add(pairKey);
+            contradictions.push({
+              memoryA: older,
+              memoryB: newer,
+              similarity: Number(sim.toFixed(4)),
+              reason: `Low word overlap (${(overlap * 100).toFixed(0)}%) despite ${(sim * 100).toFixed(0)}% semantic similarity — possible update (${ageDays.toFixed(0)}d apart)`,
+              suggestedAction: `Review: these may express the same intent differently, or the newer one may supersede the older`,
+            });
           }
         }
       }
@@ -398,10 +497,17 @@ function detectContradictions(
   return contradictions;
 }
 
+function suggestAction(newer: ClusterMember, older: ClusterMember): string {
+  return newer.confidence >= older.confidence
+    ? `Expire older memory ${older.id.slice(0, 8)} — newer supersedes it`
+    : `Review: newer has lower confidence (${(newer.confidence * 100).toFixed(0)}%) than older (${(older.confidence * 100).toFixed(0)}%)`;
+}
+
 // ── Layer 2: Synthesis candidates ──────────────────────
 
 function findSynthesisCandidates(
   clusters: MemoryCluster[],
+  db: AmemDatabase,
   cfg: ReflectionConfig,
 ): SynthesisCandidate[] {
   const candidates: SynthesisCandidate[] = [];
@@ -418,6 +524,12 @@ function findSynthesisCandidates(
       continue;
     }
 
+    // Skip if any member is already part of a synthesis (via lineage table)
+    const memberIds = cluster.members.map((m) => m.id);
+    if (db.hasAnySynthesis(memberIds)) {
+      continue;
+    }
+
     // Group members by type
     const byType = new Map<string, ClusterMember[]>();
     for (const m of cluster.members) {
@@ -426,11 +538,8 @@ function findSynthesisCandidates(
       byType.set(m.type, group);
     }
 
-    // Build synthesis prompt
     const topicHint =
-      cluster.tags.length > 0
-        ? cluster.tags.join(", ")
-        : "a common theme";
+      cluster.tags.length > 0 ? cluster.tags.join(", ") : "a common theme";
 
     const lines = [
       `These ${cluster.members.length} related memories form a cluster about "${topicHint}":`,

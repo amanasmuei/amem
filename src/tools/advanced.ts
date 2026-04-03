@@ -387,6 +387,7 @@ Args:
         lines.push(`- Clustered: ${report.stats.clusteredMemories} | Orphans: ${report.orphans}`);
         lines.push(`- Contradictions: ${report.stats.contradictionsFound}`);
         lines.push(`- Synthesis candidates: ${report.stats.synthesisCandidates}`);
+        lines.push(`- Knowledge gaps: ${report.stats.knowledgeGaps}`);
         lines.push("");
 
         // Top clusters
@@ -432,14 +433,29 @@ Args:
           }
         }
 
+        // Knowledge gaps
+        if (report.knowledgeGaps.length > 0) {
+          lines.push(`## Knowledge Gaps`);
+          lines.push(`Topics where recall consistently returns sparse or low-confidence results:`);
+          for (const g of report.knowledgeGaps.slice(0, 10)) {
+            lines.push(`- "${g.queryPattern}" — asked ${g.hitCount}x, avg ${(g.avgConfidence * 100).toFixed(0)}% confidence, ~${g.avgResults} results`);
+          }
+          lines.push("");
+        }
+
         // Action guidance
-        if (report.contradictions.length > 0 || report.synthesisCandidates.length > 0) {
+        let actionNum = 1;
+        const hasActions = report.contradictions.length > 0 || report.synthesisCandidates.length > 0 || report.knowledgeGaps.length > 0;
+        if (hasActions) {
           lines.push(`## Suggested Actions`);
           if (report.contradictions.length > 0) {
-            lines.push(`1. Review ${report.contradictions.length} contradiction(s) — use memory_expire on stale ones`);
+            lines.push(`${actionNum++}. Review ${report.contradictions.length} contradiction(s) — use memory_expire on stale ones`);
           }
           if (report.synthesisCandidates.length > 0) {
-            lines.push(`${report.contradictions.length > 0 ? "2" : "1"}. Synthesize ${report.synthesisCandidates.length} cluster(s) — use memory_store + memory_relate`);
+            lines.push(`${actionNum++}. Synthesize ${report.synthesisCandidates.length} cluster(s) — use memory_store + memory_relate`);
+          }
+          if (report.knowledgeGaps.length > 0) {
+            lines.push(`${actionNum++}. Fill ${report.knowledgeGaps.length} knowledge gap(s) — ask the user about these topics and store with memory_store`);
           }
         }
 
@@ -467,6 +483,13 @@ Args:
               dominantType: s.dominantType,
               memoryIds: s.memories.map(m => m.id),
               suggestedPrompt: s.suggestedPrompt,
+            })),
+            knowledgeGaps: report.knowledgeGaps.map(g => ({
+              id: g.id,
+              queryPattern: g.queryPattern,
+              hitCount: g.hitCount,
+              avgConfidence: g.avgConfidence,
+              avgResults: g.avgResults,
             })),
             orphans: report.orphans,
             durationMs: report.durationMs,
