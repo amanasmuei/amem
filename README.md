@@ -495,7 +495,7 @@ memory_store({
 | Auto-memory sync | Yes | -- | -- |
 | CLI setup (`amem-cli init`) | Yes | Yes | Yes |
 
-**Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second. **Other MCP clients** get the full 28-tool server via manual config.
+**Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second. **Other MCP clients** get the full 29-tool server via manual config.
 
 ### AI Skills
 
@@ -691,6 +691,9 @@ Created automatically with defaults:
 <details>
 <summary><strong>Version history</strong></summary>
 
+### v0.19.0 — Self-Evolving Memory Loop
+Reflection engine with HNSW-based clustering, 3-layer contradiction detection (negation + numerical + low-overlap), synthesis candidates with lineage tracking, knowledge gap detection, utility scoring, auto-trigger nudge in `memory_inject`. New DB tables: `synthesis_lineage`, `knowledge_gaps`, `reflection_meta`. Migration v5.
+
 ### v0.18.0 — Progressive Disclosure & Scale
 HNSW vector index (67x faster at 10k), compact mode default on recall/search, DB repair CLI, concurrent access safety, heuristic conversation extractor, session-end auto-extraction.
 
@@ -720,7 +723,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 | Embeddings | HuggingFace bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
 | Reranking | ms-marco-MiniLM-L-6-v2 (optional, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 357 tests across 28 suites + recall benchmarks |
+| Testing | Vitest — 388 tests across 29 suites + recall benchmarks |
 | CI/CD | GitHub Actions, npm publish on release |
 
 ---
@@ -731,7 +734,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 357 tests pass
+npm test        # 388 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
