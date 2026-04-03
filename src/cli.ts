@@ -118,6 +118,19 @@ if (command === "doctor") {
   process.exit(0);
 }
 
+if (command === "repair") {
+  const { repairDatabase } = await import("./repair.js");
+  const result = repairDatabase(DB_PATH);
+  const icon = result.status === "healthy" ? "\u2713" : result.status === "repaired" ? "\u2713" : "\u2717";
+  console.log(`\namem repair — ${icon} ${result.status.toUpperCase()}\n`);
+  console.log(`  ${result.message}`);
+  if (result.backupUsed) {
+    console.log(`  Backup used: ${result.backupUsed}`);
+  }
+  console.log();
+  process.exit(result.status === "failed" ? 1 : 0);
+}
+
 if (command === "dashboard") {
   if (!fs.existsSync(DB_PATH)) {
     console.error(`No memory database found at ${DB_PATH}`);
@@ -195,6 +208,7 @@ SETUP
   hooks [--uninstall]  Install/uninstall automatic memory capture hooks
   sync [--dry-run]     Import Claude Code auto-memory into amem
   doctor               Run health diagnostics on your memory database
+  repair               Attempt to repair a corrupted database from backups
   dashboard [--port=N] Open the memory dashboard in your browser (default: 3333)
 
 MEMORY
