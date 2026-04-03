@@ -459,9 +459,16 @@ try {
 
   let autoExtracted = 0;
   for (const e of entries) {
-    if (e.role !== 'user') continue;
-    const text = (e.content || '').trim();
-    if (text.length < 15) continue;
+    // Extract from user messages (if logged via memory_log) or from tool input content (logged by PostToolUse as role:system)
+    let text = '';
+    if (e.role === 'user') {
+      text = (e.content || '').trim();
+    } else if (e.role === 'system') {
+      // PostToolUse logs "Tool: X\\nInput: Y\\nOutput: Z" — extract the Input portion
+      const inputMatch = (e.content || '').match(/Input: ([\\s\\S]*?)(?:\\nOutput:|$)/);
+      if (inputMatch) text = inputMatch[1].trim();
+    }
+    if (text.length < 15 || text.endsWith('?')) continue;
 
     for (const group of EXTRACT_PATTERNS) {
       let matched = false;
