@@ -234,13 +234,17 @@ Args:
 
 Use this when standard memory_recall isn't finding what you need, or when you want the most comprehensive context possible. More expensive but more thorough.
 
+By default returns a compact index of IDs and previews (compact: true). Use memory_detail with the returned IDs to get full content.
+
 Args:
   - query (string): What to search for
   - limit (number): Max results (default: 15)
+  - compact (boolean): If true, return compact index with IDs. Use memory_detail for full content. (default: true)
   - weights (object, optional): Custom weights for each strategy (default: semantic=0.4, fts=0.3, graph=0.15, temporal=0.15)`,
       inputSchema: z.object({
         query: z.string().min(1).describe("What to search for"),
         limit: z.number().int().min(1).max(50).default(15).describe("Max results"),
+        compact: z.boolean().default(true).describe("If true, return compact index with IDs. Use memory_detail for full content."),
         weights: z.object({
           semantic: z.number().min(0).max(1).default(0.4),
           fts: z.number().min(0).max(1).default(0.3),
@@ -255,7 +259,7 @@ Args:
         openWorldHint: false,
       },
     },
-    async ({ query, limit, weights }) => {
+    async ({ query, limit, compact, weights }) => {
       try {
         const queryEmbedding = await generateEmbedding(query);
         const results = await multiStrategyRecall(db, {
@@ -275,6 +279,20 @@ Args:
         }
 
         for (const r of results) db.touchAccess(r.id);
+
+        if (compact) {
+          const compactLines = results.map((r) => {
+            const preview = r.content.slice(0, 80) + (r.content.length > 80 ? "..." : "");
+            return `${shortId(r.id)} [${r.type}] ${preview} (${(r.score * 100).toFixed(0)}%)`;
+          });
+          const tokenEstimate = compactLines.join("\n").split(/\s+/).length;
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Multi-strategy: "${query}" — ${results.length} results (~${tokenEstimate} tokens):\n${compactLines.join("\n")}\n\nUse memory_detail with IDs for full content.`,
+            }],
+          };
+        }
 
         const lines = results.map((r, i) => {
           const age = formatAge(r.createdAt);

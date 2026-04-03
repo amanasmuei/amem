@@ -304,12 +304,16 @@ Supports FTS5 query syntax:
 - Boolean: "postgres OR sqlite"
 - Negation: "database NOT redis"
 
+By default returns a compact index of IDs and previews (compact: true). Use memory_detail with the returned IDs to get full content.
+
 Args:
   - query (string): Full-text search query — exact terms, phrases, or FTS5 syntax
-  - limit (number): Max results (default: 20)`,
+  - limit (number): Max results (default: 20)
+  - compact (boolean): If true, return compact index with IDs. Use memory_detail for full content. (default: true)`,
       inputSchema: z.object({
         query: z.string().min(1).describe("Full-text search query — exact terms, phrases, or FTS5 syntax"),
         limit: z.number().int().min(1).max(100).default(20).describe("Max results to return"),
+        compact: z.boolean().default(true).describe("If true, return compact index with IDs. Use memory_detail for full content."),
       }).strict(),
       outputSchema: RecallResultSchema,
       annotations: {
@@ -319,7 +323,7 @@ Args:
         openWorldHint: false,
       },
     },
-    async ({ query, limit }) => {
+    async ({ query, limit, compact }) => {
       try {
         const results = db.fullTextSearch(query, limit, project);
 
@@ -327,6 +331,33 @@ Args:
           return {
             content: [{ type: "text" as const, text: `No memories found matching "${query}". Try memory_recall for semantic/fuzzy search.` }],
             structuredContent: { query, total: 0, memories: [] },
+          };
+        }
+
+        if (compact) {
+          const compactLines = results.map((m) => {
+            const preview = m.content.slice(0, 80) + (m.content.length > 80 ? "..." : "");
+            return `${shortId(m.id)} [${m.type}] ${preview} (${(m.confidence * 100).toFixed(0)}%)`;
+          });
+          const tokenEstimate = compactLines.join("\n").split(/\s+/).length;
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Full-text: "${query}" — ${results.length} results (~${tokenEstimate} tokens):\n${compactLines.join("\n")}\n\nUse memory_detail with IDs for full content.`,
+            }],
+            structuredContent: {
+              query,
+              total: results.length,
+              compact: true,
+              tokenEstimate,
+              memories: results.map(m => ({
+                id: m.id,
+                type: m.type,
+                preview: m.content.slice(0, 80),
+                score: 1.0,
+                confidence: m.confidence,
+              })),
+            },
           };
         }
 
