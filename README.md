@@ -199,7 +199,7 @@ amem captures knowledge in **three ways** — you choose how hands-on you want t
 With hooks installed (`amem-cli hooks`), amem passively:
 - Logs significant tool calls via the **PostToolUse** hook
 - Auto-summarizes sessions on exit via the **Stop** hook
-- Extracts decisions, corrections, and patterns from conversation flow
+- Auto-extracts corrections, decisions, preferences, and patterns using heuristic detection
 
 ### 2. Proactive (AI-driven)
 
@@ -254,6 +254,17 @@ Memories aren't forever. When facts change:
 ---
 
 ## Features
+
+### v0.18.0 — Progressive Disclosure & Scale
+
+| Feature | Description |
+|---|---|
+| HNSW vector index | Replaced brute-force with HNSW (hnswlib-node) — sub-50ms search at 10k+ memories |
+| Progressive disclosure | `compact` mode is now default on `memory_recall`, `memory_multi_recall`, `memory_search` — ~10x token savings |
+| DB repair CLI | `amem-cli repair` detects corruption, auto-restores from backups |
+| Concurrent access safety | WAL mode validated for multi-tool access (Claude Code + Copilot + Cursor simultaneously) |
+| Conversation extractor | Heuristic pattern detection auto-extracts corrections, decisions, preferences from session conversations |
+| Session-end auto-extraction | Stop hook now auto-stores detected memories with content-hash dedup |
 
 ### v0.13.0 — World-Class Recall
 
@@ -344,7 +355,7 @@ Memories aren't forever. When facts change:
 |---|---|
 | `memory_patch` | Surgical field-level edit with auto-snapshot |
 | `memory_versions` | View full edit history or restore any version |
-| `memory_search` | Exact full-text search via FTS5 |
+| `memory_search` | Exact full-text search via FTS5 with `compact` mode |
 | `memory_since` | Temporal query with natural language ranges (`7d`, `2w`, `1h`) |
 | `memory_relate` | Build a typed knowledge graph between memories |
 
@@ -352,7 +363,7 @@ Memories aren't forever. When facts change:
 
 | Tool | Description |
 |---|---|
-| `memory_multi_recall` | Multi-strategy search: semantic + FTS5 + graph + temporal, with configurable weights |
+| `memory_multi_recall` | Multi-strategy search with `compact` mode: semantic + FTS5 + graph + temporal |
 | `memory_tier` | Move memories between tiers: core / working / archival |
 | `memory_expire` | Mark as no longer valid — preserved for history, excluded from recall |
 | `memory_summarize` | Store structured session summary with decisions, corrections, metrics |
@@ -435,8 +446,8 @@ memory_extract({
 <summary><strong>Progressive disclosure (recommended)</strong></summary>
 
 ```js
-// Step 1: Compact index — ~50-100 tokens
-memory_recall({ query: "auth decisions", limit: 5, compact: true })
+// Step 1: Compact index — ~50-100 tokens (default)
+memory_recall({ query: "auth decisions", limit: 5 })
 // → a1b2c3d4 [decision] Auth service uses JWT tokens... (92%)
 // → e5f6g7h8 [correction] Never store tokens in localStorage... (100%)
 
@@ -692,6 +703,7 @@ amem-cli hooks --uninstall             # Remove hooks
 amem-cli sync                          # Import Claude auto-memory into amem
 amem-cli sync --dry-run                # Preview sync without importing
 amem-cli doctor                        # Health diagnostics
+amem-cli repair                        # Repair corrupted database from backups
 
 # Dashboard
 amem-cli dashboard                     # Web dashboard (localhost:3333)
@@ -724,7 +736,7 @@ amem-cli reset --confirm               # Wipe all data
 │   28 Tools  ·  7 Resources  ·  2 Prompts    │
 │                                              │
 │   Multi-Strategy Retrieval Pipeline          │
-│   [Vector Index] + [FTS5] + [Graph] + [Temporal]│
+│   [HNSW Vector] + [FTS5] + [Graph] + [Temporal] │
 │        ↓ query expansion + cross-encoder     │
 │                                              │
 │   ┌────────────────────────────────────┐     │
@@ -843,10 +855,10 @@ Created automatically with defaults. Edit to customize:
 | Protocol | MCP SDK ^1.25 |
 | Language | TypeScript 5.6+, strict mode |
 | Database | SQLite + WAL + FTS5 |
-| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + in-memory vector index |
+| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
 | Reranking | Xenova/ms-marco-MiniLM-L-6-v2 (optional, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 337 tests across 24 suites + recall benchmarks |
+| Testing | Vitest — 357 tests across 28 suites + recall benchmarks |
 | CI/CD | GitHub Actions → npm publish on release, recall regression in CI |
 
 ---
