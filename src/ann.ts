@@ -108,9 +108,11 @@ export class VectorIndex {
 
   search(query: Float32Array, k: number, minSimilarity = 0.0): VectorSearchResult[] {
     if (this.hnsw) {
-      const count = this.idToLabel.size;
-      if (count === 0) return [];
-      const actualK = Math.min(k, count);
+      const liveCount = this.idToLabel.size;
+      if (liveCount === 0) return [];
+      // Over-request to compensate for tombstoned entries that HNSW may return
+      const totalLabels = this.nextLabel;
+      const actualK = Math.min(Math.max(k * 2, k + 10), totalLabels);
       const { neighbors, distances } = this.hnsw.searchKnn(Array.from(query), actualK);
       const results: VectorSearchResult[] = [];
       for (let i = 0; i < neighbors.length; i++) {
@@ -123,7 +125,7 @@ export class VectorIndex {
         }
       }
       results.sort((a, b) => b.similarity - a.similarity);
-      return results;
+      return results.slice(0, k);
     }
 
     // Brute-force fallback

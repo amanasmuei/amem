@@ -291,6 +291,19 @@ Args:
               type: "text" as const,
               text: `Multi-strategy: "${query}" — ${results.length} results (~${tokenEstimate} tokens):\n${compactLines.join("\n")}\n\nUse memory_detail with IDs for full content.`,
             }],
+            structuredContent: {
+              query,
+              total: results.length,
+              compact: true,
+              tokenEstimate,
+              memories: results.map(r => ({
+                id: r.id,
+                type: r.type,
+                preview: r.content.slice(0, 80),
+                score: Number(r.score.toFixed(3)),
+                confidence: r.confidence,
+              })),
+            },
           };
         }
 
