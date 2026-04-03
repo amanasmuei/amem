@@ -82,15 +82,21 @@ export function extractMemories(turns: ConversationTurn[]): ExtractedMemory[] {
   const extracted: ExtractedMemory[] = [];
 
   for (const turn of turns) {
+    const text = turn.content.trim();
+    // Skip questions — they express uncertainty, not assertions
+    if (text.endsWith("?")) continue;
+    // Skip very short messages — not enough signal
+    if (text.length < 15) continue;
+
     for (const pattern of EXTRACTION_PATTERNS) {
       if (!pattern.roles.includes(turn.role)) continue;
 
       for (const regex of pattern.patterns) {
-        if (regex.test(turn.content)) {
-          if (extracted.some(e => e.content === turn.content)) break;
+        if (regex.test(text)) {
+          if (extracted.some(e => e.content === text)) break;
 
           extracted.push({
-            content: turn.content.trim(),
+            content: text,
             type: pattern.type,
             confidence: pattern.confidence,
             tags: ["auto-extracted"],

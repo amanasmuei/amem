@@ -274,9 +274,9 @@ try {
   if (signal) {
     // Extract the key content — use first 500 chars of the input as the memory
     const memContent = toolInput.slice(0, 500).trim();
-    const contentHash = createHash('sha256').update(memContent).digest('hex');
+    const contentHash = createHash('sha256').update(memContent).digest('hex').slice(0, 16);
 
-    // Check for duplicates by content hash
+    // Check for duplicates by content hash (16-char prefix, matching insertMemory)
     const existing = db.prepare('SELECT id FROM memories WHERE content_hash = ?').get(contentHash);
     if (!existing) {
       const memId = randomUUID();
