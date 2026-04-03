@@ -151,10 +151,10 @@ describe("amem rules", () => {
 
     const content = fs.readFileSync(rulesPath, "utf-8");
     expect(content).toContain("Session Start");
-    expect(content).toContain("During Conversation");
-    expect(content).toContain("Every ~10 Exchanges");
-    expect(content).toContain("Before Ending");
-    expect(content).toContain("Never store");
+    expect(content).toContain("Active Extraction");
+    expect(content).toContain("Implicit Signals");
+    expect(content).toContain("Extraction Rhythm");
+    expect(content).toContain("What NOT to Store");
     expect(content).toContain("memory_relate");
     expect(content).toContain("reminder_check");
   });

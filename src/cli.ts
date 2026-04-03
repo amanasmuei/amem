@@ -319,35 +319,54 @@ function handleInit(args: string[]) {
 function getRulesContent(): string {
   return `# Amem — Persistent Memory Rules
 
-You have access to **amem**, a persistent memory system via MCP. Use it proactively.
+You have access to **amem**, a persistent memory system via MCP. You are the LLM — use your understanding to extract memories the user would want preserved.
 
 ## Session Start
-1. Call \`memory_inject\` with the current task topic — surfaces corrections (hard constraints) and decisions
+1. Call \`memory_inject\` with the current task topic — surfaces corrections (MUST follow) and decisions
 2. Call \`reminder_check\` — shows overdue and upcoming reminders
 3. Call \`memory_context\` for broader background if needed
 
-## During Conversation
-- **User corrects you** → \`memory_store\` as \`correction\` (confidence: 1.0)
-- **Architecture decision made** → \`memory_store\` as \`decision\` (confidence: 0.9)
-- **Coding pattern observed** → \`memory_store\` as \`pattern\` (confidence: 0.7)
-- **Tool/style preference expressed** → \`memory_store\` as \`preference\` (confidence: 0.8)
-- **Codebase location revealed** → \`memory_store\` as \`topology\` (confidence: 0.7)
-- **Project fact established** → \`memory_store\` as \`fact\` (confidence: 0.6)
+## Active Extraction — You Are the LLM
 
-## Every ~10 Exchanges
-Call \`memory_extract\` with a batch of memories from the conversation so far.
+You are far better at understanding intent than regex. Extract memories **as they happen**, not just when explicitly asked.
 
-## Before Ending
-Call \`memory_extract\` to capture any remaining insights.
+### Explicit Signals (always extract immediately)
+- User says "don't", "never", "stop doing" → \`correction\` (1.0)
+- User says "we decided", "let's go with" → \`decision\` (0.9)
+- User says "I prefer", "I always" → \`preference\` (0.8)
+
+### Implicit Signals (extract these too — regex can't catch them)
+- User **rejects your suggestion** and explains why → \`correction\` (0.95). The rejection reason is the memory, not the code.
+- User **chooses between options** you presented → \`decision\` (0.85). Store which option and why.
+- User **refactors your code** in a consistent way → \`pattern\` (0.7). The refactoring style is the memory.
+- User **asks you to check a specific file/path** → \`topology\` (0.6). The location is worth remembering.
+- User **explains context** you didn't have → \`fact\` (0.7). They're teaching you about the project.
+- User **re-explains something** from a prior session → \`correction\` (0.9). If they have to repeat it, it wasn't stored.
+
+### What Makes a Good Memory
+- **Self-contained** — "Use pnpm, not npm, because of workspace support" not "Use pnpm"
+- **Include the why** — "Chose Postgres over Mongo for ACID compliance" not "Uses Postgres"
+- **Be specific** — "Auth middleware lives in src/middleware/auth.ts and uses JWT RS256" not "Has auth"
+- **One concept per memory** — split compound statements into separate memories
+
+## Extraction Rhythm
+- **Immediately** after any correction or decision (don't wait)
+- **Every ~10 exchanges** — call \`memory_extract\` with a batch of accumulated insights
+- **Before ending** — final \`memory_extract\` for anything remaining
+- **After significant debugging** — store what was wrong and how it was fixed as a \`pattern\`
+
+## What NOT to Store
+- Ephemeral task details ("fix the bug on line 42")
+- Exact file contents or large code blocks
+- API keys, passwords, tokens (auto-redacted, but avoid storing them)
+- Things already in the codebase (the code is the source of truth)
+- Duplicate of something already stored — use \`memory_recall\` to check first
 
 ## Rules
 - **Corrections override everything** — always check for them before acting
-- **Be specific** — "Uses Tailwind with custom theme in src/styles" not "Has CSS"
-- **Be self-contained** — each memory should make sense without conversation context
-- **Never store** — API keys, passwords, ephemeral task details, or exact file contents
-- **Check before storing** — use \`memory_recall\` to avoid duplicates
 - **Link related memories** — use \`memory_relate\` to build the knowledge graph
 - **Reference naturally** — say "I remember you prefer X" not "My memory database says..."
+- **Use compact recall** — \`memory_recall\` returns compact by default, use \`memory_detail\` for full content
 `.trimEnd();
 }
 
