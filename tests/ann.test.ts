@@ -93,6 +93,30 @@ describe("VectorIndex", () => {
     expect(index.has("x")).toBe(true);
   });
 
+  it("scales to 5000 entries with sub-50ms search", () => {
+    const dims = 384;
+    const index = new VectorIndex(dims);
+
+    const entries: Array<{ id: string; embedding: Float32Array }> = [];
+    for (let i = 0; i < 5000; i++) {
+      entries.push({ id: `mem-${i}`, embedding: normalize(randomVec(dims)) });
+    }
+    index.buildFrom(entries);
+    expect(index.size()).toBe(5000);
+
+    const query = normalize(randomVec(dims));
+    const start = performance.now();
+    const results = index.search(query, 10, 0.0);
+    const elapsed = performance.now() - start;
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.length).toBeLessThanOrEqual(10);
+    expect(elapsed).toBeLessThan(50);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].similarity).toBeGreaterThanOrEqual(results[i].similarity);
+    }
+  });
+
   it("works with higher dimensional vectors", () => {
     const dims = 384;
     const index = new VectorIndex(dims);
