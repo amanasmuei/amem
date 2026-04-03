@@ -366,45 +366,88 @@ export function createDatabase(dbPath: string): AmemDatabase {
     CREATE INDEX IF NOT EXISTS idx_summaries_project ON session_summaries(project);
   `);
 
-  // Migration: add scope column if not present
-  const columns = db.pragma('table_info(memories)') as { name: string }[];
-  const hasScope = columns.some(c => c.name === 'scope');
-  if (!hasScope) {
-    db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'`);
-  }
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)`);
+  // ── Schema migrations ──────────────────────────────────
+  // Versioned migration system — each migration runs exactly once.
+  // New migrations MUST be appended to the end of this array.
 
-  // Migration: add content_hash column for dedup without embeddings
-  const hasContentHash = columns.some(c => c.name === 'content_hash');
-  if (!hasContentHash) {
-    db.exec(`ALTER TABLE memories ADD COLUMN content_hash TEXT`);
-    // Backfill existing rows
-    const allRows = db.prepare("SELECT id, content FROM memories").all() as { id: string; content: string }[];
-    const updateHash = db.prepare("UPDATE memories SET content_hash = ? WHERE id = ?");
-    for (const row of allRows) {
-      updateHash.run(createHash("sha256").update(row.content).digest("hex").slice(0, 16), row.id);
-    }
-  }
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_content_hash ON memories(content_hash)`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at INTEGER NOT NULL
+    )
+  `);
 
-  // Migration: add temporal validity + tiers
-  const hasValidFrom = columns.some(c => c.name === 'valid_from');
-  if (!hasValidFrom) {
-    db.exec(`ALTER TABLE memories ADD COLUMN valid_from INTEGER`);
-    db.exec(`ALTER TABLE memories ADD COLUMN valid_until INTEGER`);
-    db.exec(`ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'archival'`);
-    db.exec(`UPDATE memories SET valid_from = created_at WHERE valid_from IS NULL`);
-  }
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_valid_until ON memories(valid_until)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier)`);
+  const appliedVersions = new Set(
+    (db.prepare("SELECT version FROM schema_migrations").all() as { version: number }[]).map(r => r.version),
+  );
 
-  // Migration: add temporal validity to relations
-  const relColumns = db.pragma('table_info(memory_relations)') as { name: string }[];
-  const relHasValidFrom = relColumns.some(c => c.name === 'valid_from');
-  if (!relHasValidFrom) {
-    db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_from INTEGER`);
-    db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_until INTEGER`);
-    db.exec(`UPDATE memory_relations SET valid_from = created_at WHERE valid_from IS NULL`);
+  const hasColumn = (table: string, column: string): boolean => {
+    const cols = db.pragma(`table_info(${table})`) as { name: string }[];
+    return cols.some(c => c.name === column);
+  };
+
+  const migrations: Array<{ version: number; name: string; up: () => void }> = [
+    {
+      version: 1,
+      name: "add_scope_column",
+      up: () => {
+        if (!hasColumn("memories", "scope")) {
+          db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'`);
+        }
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)`);
+      },
+    },
+    {
+      version: 2,
+      name: "add_content_hash",
+      up: () => {
+        if (!hasColumn("memories", "content_hash")) {
+          db.exec(`ALTER TABLE memories ADD COLUMN content_hash TEXT`);
+          const allRows = db.prepare("SELECT id, content FROM memories").all() as { id: string; content: string }[];
+          const updateHash = db.prepare("UPDATE memories SET content_hash = ? WHERE id = ?");
+          for (const row of allRows) {
+            updateHash.run(createHash("sha256").update(row.content).digest("hex").slice(0, 16), row.id);
+          }
+        }
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_content_hash ON memories(content_hash)`);
+      },
+    },
+    {
+      version: 3,
+      name: "add_temporal_validity_and_tiers",
+      up: () => {
+        if (!hasColumn("memories", "valid_from")) {
+          db.exec(`ALTER TABLE memories ADD COLUMN valid_from INTEGER`);
+          db.exec(`ALTER TABLE memories ADD COLUMN valid_until INTEGER`);
+          db.exec(`ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'archival'`);
+          db.exec(`UPDATE memories SET valid_from = created_at WHERE valid_from IS NULL`);
+        }
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_valid_until ON memories(valid_until)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier)`);
+      },
+    },
+    {
+      version: 4,
+      name: "add_temporal_relations",
+      up: () => {
+        if (!hasColumn("memory_relations", "valid_from")) {
+          db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_from INTEGER`);
+          db.exec(`ALTER TABLE memory_relations ADD COLUMN valid_until INTEGER`);
+          db.exec(`UPDATE memory_relations SET valid_from = created_at WHERE valid_from IS NULL`);
+        }
+      },
+    },
+  ];
+
+  const insertMigration = db.prepare(
+    "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+  );
+
+  for (const m of migrations) {
+    if (appliedVersions.has(m.version)) continue;
+    m.up();
+    insertMigration.run(m.version, m.name, Date.now());
   }
 
   const stmts = {

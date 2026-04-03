@@ -5,7 +5,7 @@
 <h1 align="center">amem</h1>
 
 <p align="center">
-  <strong>Give your AI a memory it never forgets.</strong>
+  <strong>One memory. Every AI tool.</strong>
 </p>
 
 <p align="center">
@@ -21,8 +21,8 @@
 </p>
 
 <p align="center">
-  <b>amem</b> (<b>A</b>man's <b>Mem</b>ory) is a persistent memory layer for AI coding tools.<br/>
-  Local-first &middot; Semantic &middot; Temporal &middot; Privacy-aware &middot; Works with Claude Code, Cursor, Windsurf &amp; any MCP client.
+  Tell your AI something once — it remembers across Claude Code, GitHub Copilot, Cursor, Windsurf, and any MCP client.<br/>
+  Local-first &middot; Semantic search &middot; Temporal validity &middot; Privacy-aware &middot; No cloud required.
 </p>
 
 <p align="center">
@@ -39,25 +39,26 @@
 
 ## The Problem
 
-Every time you start a new conversation with an AI coding assistant, it starts from zero.
+You use Claude Code at work, Copilot on side projects, Cursor when pairing. Each tool starts from zero — every session, every tool.
 
-> *"Don't use `any` in TypeScript"* — told it **three times**, still does it.
+> *"Don't use `any` in TypeScript"* — told Claude three times. Copilot still doesn't know.
 >
-> *"We chose PostgreSQL over MongoDB"* — doesn't remember why.
+> *"We chose PostgreSQL over MongoDB"* — explained in Cursor. Claude has no idea.
 >
-> *"I prefer early returns and pnpm"* — explained again. And again.
+> *"I prefer early returns and pnpm"* — repeated in every tool. Every session.
 
-**You repeat yourself. Every. Single. Session.**
+**Your preferences, decisions, and corrections are trapped inside each tool's memory silo.**
 
 ## The Solution
 
-**amem** plugs into any MCP-compatible AI tool and gives it persistent, searchable, lossless memory — with temporal validity, privacy controls, and a knowledge graph.
+**amem** gives all your AI tools a shared, persistent memory. Tell it once — every tool remembers.
 
 ```
-You: "Don't use any type in TypeScript"
-
+You (in Claude Code):  "Don't use any type in TypeScript"
   amem stores this as a correction (priority 1.0)
-  next session, your AI already knows
+
+You (switch to Copilot): starts coding
+  Copilot already knows — amem feeds it the same correction
 ```
 
 No cloud. No API keys. Everything stays on your machine.
@@ -263,7 +264,7 @@ Memories aren't forever. When facts change:
 | Query expansion | Dev-domain synonyms (`auth` → `authentication`, `login`, `session`) + stemming |
 | Auto-relate | New memories automatically link to similar ones — graph builds itself |
 | Graph-aware injection | `memory_inject` surfaces 1-hop knowledge graph neighbors |
-| In-memory ANN index | Pre-loaded vectors for fast semantic search (vs SQLite BLOB scan) |
+| In-memory vector index | Pre-loaded vectors for fast semantic search (vs SQLite BLOB scan) |
 | `amem doctor` | Health diagnostics CLI — embedding coverage, core budget, stale memories |
 | Cross-session continuity | `amem://last-session` resource for previous session summary |
 | CI benchmarks | Recall regression detection in CI pipeline |
@@ -273,8 +274,9 @@ Memories aren't forever. When facts change:
 
 ### v0.12.0
 - Passive capture and auto-injection
-- Team sync and dashboard timeline
+- Dashboard timeline
 - Auto-recover corrupted embedding cache
+- Team sync foundation (import/export — full team sync is on the roadmap)
 
 ### v0.9.x — The Temporal Intelligence Release
 - Temporal validity (`valid_from`/`valid_until`) — facts expire, history preserved
@@ -722,7 +724,7 @@ amem-cli reset --confirm               # Wipe all data
 │   28 Tools  ·  7 Resources  ·  2 Prompts    │
 │                                              │
 │   Multi-Strategy Retrieval Pipeline          │
-│   [ANN Index] + [FTS5] + [Graph] + [Temporal]│
+│   [Vector Index] + [FTS5] + [Graph] + [Temporal]│
 │        ↓ query expansion + cross-encoder     │
 │                                              │
 │   ┌────────────────────────────────────┐     │
@@ -750,7 +752,7 @@ score = relevance × 0.45 + recency × 0.2 + confidence × 0.2 + importance × 0
 
 | Factor | How it works |
 |---|---|
-| **Relevance** | Cosine similarity via in-memory ANN index; query-expanded keyword fallback |
+| **Relevance** | Cosine similarity via in-memory vector index; query-expanded keyword fallback |
 | **Recency** | Exponential decay (`0.995^hours`) |
 | **Confidence** | Reinforced by repeated confirmation (0-1) |
 | **Importance** | Type-based: corrections `1.0` → facts `0.4` |
@@ -766,10 +768,10 @@ Run `npx vitest run benchmarks/` to reproduce. Corpus: 34 realistic developer me
 | Keyword-only (no embeddings) | 34.4% | 62.0% | 36.7% | 13.8% |
 | FTS5-only | 31.3% | 31.3% | 31.3% | --- |
 | Multi-strategy (FTS + graph + temporal) | 31.3% | 31.3% | 31.3% | 25.0% |
-| **Multi-strategy + embeddings** | **~70%+** | **~85%+** | **~75%+** | **~35%+** |
-| **+ cross-encoder reranking** | **~80%+** | **~90%+** | **~85%+** | **~45%+** |
+| **Multi-strategy + embeddings** (default) | **~70%+** | **~85%+** | **~75%+** | **~35%+** |
+| + cross-encoder reranking (opt-in) | ~80%+ | ~90%+ | ~85%+ | ~45%+ |
 
-*Keyword-only scores are the floor — retrieval gracefully degrades without embeddings.*
+> **Default out-of-box performance is ~70% Recall@5** with embeddings. Cross-encoder reranking improves this to ~80%+ but is opt-in — enable it with `"rerankerEnabled": true` in `~/.amem/config.json`. Without embeddings (first run before model downloads), retrieval gracefully degrades to keyword-only (~34%).
 
 ---
 
@@ -841,7 +843,7 @@ Created automatically with defaults. Edit to customize:
 | Protocol | MCP SDK ^1.25 |
 | Language | TypeScript 5.6+, strict mode |
 | Database | SQLite + WAL + FTS5 |
-| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + in-memory ANN index |
+| Embeddings | HuggingFace Xenova/bge-small-en-v1.5 (local, 80MB) + in-memory vector index |
 | Reranking | Xenova/ms-marco-MiniLM-L-6-v2 (optional, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
 | Testing | Vitest — 337 tests across 24 suites + recall benchmarks |
