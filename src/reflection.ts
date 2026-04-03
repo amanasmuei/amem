@@ -141,7 +141,7 @@ export function reflect(
 
   // 8. Record reflection timestamp
   db.setReflectionMeta("last_reflection_at", String(Date.now()));
-  db.setReflectionMeta("last_memory_count", String(active.length));
+  db.setReflectionMeta("last_memory_count", String(db.getStats().total));
 
   return {
     clusters,
