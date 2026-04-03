@@ -5,6 +5,7 @@ import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories,
 import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
 import { sanitizeContent, loadConfig } from "../config.js";
 import { autoRelateMemory } from "../auto-relate.js";
+import { isReflectionDue } from "../reflection.js";
 import {
   RecallResultSchema,
   ContextResultSchema,
@@ -265,6 +266,12 @@ Returns:
           db.touchAccess(r.id);
         }
 
+        // Track knowledge gaps — sparse or low-confidence results
+        if (results.length < 3 || (results.length > 0 && results.reduce((s, r) => s + r.confidence, 0) / results.length < 0.5)) {
+          const avgConf = results.length > 0 ? results.reduce((s, r) => s + r.confidence, 0) / results.length : 0;
+          db.upsertKnowledgeGap(query.toLowerCase().trim(), avgConf, results.length);
+        }
+
         if (results.length === 0) {
           return {
             content: [{ type: "text" as const, text: `No memories found for: "${query}". Try broadening your search or using different keywords.` }],
@@ -380,6 +387,7 @@ Returns:
           const mem = db.getById(fullId);
           if (!mem) return null;
           db.touchAccess(mem.id);
+          db.bumpUtilityScore(mem.id); // User actively chose to read this — signal utility
           return mem;
         }).filter((m): m is NonNullable<typeof m> => m !== null);
 
@@ -1118,6 +1126,25 @@ Returns:
         if (graphContext.length > 0) {
           context += "\n\n## Related Context (from knowledge graph)\n";
           context += graphContext.join("\n");
+        }
+
+        // Check if reflection is due and nudge
+        const reflectionCheck = isReflectionDue(db);
+        if (reflectionCheck.due) {
+          context += `\n\n## Reflection Recommended\n`;
+          context += `${reflectionCheck.reason}. Run \`memory_reflect\` to analyze memory health, find contradictions, and synthesize clusters.`;
+        }
+
+        // Surface active knowledge gaps relevant to this topic
+        const gaps = db.getActiveKnowledgeGaps(5);
+        if (gaps.length > 0) {
+          const relevant = gaps.filter(g =>
+            topic.toLowerCase().includes(g.queryPattern) || g.queryPattern.includes(topic.toLowerCase()),
+          );
+          if (relevant.length > 0) {
+            context += `\n\n## Knowledge Gaps\n`;
+            context += relevant.map(g => `- "${g.queryPattern}" (asked ${g.hitCount}x, avg ${(g.avgConfidence * 100).toFixed(0)}% confidence)`).join("\n");
+          }
         }
 
         return {

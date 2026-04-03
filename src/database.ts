@@ -76,6 +76,17 @@ export interface PatchInput {
   skipSnapshot?: boolean;
 }
 
+export interface KnowledgeGap {
+  id: string;
+  queryPattern: string;
+  hitCount: number;
+  avgConfidence: number;
+  avgResults: number;
+  firstSeen: number;
+  lastSeen: number;
+  resolved: boolean;
+}
+
 export interface AmemDatabase {
   insertMemory(input: MemoryInput): string;
   findByContentHash(content: string): Memory | null;
@@ -140,6 +151,20 @@ export interface AmemDatabase {
   // Temporal relations
   expireRelation(relationId: string, timestamp?: number): void;
   getValidRelations(asOf?: number): MemoryRelation[];
+  // ── Self-evolving loop (v0.19) ────────��──────────────
+  // Synthesis lineage
+  insertSynthesisLineage(synthesisId: string, sourceIds: string[]): void;
+  getSynthesisSources(synthesisId: string): string[];
+  hasAnySynthesis(sourceIds: string[]): boolean;
+  // Knowledge gaps
+  upsertKnowledgeGap(queryPattern: string, avgConfidence: number, resultCount: number): string;
+  getActiveKnowledgeGaps(limit?: number): KnowledgeGap[];
+  resolveKnowledgeGap(id: string): void;
+  // Utility score
+  bumpUtilityScore(id: string): void;
+  // Reflection metadata
+  getReflectionMeta(key: string): string | null;
+  setReflectionMeta(key: string, value: string): void;
 }
 
 interface LogRow {
@@ -187,6 +212,18 @@ interface MemoryRow {
   valid_from: number | null;
   valid_until: number | null;
   tier: string;
+  utility_score: number;
+}
+
+interface KnowledgeGapRow {
+  id: string;
+  query_pattern: string;
+  hit_count: number;
+  avg_confidence: number;
+  avg_results: number;
+  first_seen: number;
+  last_seen: number;
+  resolved: number;
 }
 
 interface SummaryRow {
@@ -222,6 +259,7 @@ function rowToMemory(row: MemoryRow): Memory {
     validFrom: row.valid_from ?? row.created_at,
     validUntil: row.valid_until ?? null,
     tier: (row.tier ?? 'archival') as Memory['tier'],
+    utilityScore: row.utility_score ?? 0,
   };
 }
 
@@ -438,6 +476,22 @@ export function createDatabase(dbPath: string): AmemDatabase {
         }
       },
     },
+    {
+      version: 5,
+      name: "add_self_evolving_loop_support",
+      up: () => {
+        if (!hasColumn("memories", "utility_score")) {
+          db.exec("ALTER TABLE memories ADD COLUMN utility_score INTEGER NOT NULL DEFAULT 0");
+        }
+        db.exec("CREATE TABLE IF NOT EXISTS synthesis_lineage (synthesis_id TEXT NOT NULL, source_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(synthesis_id, source_id), FOREIGN KEY(synthesis_id) REFERENCES memories(id) ON DELETE CASCADE, FOREIGN KEY(source_id) REFERENCES memories(id) ON DELETE CASCADE)");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_lineage_synthesis ON synthesis_lineage(synthesis_id)");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_lineage_source ON synthesis_lineage(source_id)");
+        db.exec("CREATE TABLE IF NOT EXISTS knowledge_gaps (id TEXT PRIMARY KEY, query_pattern TEXT NOT NULL, hit_count INTEGER NOT NULL DEFAULT 1, avg_confidence REAL NOT NULL DEFAULT 0, avg_results INTEGER NOT NULL DEFAULT 0, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, resolved INTEGER NOT NULL DEFAULT 0)");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_gaps_resolved ON knowledge_gaps(resolved)");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_gaps_hit_count ON knowledge_gaps(hit_count)");
+        db.exec("CREATE TABLE IF NOT EXISTS reflection_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+      },
+    },
   ];
 
   const insertMigration = db.prepare(
@@ -534,6 +588,18 @@ export function createDatabase(dbPath: string): AmemDatabase {
     // Temporal relations
     expireRelation: db.prepare(`UPDATE memory_relations SET valid_until = ? WHERE id = ?`),
     getValidRelations: db.prepare(`SELECT * FROM memory_relations WHERE (valid_until IS NULL OR valid_until > ?) ORDER BY created_at DESC`),
+    // Self-evolving loop
+    insertLineage: db.prepare(`INSERT OR IGNORE INTO synthesis_lineage (synthesis_id, source_id, created_at) VALUES (?, ?, ?)`),
+    getLineageSources: db.prepare(`SELECT source_id FROM synthesis_lineage WHERE synthesis_id = ?`),
+    getLineageBySrc: db.prepare(`SELECT DISTINCT synthesis_id FROM synthesis_lineage WHERE source_id = ?`),
+    findGapByPattern: db.prepare(`SELECT * FROM knowledge_gaps WHERE query_pattern = ? AND resolved = 0 LIMIT 1`),
+    insertGap: db.prepare(`INSERT INTO knowledge_gaps (id, query_pattern, hit_count, avg_confidence, avg_results, first_seen, last_seen, resolved) VALUES (?, ?, 1, ?, ?, ?, ?, 0)`),
+    updateGap: db.prepare(`UPDATE knowledge_gaps SET hit_count = hit_count + 1, avg_confidence = ?, avg_results = ?, last_seen = ? WHERE id = ?`),
+    getActiveGaps: db.prepare(`SELECT * FROM knowledge_gaps WHERE resolved = 0 ORDER BY hit_count DESC LIMIT ?`),
+    resolveGap: db.prepare(`UPDATE knowledge_gaps SET resolved = 1 WHERE id = ?`),
+    bumpUtility: db.prepare(`UPDATE memories SET utility_score = utility_score + 1 WHERE id = ?`),
+    getMeta: db.prepare(`SELECT value FROM reflection_meta WHERE key = ?`),
+    setMeta: db.prepare(`INSERT OR REPLACE INTO reflection_meta (key, value, updated_at) VALUES (?, ?, ?)`),
   };
 
   // Keep FTS index in sync via triggers.
@@ -1036,6 +1102,71 @@ export function createDatabase(dbPath: string): AmemDatabase {
     getValidRelations(asOf?: number): MemoryRelation[] {
       const rows = stmts.getValidRelations.all(asOf ?? Date.now()) as RelationRow[];
       return rows.map(rowToRelation);
+    },
+
+    // ── Self-evolving loop ─────────────────────────────────
+
+    insertSynthesisLineage(synthesisId: string, sourceIds: string[]): void {
+      const now = Date.now();
+      for (const sourceId of sourceIds) {
+        stmts.insertLineage.run(synthesisId, sourceId, now);
+      }
+    },
+
+    getSynthesisSources(synthesisId: string): string[] {
+      const rows = stmts.getLineageSources.all(synthesisId) as { source_id: string }[];
+      return rows.map(r => r.source_id);
+    },
+
+    hasAnySynthesis(sourceIds: string[]): boolean {
+      for (const id of sourceIds) {
+        const row = stmts.getLineageBySrc.get(id) as { synthesis_id: string } | undefined;
+        if (row) return true;
+      }
+      return false;
+    },
+
+    upsertKnowledgeGap(queryPattern: string, avgConfidence: number, resultCount: number): string {
+      const now = Date.now();
+      const existing = stmts.findGapByPattern.get(queryPattern) as KnowledgeGapRow | undefined;
+      if (existing) {
+        stmts.updateGap.run(avgConfidence, resultCount, now, existing.id);
+        return existing.id;
+      }
+      const id = randomUUID();
+      stmts.insertGap.run(id, queryPattern, avgConfidence, resultCount, now, now);
+      return id;
+    },
+
+    getActiveKnowledgeGaps(limit = 10): KnowledgeGap[] {
+      const rows = stmts.getActiveGaps.all(limit) as KnowledgeGapRow[];
+      return rows.map(r => ({
+        id: r.id,
+        queryPattern: r.query_pattern,
+        hitCount: r.hit_count,
+        avgConfidence: r.avg_confidence,
+        avgResults: r.avg_results,
+        firstSeen: r.first_seen,
+        lastSeen: r.last_seen,
+        resolved: r.resolved === 1,
+      }));
+    },
+
+    resolveKnowledgeGap(id: string): void {
+      stmts.resolveGap.run(id);
+    },
+
+    bumpUtilityScore(id: string): void {
+      stmts.bumpUtility.run(id);
+    },
+
+    getReflectionMeta(key: string): string | null {
+      const row = stmts.getMeta.get(key) as { value: string } | undefined;
+      return row?.value ?? null;
+    },
+
+    setReflectionMeta(key: string, value: string): void {
+      stmts.setMeta.run(key, value, Date.now());
     },
   };
 }

@@ -298,6 +298,7 @@ export const ReflectResultSchema = z.object({
     avgClusterSize: z.number(),
     contradictionsFound: z.number(),
     synthesisCandidates: z.number(),
+    knowledgeGaps: z.number(),
     healthScore: z.number(),
   }),
   clusters: z.array(z.object({
@@ -320,6 +321,13 @@ export const ReflectResultSchema = z.object({
     dominantType: z.string(),
     memoryIds: z.array(z.string()),
     suggestedPrompt: z.string(),
+  })),
+  knowledgeGaps: z.array(z.object({
+    id: z.string(),
+    queryPattern: z.string(),
+    hitCount: z.number(),
+    avgConfidence: z.number(),
+    avgResults: z.number(),
   })),
   orphans: z.number(),
   durationMs: z.number(),

@@ -38,6 +38,7 @@ export interface Memory {
   validFrom: number;
   validUntil: number | null;
   tier: 'core' | 'working' | 'archival';
+  utilityScore: number;
 }
 
 export interface ScoreInput {
