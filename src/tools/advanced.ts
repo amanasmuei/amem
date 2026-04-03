@@ -4,6 +4,7 @@ import type { AmemDatabase } from "../database.js";
 import { multiStrategyRecall } from "../memory.js";
 import { generateEmbedding } from "../embeddings.js";
 import { loadConfig } from "../config.js";
+import { reflect } from "../reflection.js";
 import { shortId, formatAge } from "./helpers.js";
 
 export function registerAdvancedTools(server: McpServer, db: AmemDatabase, project: string): void {
@@ -322,6 +323,162 @@ Args:
         return {
           isError: true,
           content: [{ type: "text" as const, text: `Error in multi-strategy recall: ${error instanceof Error ? error.message : String(error)}` }],
+        };
+      }
+    },
+  );
+
+  // ── memory_reflect ───────────────────────────────────────
+  server.registerTool(
+    "memory_reflect",
+    {
+      title: "Self-Evolving Memory Reflection",
+      description: `Run the reflection engine to analyze your entire memory graph. Returns a structured report with:
+
+1. **Clusters** — groups of semantically related memories (connected-component clustering via HNSW)
+2. **Contradictions** — pairs of memories with opposing language within the same cluster
+3. **Synthesis candidates** — clusters ripe for merging into a higher-order principle
+
+**How the self-evolving loop works:**
+- Call memory_reflect to get the report
+- Review synthesis candidates → call memory_store with the synthesized principle (source: "reflection-synthesis")
+- Link synthesis to constituents → call memory_relate with relationship_type "synthesized_from"
+- Resolve contradictions → call memory_expire on stale memories
+- Repeat periodically — each cycle, the memory graph becomes more coherent and abstract
+
+Args:
+  - min_cluster_size (number, optional): Minimum memories to form a cluster (default: 3)
+  - similarity_threshold (number, optional): Min similarity for cluster edges (default: 0.65)
+  - max_synthesis_candidates (number, optional): Max synthesis prompts to return (default: 5)`,
+      inputSchema: z.object({
+        min_cluster_size: z.number().int().min(2).max(20).default(3)
+          .describe("Minimum memories to form a cluster"),
+        similarity_threshold: z.number().min(0.3).max(0.95).default(0.65)
+          .describe("Minimum cosine similarity to form a cluster edge"),
+        max_synthesis_candidates: z.number().int().min(1).max(20).default(5)
+          .describe("Maximum synthesis prompts to return"),
+      }).strict(),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ min_cluster_size, similarity_threshold, max_synthesis_candidates }) => {
+      try {
+        const report = reflect(db, {
+          minClusterSize: min_cluster_size,
+          similarityThreshold: similarity_threshold,
+          maxSynthesisCandidates: max_synthesis_candidates,
+        });
+
+        // Format the report for the AI to act on
+        const lines: string[] = [];
+
+        lines.push(`# Memory Reflection Report`);
+        lines.push(`Analyzed ${report.stats.totalMemories} memories in ${report.durationMs}ms`);
+        lines.push(`Health Score: ${report.stats.healthScore}/100`);
+        lines.push("");
+
+        // Stats summary
+        lines.push(`## Stats`);
+        lines.push(`- Clusters: ${report.stats.totalClusters} (avg size: ${report.stats.avgClusterSize})`);
+        lines.push(`- Clustered: ${report.stats.clusteredMemories} | Orphans: ${report.orphans}`);
+        lines.push(`- Contradictions: ${report.stats.contradictionsFound}`);
+        lines.push(`- Synthesis candidates: ${report.stats.synthesisCandidates}`);
+        lines.push("");
+
+        // Top clusters
+        if (report.clusters.length > 0) {
+          lines.push(`## Top Clusters`);
+          for (const c of report.clusters.slice(0, 8)) {
+            const tagStr = c.tags.length > 0 ? ` [${c.tags.join(", ")}]` : "";
+            lines.push(`**${c.id}** — ${c.members.length} memories, ${c.dominantType}s${tagStr} (coherence: ${(c.coherence * 100).toFixed(0)}%)`);
+            for (const m of c.members.slice(0, 4)) {
+              lines.push(`  ${shortId(m.id)} [${m.type}] "${m.content.slice(0, 70)}${m.content.length > 70 ? "..." : ""}"`);
+            }
+            if (c.members.length > 4) {
+              lines.push(`  ... +${c.members.length - 4} more`);
+            }
+            lines.push("");
+          }
+        }
+
+        // Contradictions
+        if (report.contradictions.length > 0) {
+          lines.push(`## Contradictions Found`);
+          for (const c of report.contradictions) {
+            lines.push(`⚠ ${c.reason}`);
+            lines.push(`  A: ${shortId(c.memoryA.id)} "${c.memoryA.content.slice(0, 60)}..."`);
+            lines.push(`  B: ${shortId(c.memoryB.id)} "${c.memoryB.content.slice(0, 60)}..."`);
+            lines.push(`  → ${c.suggestedAction}`);
+            lines.push("");
+          }
+        }
+
+        // Synthesis candidates
+        if (report.synthesisCandidates.length > 0) {
+          lines.push(`## Synthesis Candidates`);
+          lines.push(`These clusters are ready to be synthesized into higher-order principles.`);
+          lines.push(`For each, review the prompt, synthesize, then store with memory_store and link with memory_relate.`);
+          lines.push("");
+          for (const s of report.synthesisCandidates) {
+            lines.push(`### ${s.clusterId} (${s.memories.length} ${s.dominantType}s)`);
+            lines.push("```");
+            lines.push(s.suggestedPrompt);
+            lines.push("```");
+            lines.push("");
+          }
+        }
+
+        // Action guidance
+        if (report.contradictions.length > 0 || report.synthesisCandidates.length > 0) {
+          lines.push(`## Suggested Actions`);
+          if (report.contradictions.length > 0) {
+            lines.push(`1. Review ${report.contradictions.length} contradiction(s) — use memory_expire on stale ones`);
+          }
+          if (report.synthesisCandidates.length > 0) {
+            lines.push(`${report.contradictions.length > 0 ? "2" : "1"}. Synthesize ${report.synthesisCandidates.length} cluster(s) — use memory_store + memory_relate`);
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n").trim() }],
+          structuredContent: {
+            stats: report.stats,
+            clusters: report.clusters.map(c => ({
+              id: c.id,
+              memberCount: c.members.length,
+              dominantType: c.dominantType,
+              coherence: c.coherence,
+              tags: c.tags,
+              memberIds: c.members.map(m => m.id),
+            })),
+            contradictions: report.contradictions.map(c => ({
+              olderMemoryId: c.memoryA.id,
+              newerMemoryId: c.memoryB.id,
+              similarity: c.similarity,
+              reason: c.reason,
+              suggestedAction: c.suggestedAction,
+            })),
+            synthesisCandidates: report.synthesisCandidates.map(s => ({
+              clusterId: s.clusterId,
+              dominantType: s.dominantType,
+              memoryIds: s.memories.map(m => m.id),
+              suggestedPrompt: s.suggestedPrompt,
+            })),
+            orphans: report.orphans,
+            durationMs: report.durationMs,
+          },
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{
+            type: "text" as const,
+            text: `Error running reflection: ${error instanceof Error ? error.message : String(error)}`,
+          }],
         };
       }
     },
