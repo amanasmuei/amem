@@ -224,7 +224,7 @@ Args:
   - type (enum, optional): Filter by memory type
   - tag (string, optional): Filter by tag
   - min_confidence (number 0-1, optional): Minimum confidence threshold
-  - compact (boolean, optional): If true, return compact index (~50-100 tokens) with IDs for progressive disclosure. Use memory_detail to get full content.
+  - compact (boolean, optional): Return compact index (~50-100 tokens) with IDs for progressive disclosure (default: true). Set to false for full content inline. Use memory_detail to get full content for specific IDs.
   - explain (boolean, optional): If true, include detailed score breakdown showing how each factor (relevance, recency, confidence, importance) contributed to the ranking.
 
 Returns:
@@ -235,7 +235,7 @@ Returns:
         type: z.enum(MEMORY_TYPES as [string, ...string[]]).optional().describe("Filter by memory type"),
         tag: z.string().optional().describe("Filter by tag"),
         min_confidence: z.number().min(0).max(1).optional().describe("Minimum confidence threshold"),
-        compact: z.boolean().default(false).describe("If true, return compact index (~50-100 tokens) with IDs for progressive disclosure. Use memory_detail to get full content."),
+        compact: z.boolean().default(true).describe("If true, return compact index (~50-100 tokens) with IDs for progressive disclosure. Use memory_detail to get full content."),
         explain: z.boolean().default(false).describe("If true, include detailed score breakdown per memory showing relevance source, recency decay, confidence, and type importance."),
       }).strict(),
       outputSchema: RecallResultSchema,

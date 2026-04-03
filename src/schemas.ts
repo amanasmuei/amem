@@ -20,17 +20,20 @@ export const StoreResultSchema = z.union([
 
 const RecalledMemorySchema = z.object({
   id: z.string(),
-  content: z.string(),
+  content: z.string().optional(),
+  preview: z.string().optional(),
   type: z.string(),
   score: z.number(),
   confidence: z.number(),
-  tags: z.array(z.string()),
-  age: z.string(),
+  tags: z.array(z.string()).optional(),
+  age: z.string().optional(),
 });
 
 export const RecallResultSchema = z.object({
   query: z.string(),
   total: z.number(),
+  compact: z.boolean().optional(),
+  tokenEstimate: z.number().optional(),
   memories: z.array(RecalledMemorySchema),
 });
 
