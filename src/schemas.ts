@@ -289,3 +289,39 @@ export const LogCleanupResultSchema = z.object({
   cutoffDate: z.string(),
 });
 
+// ── Reflection ──────────────────────────────────────────
+export const ReflectResultSchema = z.object({
+  stats: z.object({
+    totalMemories: z.number(),
+    clusteredMemories: z.number(),
+    totalClusters: z.number(),
+    avgClusterSize: z.number(),
+    contradictionsFound: z.number(),
+    synthesisCandidates: z.number(),
+    healthScore: z.number(),
+  }),
+  clusters: z.array(z.object({
+    id: z.string(),
+    memberCount: z.number(),
+    dominantType: z.string(),
+    coherence: z.number(),
+    tags: z.array(z.string()),
+    memberIds: z.array(z.string()),
+  })),
+  contradictions: z.array(z.object({
+    olderMemoryId: z.string(),
+    newerMemoryId: z.string(),
+    similarity: z.number(),
+    reason: z.string(),
+    suggestedAction: z.string(),
+  })),
+  synthesisCandidates: z.array(z.object({
+    clusterId: z.string(),
+    dominantType: z.string(),
+    memoryIds: z.array(z.string()),
+    suggestedPrompt: z.string(),
+  })),
+  orphans: z.number(),
+  durationMs: z.number(),
+});
+
