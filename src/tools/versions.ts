@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { type AmemDatabase, generateEmbedding, shortId, formatAge } from "@aman_asmuei/amem-core";
+import { type AmemDatabase, type MemoryVersion, generateEmbedding, shortId, formatAge } from "@aman_asmuei/amem-core";
 
 export function registerVersionTools(server: McpServer, db: AmemDatabase, _project: string): void {
 
@@ -45,7 +45,7 @@ Args:
 
         if (restore_version_id) {
           const history = db.getVersionHistory(fullId);
-          const target = history.find(v => v.versionId === restore_version_id || v.versionId.startsWith(restore_version_id));
+          const target = history.find((v: MemoryVersion) => v.versionId === restore_version_id || v.versionId.startsWith(restore_version_id));
           if (!target) {
             return {
               isError: true,
@@ -96,7 +96,7 @@ Args:
           `Current: "${mem.content}" (${(mem.confidence * 100).toFixed(0)}% confidence)`,
           "",
           `${history.length} version${history.length === 1 ? "" : "s"}:`,
-          ...history.map((v, i) =>
+          ...history.map((v: MemoryVersion, i: number) =>
             `  ${i + 1}. [${shortId(v.versionId)}] "${v.content}" — ${(v.confidence * 100).toFixed(0)}% — ${formatAge(v.editedAt)}\n     Reason: ${v.reason}`
           ),
         ];
@@ -107,7 +107,7 @@ Args:
             action: "history" as const,
             memoryId: fullId,
             currentContent: mem.content,
-            versions: history.map(v => ({
+            versions: history.map((v: MemoryVersion) => ({
               versionId: v.versionId,
               content: v.content,
               confidence: v.confidence,

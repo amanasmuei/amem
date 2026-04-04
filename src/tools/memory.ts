@@ -2,9 +2,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   type AmemDatabase,
+  type Memory,
   MemoryType,
   type MemoryTypeValue,
+  type RecalledMemory,
   type ExplainedMemory,
+  type KnowledgeGap,
   recallMemories,
   detectConflict,
   consolidateMemories,
@@ -644,7 +647,7 @@ Error Handling:
                 action: "preview" as const,
                 query,
                 total: matches.length,
-                previewed: matches.slice(0, 5).map(m => ({ id: m.id, content: m.content })),
+                previewed: matches.slice(0, 5).map((m: RecalledMemory | ExplainedMemory) => ({ id: m.id, content: m.content })),
               },
             };
           }
@@ -882,8 +885,8 @@ Returns:
         }
 
         const typeLines = TYPE_ORDER
-          .filter(t => (stats.byType[t] || 0) > 0)
-          .map(t => `  ${t}: ${stats.byType[t]}`);
+          .filter((t: MemoryTypeValue) => (stats.byType[t] || 0) > 0)
+          .map((t: MemoryTypeValue) => `  ${t}: ${stats.byType[t]}`);
 
         const { high: highConf, medium: medConf, low: lowConf } = db.getConfidenceStats();
         const withEmbeddings = db.getEmbeddingCount();
@@ -965,9 +968,9 @@ Returns:
         if (format === "json") {
           const grouped: Record<string, Array<{ id: string; content: string; confidence: number; tags: string[]; scope: string; createdAt: number }>> = {};
           for (const t of TYPE_ORDER) {
-            const memories = all.filter(m => m.type === t);
+            const memories = all.filter((m: Memory) => m.type === t);
             if (memories.length > 0) {
-              grouped[t] = memories.map(m => ({
+              grouped[t] = memories.map((m: Memory) => ({
                 id: m.id,
                 content: m.content,
                 confidence: m.confidence,
@@ -1000,7 +1003,7 @@ Returns:
         md += `*Total: ${all.length} memories*\n\n`;
 
         for (const t of TYPE_ORDER) {
-          const memories = all.filter(m => m.type === t);
+          const memories = all.filter((m: Memory) => m.type === t);
           if (memories.length === 0) continue;
 
           md += `## ${t.charAt(0).toUpperCase() + t.slice(1)}s\n\n`;
@@ -1084,21 +1087,21 @@ Returns:
         });
 
         const corrections = results
-          .filter(r => r.type === MemoryType.CORRECTION)
-          .map(r => r.content);
+          .filter((r: RecalledMemory | ExplainedMemory) => r.type === MemoryType.CORRECTION)
+          .map((r: RecalledMemory | ExplainedMemory) => r.content);
         const decisions = results
-          .filter(r => r.type === MemoryType.DECISION)
-          .map(r => r.content);
+          .filter((r: RecalledMemory | ExplainedMemory) => r.type === MemoryType.DECISION)
+          .map((r: RecalledMemory | ExplainedMemory) => r.content);
 
         let context = "";
         if (corrections.length > 0) {
           context += "## Corrections (MUST follow)\n";
-          context += corrections.map(c => `- ${c}`).join("\n");
+          context += corrections.map((c: string) => `- ${c}`).join("\n");
           context += "\n\n";
         }
         if (decisions.length > 0) {
           context += "## Decisions (SHOULD follow)\n";
-          context += decisions.map(d => `- ${d}`).join("\n");
+          context += decisions.map((d: string) => `- ${d}`).join("\n");
           context += "\n";
         }
 
@@ -1126,7 +1129,7 @@ Returns:
 
         // Graph-aware injection: surface 1-hop neighbors of top results
         const graphContext: string[] = [];
-        const topResults = results.filter(r => r.type === MemoryType.CORRECTION || r.type === MemoryType.DECISION).slice(0, 5);
+        const topResults = results.filter((r: RecalledMemory | ExplainedMemory) => r.type === MemoryType.CORRECTION || r.type === MemoryType.DECISION).slice(0, 5);
         for (const r of topResults) {
           const related = db.getRelatedMemories(r.id);
           for (const rel of related.slice(0, 2)) {
@@ -1151,12 +1154,12 @@ Returns:
         // Surface active knowledge gaps relevant to this topic
         const gaps = db.getActiveKnowledgeGaps(5);
         if (gaps.length > 0) {
-          const relevant = gaps.filter(g =>
+          const relevant = gaps.filter((g: KnowledgeGap) =>
             topic.toLowerCase().includes(g.queryPattern) || g.queryPattern.includes(topic.toLowerCase()),
           );
           if (relevant.length > 0) {
             context += `\n\n## Knowledge Gaps\n`;
-            context += relevant.map(g => `- "${g.queryPattern}" (asked ${g.hitCount}x, avg ${(g.avgConfidence * 100).toFixed(0)}% confidence)`).join("\n");
+            context += relevant.map((g: KnowledgeGap) => `- "${g.queryPattern}" (asked ${g.hitCount}x, avg ${(g.avgConfidence * 100).toFixed(0)}% confidence)`).join("\n");
           }
         }
 

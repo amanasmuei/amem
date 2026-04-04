@@ -115,7 +115,7 @@ Returns:
           content: [{ type: "text" as const, text: lines.join("\n").trim() }],
           structuredContent: {
             total: reminders.length,
-            reminders: reminders.map(r => ({
+            reminders: reminders.map((r: { id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }) => ({
               id: r.id,
               content: r.content,
               dueAt: r.dueAt,
@@ -180,7 +180,7 @@ Returns:
           content: [{ type: "text" as const, text: lines.join("\n").trim() }],
           structuredContent: {
             total: reminders.length,
-            reminders: reminders.map(r => ({
+            reminders: reminders.map((r: { id: string; content: string; dueAt: number | null; status: "overdue" | "today" | "upcoming"; scope: string }) => ({
               id: r.id,
               content: r.content,
               dueAt: r.dueAt,
@@ -235,7 +235,7 @@ Returns:
           };
         }
 
-        const reminder = db.listReminders(true).find(r => r.id === fullId);
+        const reminder = db.listReminders(true).find((r: { id: string; content: string; dueAt: number | null; completed: boolean; createdAt: number; scope: string }) => r.id === fullId);
         return {
           content: [{ type: "text" as const, text: `Reminder ${shortId(fullId)} marked as completed${reminder ? `: "${reminder.content}"` : ""}.` }],
           structuredContent: {
