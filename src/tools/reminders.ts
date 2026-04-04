@@ -1,13 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
 import {
+  type AmemDatabase,
   ReminderSetResultSchema,
   ReminderListResultSchema,
   ReminderCheckResultSchema,
   ReminderCompleteResultSchema,
-} from "../schemas.js";
-import { shortId } from "./helpers.js";
+  shortId,
+} from "@aman_asmuei/amem-core";
 
 export function registerReminderTools(server: McpServer, db: AmemDatabase): void {
 

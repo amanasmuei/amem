@@ -18,9 +18,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { type MemoryTypeValue, recallMemories, multiStrategyRecall } from "../src/memory.js";
-import { generateEmbedding, isEmbeddingAvailable } from "../src/embeddings.js";
+import { createDatabase, type AmemDatabase, type MemoryTypeValue, recallMemories, multiStrategyRecall, generateEmbedding, isEmbeddingAvailable } from "@aman_asmuei/amem-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";

@@ -1,8 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
-import { generateEmbedding } from "../embeddings.js";
-import { shortId, formatAge } from "./helpers.js";
+import { type AmemDatabase, generateEmbedding, shortId, formatAge } from "@aman_asmuei/amem-core";
 
 export function registerVersionTools(server: McpServer, db: AmemDatabase, _project: string): void {
 

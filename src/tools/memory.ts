@@ -1,12 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
-import { MemoryType, type MemoryTypeValue, type ExplainedMemory, recallMemories, detectConflict, consolidateMemories, autoExpireContradictions, getVectorIndex } from "../memory.js";
-import { generateEmbedding, cosineSimilarity } from "../embeddings.js";
-import { sanitizeContent, loadConfig } from "../config.js";
-import { autoRelateMemory } from "../auto-relate.js";
-import { isReflectionDue } from "../reflection.js";
 import {
+  type AmemDatabase,
+  MemoryType,
+  type MemoryTypeValue,
+  type ExplainedMemory,
+  recallMemories,
+  detectConflict,
+  consolidateMemories,
+  autoExpireContradictions,
+  getVectorIndex,
+  generateEmbedding,
+  cosineSimilarity,
+  sanitizeContent,
+  loadConfig,
+  autoRelateMemory,
+  isReflectionDue,
   RecallResultSchema,
   ContextResultSchema,
   ExtractResultSchema,
@@ -15,8 +24,12 @@ import {
   InjectResultSchema,
   ConsolidateResultSchema,
   DetailResultSchema,
-} from "../schemas.js";
-import { TYPE_ORDER, MEMORY_TYPES, CHARACTER_LIMIT, shortId, formatAge } from "./helpers.js";
+  TYPE_ORDER,
+  MEMORY_TYPES,
+  CHARACTER_LIMIT,
+  shortId,
+  formatAge,
+} from "@aman_asmuei/amem-core";
 
 export function registerMemoryTools(server: McpServer, db: AmemDatabase, project: string, autoScope: (type: MemoryTypeValue) => string): void {
 

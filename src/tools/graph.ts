@@ -1,9 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
-import type { MemoryTypeValue } from "../memory.js";
-import { RecallResultSchema, TemporalResultSchema } from "../schemas.js";
-import { TYPE_ORDER, shortId, formatAge } from "./helpers.js";
+import { type AmemDatabase, type MemoryTypeValue, RecallResultSchema, TemporalResultSchema, TYPE_ORDER, shortId, formatAge } from "@aman_asmuei/amem-core";
 
 export function registerGraphTools(server: McpServer, db: AmemDatabase, project: string): void {
 

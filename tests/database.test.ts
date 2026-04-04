@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { MemoryType } from "../src/memory.js";
+import { createDatabase, type AmemDatabase, MemoryType } from "@aman_asmuei/amem-core";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";

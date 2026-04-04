@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { MemoryType } from "../src/memory.js";
+import { createDatabase, type AmemDatabase, MemoryType } from "@aman_asmuei/amem-core";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";

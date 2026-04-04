@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { VectorIndex } from "../src/ann.js";
+import { VectorIndex } from "@aman_asmuei/amem-core";
 
 function randomVec(dims: number): Float32Array {
   const v = new Float32Array(dims);

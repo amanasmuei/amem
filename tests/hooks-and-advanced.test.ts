@@ -1,8 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { installHooks, uninstallHooks, generateHooksConfig } from "../src/hooks.js";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { rerankWithCrossEncoder } from "../src/embeddings.js";
-import { getDefaultConfig, resetConfigCache } from "../src/config.js";
+import { createDatabase, type AmemDatabase, rerankWithCrossEncoder, getDefaultConfig, resetConfigCache } from "@aman_asmuei/amem-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractMemories } from "../src/extractor.js";
+import { extractMemories } from "@aman_asmuei/amem-core";
 
 describe("Conversation Extractor", () => {
   it("detects corrections from user messages", () => {

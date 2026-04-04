@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createDatabase, type AmemDatabase } from "./database.js";
-import { recallMemories, detectConflict, type MemoryTypeValue } from "./memory.js";
+import { createDatabase, type AmemDatabase, recallMemories, detectConflict, type MemoryTypeValue } from "@aman_asmuei/amem-core";
 import { formatAge, TYPE_ORDER } from "./tools/index.js";
 
 /**

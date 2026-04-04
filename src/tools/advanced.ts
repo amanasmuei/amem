@@ -1,11 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
-import { multiStrategyRecall } from "../memory.js";
-import { generateEmbedding } from "../embeddings.js";
-import { loadConfig } from "../config.js";
-import { reflect } from "../reflection.js";
-import { shortId, formatAge } from "./helpers.js";
+import {
+  type AmemDatabase,
+  multiStrategyRecall,
+  generateEmbedding,
+  loadConfig,
+  reflect,
+  shortId,
+  formatAge,
+} from "@aman_asmuei/amem-core";
 
 export function registerAdvancedTools(server: McpServer, db: AmemDatabase, project: string): void {
 

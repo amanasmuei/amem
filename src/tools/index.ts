@@ -1,6 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AmemDatabase } from "../database.js";
-import type { MemoryTypeValue } from "../memory.js";
+import type { AmemDatabase, MemoryTypeValue } from "@aman_asmuei/amem-core";
 import { registerMemoryTools } from "./memory.js";
 import { registerVersionTools } from "./versions.js";
 import { registerLogTools } from "./log.js";
@@ -8,8 +7,8 @@ import { registerGraphTools } from "./graph.js";
 import { registerReminderTools } from "./reminders.js";
 import { registerAdvancedTools } from "./advanced.js";
 
-// Re-export helpers for external consumers
-export { TYPE_ORDER, formatAge, shortId, SHORT_ID_LENGTH, CHARACTER_LIMIT } from "./helpers.js";
+// Re-export helpers for external consumers (now from amem-core)
+export { TYPE_ORDER, formatAge, shortId, SHORT_ID_LENGTH, CHARACTER_LIMIT } from "@aman_asmuei/amem-core";
 
 export function registerTools(server: McpServer, db: AmemDatabase, project: string): void {
   const GLOBAL_TYPES: MemoryTypeValue[] = ["correction", "preference", "pattern"];

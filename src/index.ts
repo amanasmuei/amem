@@ -2,9 +2,8 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createDatabase } from "./database.js";
+import { createDatabase, MemoryType } from "@aman_asmuei/amem-core";
 import { registerTools, TYPE_ORDER } from "./tools/index.js";
-import { MemoryType } from "./memory.js";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -72,12 +71,8 @@ ensureSecurePermissions(DB_PATH);
 const currentProject = detectProject();
 
 // Pre-warm embeddings in the background so first query is fast
-import { preloadEmbeddings, generateEmbedding } from "./embeddings.js";
+import { preloadEmbeddings, generateEmbedding, autoRelateMemory } from "@aman_asmuei/amem-core";
 preloadEmbeddings();
-
-// Background task: generate embeddings for memories that don't have them yet,
-// then auto-relate any that were missing links (fixes first-run gap when model was downloading)
-import { autoRelateMemory } from "./auto-relate.js";
 
 async function backfillEmbeddings(): Promise<void> {
   try {
@@ -117,7 +112,7 @@ async function backfillEmbeddings(): Promise<void> {
 setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
 
 // Build vector index after embeddings are loaded
-import { buildVectorIndex } from "./memory.js";
+import { buildVectorIndex } from "@aman_asmuei/amem-core";
 setTimeout(() => {
   try {
     const index = buildVectorIndex(db);

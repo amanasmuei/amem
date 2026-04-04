@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { MemoryType, type MemoryTypeValue, recallMemories, multiStrategyRecall, autoExpireContradictions } from "../src/memory.js";
-import { sanitizeContent, loadConfig, getDefaultConfig, resetConfigCache } from "../src/config.js";
+import { createDatabase, type AmemDatabase, MemoryType, type MemoryTypeValue, recallMemories, multiStrategyRecall, autoExpireContradictions, sanitizeContent, loadConfig, getDefaultConfig, resetConfigCache } from "@aman_asmuei/amem-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";

@@ -6,8 +6,8 @@ import {
   detectConflict,
   recallMemories,
   type Memory,
-} from "../src/memory.js";
-import { createDatabase } from "../src/database.js";
+  createDatabase,
+} from "@aman_asmuei/amem-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";

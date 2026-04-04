@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandQuery } from "../src/query-expand.js";
+import { expandQuery } from "@aman_asmuei/amem-core";
 
 describe("expandQuery", () => {
   it("expands 'auth' to include authentication and login", () => {

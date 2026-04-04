@@ -8,7 +8,7 @@ import {
   StatsResultSchema,
   ExportResultSchema,
   InjectResultSchema,
-} from "../src/schemas.js";
+} from "@aman_asmuei/amem-core";
 
 describe("Output Schemas", () => {
   it("StoreResultSchema validates a stored result", () => {

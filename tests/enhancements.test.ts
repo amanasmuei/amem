@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createDatabase, type AmemDatabase } from "../src/database.js";
-import { MemoryType, type MemoryTypeValue, consolidateMemories } from "../src/memory.js";
-import { cosineSimilarity } from "../src/embeddings.js";
+import { createDatabase, type AmemDatabase, MemoryType, type MemoryTypeValue, consolidateMemories, cosineSimilarity } from "@aman_asmuei/amem-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -268,7 +266,7 @@ describe("Confidence Decay in Consolidation", () => {
 // -----------------------------------------------------------------
 describe("Embedding generation fallback", () => {
   it("generateEmbedding returns null when no model is available", async () => {
-    const { generateEmbedding } = await import("../src/embeddings.js");
+    const { generateEmbedding } = await import("@aman_asmuei/amem-core");
     const result = await generateEmbedding("test content");
     // In CI / test environments without HuggingFace transformers, returns null
     expect(result === null || result instanceof Float32Array).toBe(true);

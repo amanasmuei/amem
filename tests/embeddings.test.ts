@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cosineSimilarity, findTopK } from "../src/embeddings.js";
+import { cosineSimilarity, findTopK } from "@aman_asmuei/amem-core";
 
 describe("cosineSimilarity", () => {
   it("returns 1.0 for identical vectors", () => {

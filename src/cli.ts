@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { createDatabase } from "./database.js";
-import { recallMemories, MemoryType, type MemoryTypeValue } from "./memory.js";
+import { createDatabase, recallMemories, MemoryType, type MemoryTypeValue } from "@aman_asmuei/amem-core";
 import { formatAge, TYPE_ORDER } from "./tools/index.js";
 import path from "node:path";
 import os from "node:os";
@@ -89,7 +88,7 @@ if (command === "doctor") {
     console.error(`No memory database found at ${DB_PATH}`);
     process.exit(1);
   }
-  const { runDiagnostics } = await import("./doctor.js");
+  const { runDiagnostics } = await import("@aman_asmuei/amem-core");
   const doctorDb = createDatabase(DB_PATH);
   try {
     const report = runDiagnostics(doctorDb);
@@ -119,7 +118,7 @@ if (command === "doctor") {
 }
 
 if (command === "repair") {
-  const { repairDatabase } = await import("./repair.js");
+  const { repairDatabase } = await import("@aman_asmuei/amem-core");
   const result = repairDatabase(DB_PATH);
   const icon = result.status === "healthy" ? "\u2713" : result.status === "repaired" ? "\u2713" : "\u2717";
   console.log(`\namem repair — ${icon} ${result.status.toUpperCase()}\n`);
@@ -473,7 +472,7 @@ async function handleSync(args: string[]) {
   const syncDb = createDatabase(DB_PATH);
 
   try {
-    const { discoverClaudeMemories, syncFromClaude } = await import("./sync.js");
+    const { discoverClaudeMemories, syncFromClaude } = await import("@aman_asmuei/amem-core");
 
     const discovered = discoverClaudeMemories();
     if (discovered.size === 0) {
@@ -511,7 +510,7 @@ async function handleSync(args: string[]) {
 // DB-DEPENDENT COMMANDS
 // ═══════════════════════════════════════════════════════════
 
-import type { AmemDatabase } from "./database.js";
+import type { AmemDatabase } from "@aman_asmuei/amem-core";
 
 async function handleRecall(db: AmemDatabase, args: string[]) {
   const query = args.join(" ");
@@ -713,7 +712,7 @@ async function handleTeamExport(db: AmemDatabase, args: string[]) {
     process.exit(1);
   }
 
-  const { exportForTeam } = await import("./sync.js");
+  const { exportForTeam } = await import("@aman_asmuei/amem-core");
   const result = await exportForTeam(db, outputDir, { userId });
 
   console.log(`Exported ${result.count} memories to ${result.file}`);
@@ -735,7 +734,7 @@ async function handleTeamImport(db: AmemDatabase, args: string[]) {
     process.exit(1);
   }
 
-  const { importFromTeam } = await import("./sync.js");
+  const { importFromTeam } = await import("@aman_asmuei/amem-core");
 
   if (dryRun) console.log("(dry run — no changes will be made)\n");
 

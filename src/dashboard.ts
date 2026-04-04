@@ -1,7 +1,7 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
-import type { AmemDatabase } from "./database.js";
-import { MemoryType } from "./memory.js";
+import type { AmemDatabase } from "@aman_asmuei/amem-core";
+import { MemoryType } from "@aman_asmuei/amem-core";
 
 // ---------------------------------------------------------------------------
 // HTML Dashboard — single-page app with embedded CSS + JS

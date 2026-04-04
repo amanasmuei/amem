@@ -1,8 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { AmemDatabase } from "../database.js";
-import { LogAppendResultSchema, LogRecallResultSchema, LogCleanupResultSchema } from "../schemas.js";
-import { shortId, formatAge } from "./helpers.js";
+import { type AmemDatabase, LogAppendResultSchema, LogRecallResultSchema, LogCleanupResultSchema, shortId, formatAge } from "@aman_asmuei/amem-core";
 
 export function registerLogTools(server: McpServer, db: AmemDatabase, project: string): void {
 

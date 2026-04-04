@@ -44,16 +44,10 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
-    "better-sqlite3": "^12.0.0",
-    "zod": "^3.25.0"
-  },
-  "optionalDependencies": {
-    "@huggingface/transformers": "^3.8.0",
-    "hnswlib-node": "^3.0.0"
+    "@aman_asmuei/amem-core": "file:../amem-core",
+    "@modelcontextprotocol/sdk": "^1.25.2"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
