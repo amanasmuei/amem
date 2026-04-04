@@ -529,7 +529,7 @@ amem complements Claude's built-in auto-memory — it doesn't replace it.
 **Recommended:** Keep both enabled. Run `amem-cli sync` to import Claude's memories into amem for unified, structured access.
 
 <details>
-<summary><strong>Sync details</strong></summary>
+<summary><strong>Claude → amem sync</strong></summary>
 
 ```bash
 amem-cli sync              # Import all projects
@@ -546,6 +546,33 @@ amem-cli sync --project myapp  # Import specific project
 
 </details>
 
+<details>
+<summary><strong>amem → Copilot sync</strong></summary>
+
+Export amem memories to `.github/copilot-instructions.md` so Copilot reads them as persistent context:
+
+```bash
+amem-cli sync --to copilot              # Export to current project
+amem-cli sync --to copilot --dry-run    # Preview without writing
+amem-cli sync --to copilot --project /path/to/repo
+```
+
+This generates structured markdown grouped by priority:
+1. **Corrections** (MUST follow) — hard constraints
+2. **Decisions** — architectural choices
+3. **Preferences** — user preferences
+4. **Patterns** — coding conventions
+5. **Context** — topology + facts
+
+The amem section is wrapped in `<!-- amem:start/end -->` markers — existing non-amem content in the file is preserved.
+
+**Cross-tool sync:** Decisions made in Claude sessions automatically inform Copilot:
+```
+Claude Code → amem sync → amem DB → amem sync --to copilot → copilot-instructions.md
+```
+
+</details>
+
 ---
 
 ## Dashboard
@@ -555,7 +582,7 @@ amem-cli dashboard              # Opens at localhost:3333
 amem-cli dashboard --port=8080  # Custom port
 ```
 
-Memory list with search and filters, inline actions (promote, demote, expire), interactive knowledge graph, confidence charts, session timeline, reminders, and conversation log.
+Memory list with search and filters (type, tier, source), inline actions (promote, demote, expire), interactive knowledge graph, confidence charts, session timeline, reminders, conversation log, and **Copilot Instructions Preview** panel with copy-to-clipboard.
 
 ---
 
@@ -565,9 +592,11 @@ Memory list with search and filters, inline actions (promote, demote, expire), i
 # Setup
 amem-cli init                          # Auto-configure AI tools
 amem-cli rules                         # Generate extraction rules
-amem-cli hooks                         # Install automatic capture hooks
+amem-cli hooks                         # Install hooks for Claude Code
+amem-cli hooks --target copilot        # Install hooks for GitHub Copilot CLI
 amem-cli hooks --uninstall             # Remove hooks
-amem-cli sync                          # Import Claude auto-memory
+amem-cli sync                          # Import Claude auto-memory → amem
+amem-cli sync --to copilot             # Export amem → copilot-instructions.md
 amem-cli doctor                        # Health diagnostics
 amem-cli repair                        # Repair corrupted database from backups
 
