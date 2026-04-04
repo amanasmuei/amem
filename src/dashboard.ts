@@ -1,7 +1,7 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
 import type { AmemDatabase } from "@aman_asmuei/amem-core";
-import { MemoryType } from "@aman_asmuei/amem-core";
+import { MemoryType, generateCopilotInstructions } from "@aman_asmuei/amem-core";
 
 // ---------------------------------------------------------------------------
 // HTML Dashboard — single-page app with embedded CSS + JS
@@ -172,8 +172,27 @@ a{color:var(--decision);text-decoration:none}
         <option value="working">working</option>
         <option value="archival">archival</option>
       </select>
+      <select id="mem-source">
+        <option value="">All sources</option>
+        <option value="conversation">conversation</option>
+        <option value="claude-auto-memory">claude sync</option>
+        <option value="copilot">copilot</option>
+        <option value="hook:PostToolUse">hook (tool)</option>
+        <option value="hook:SessionEnd">hook (session)</option>
+        <option value="team-sync">team sync</option>
+      </select>
     </div>
     <div class="mem-list" id="mem-list"></div>
+  </div>
+
+  <!-- Copilot Instructions Preview -->
+  <div class="card full" id="copilot-card">
+    <h2>Copilot Instructions Preview</h2>
+    <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
+      <span style="font-size:0.85rem;color:var(--muted)">Preview of what <code>amem sync --to copilot</code> would export to <code>.github/copilot-instructions.md</code></span>
+      <button onclick="copyCopilotPreview()" style="background:var(--decision);color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:0.8rem;cursor:pointer;font-weight:600;margin-left:auto">Copy to Clipboard</button>
+    </div>
+    <pre id="copilot-preview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:16px;font-size:0.82rem;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:var(--text);line-height:1.6"></pre>
   </div>
 
   <!-- Knowledge graph -->
@@ -316,11 +335,13 @@ a{color:var(--decision);text-decoration:none}
     var q=($('mem-search').value||'').toLowerCase();
     var t=$('mem-type').value;
     var tier=$('mem-tier')?$('mem-tier').value:'';
+    var src=$('mem-source')?$('mem-source').value:'';
     currentSearchQuery=q;
     var list=allMemories;
     if(q) list=list.filter(function(m){return m.content.toLowerCase().indexOf(q)!==-1});
     if(t) list=list.filter(function(m){return m.type===t});
     if(tier) list=list.filter(function(m){return m.tier===tier});
+    if(src) list=list.filter(function(m){return (m.source||'').indexOf(src)!==-1});
     renderMemories(list);
   }
 
@@ -453,6 +474,20 @@ a{color:var(--decision);text-decoration:none}
     fetchJSON('/api/reminders').then(renderReminders).catch(function(){});
     fetchJSON('/api/log?limit=30').then(renderLog).catch(function(){});
     fetchJSON('/api/summaries?limit=10').then(renderSummaries).catch(function(){});
+    fetchJSON('/api/copilot-preview').then(function(d){
+      var el=$('copilot-preview');
+      if(el) el.textContent=d.markdown||'No memories to export.';
+    }).catch(function(){});
+  }
+
+  window.copyCopilotPreview=function(){
+    var el=$('copilot-preview');
+    if(el&&el.textContent){
+      navigator.clipboard.writeText(el.textContent).then(function(){
+        var btn=document.querySelector('#copilot-card button');
+        if(btn){var orig=btn.textContent;btn.textContent='Copied!';setTimeout(function(){btn.textContent=orig},2000)}
+      });
+    }
   }
 
   function renderSummaries(summaries){
@@ -509,6 +544,7 @@ a{color:var(--decision);text-decoration:none}
   });
   $('mem-type').addEventListener('change',filterMemories);
   if($('mem-tier')) $('mem-tier').addEventListener('change',filterMemories);
+  if($('mem-source')) $('mem-source').addEventListener('change',filterMemories);
 
   // -- Memory actions (delegated) --
   document.addEventListener('click',function(e){
@@ -898,11 +934,20 @@ function handleTimeline(
       createdAt: m.createdAt,
       tier: m.tier,
       tags: m.tags,
+      source: m.source,
       dayGroup,
     };
   });
 
   jsonResponse(res, result);
+}
+
+function handleCopilotPreview(
+  db: AmemDatabase,
+  res: http.ServerResponse,
+): void {
+  const { markdown, counts } = generateCopilotInstructions(db);
+  jsonResponse(res, { markdown, counts });
 }
 
 // ---------------------------------------------------------------------------
@@ -940,6 +985,9 @@ export function startDashboard(db: AmemDatabase, port: number): void {
           break;
         case "/api/timeline":
           handleTimeline(db, res, query);
+          break;
+        case "/api/copilot-preview":
+          handleCopilotPreview(db, res);
           break;
         case "/api/action/tier":
           handleActionTier(db, res, query);

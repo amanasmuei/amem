@@ -186,6 +186,179 @@ export function uninstallHooks(): { removed: string[] } {
   return { removed };
 }
 
+// ── Copilot Hooks ─────────────────────────────────────
+
+export type HookTarget = "claude" | "copilot";
+
+/**
+ * Install hooks for GitHub Copilot CLI.
+ *
+ * Copilot CLI reads hooks from ~/.copilot/hooks/ or the agent config.
+ * Same hook scripts as Claude Code — the scripts are tool-agnostic
+ * (they write directly to the amem SQLite DB).
+ *
+ * The config is stored in ~/.copilot/hooks/amem-hooks.json.
+ */
+export function installCopilotHooks(config: HookConfig): { installed: string[]; configPath: string } {
+  const amemDir = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+  const hooksDir = path.join(amemDir, "hooks");
+  fs.mkdirSync(hooksDir, { recursive: true });
+
+  const installed: string[] = [];
+  const dbPath = process.env.AMEM_DB || path.join(amemDir, "memory.db");
+
+  // Write hook scripts — same as Claude (scripts are tool-agnostic)
+  if (config.captureToolUse) {
+    const scriptPath = path.join(hooksDir, "post-tool-use.mjs");
+    if (!fs.existsSync(scriptPath)) {
+      fs.writeFileSync(scriptPath, getPostToolUseScript(dbPath));
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    }
+    installed.push("post-tool-use.mjs");
+  }
+
+  if (config.captureSessionEnd) {
+    const scriptPath = path.join(hooksDir, "session-end.mjs");
+    if (!fs.existsSync(scriptPath)) {
+      fs.writeFileSync(scriptPath, getSessionEndScript(dbPath));
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    }
+    installed.push("session-end.mjs");
+  }
+
+  if (config.captureSessionStart) {
+    const scriptPath = path.join(hooksDir, "session-start.mjs");
+    if (!fs.existsSync(scriptPath)) {
+      fs.writeFileSync(scriptPath, getSessionStartScript(dbPath));
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    }
+    installed.push("session-start.mjs");
+  }
+
+  // Write Copilot hooks config
+  const copilotDir = path.join(os.homedir(), ".copilot");
+  fs.mkdirSync(copilotDir, { recursive: true });
+
+  const copilotHooksConfig = generateCopilotHooksConfig(config);
+  const configPath = path.join(copilotDir, "amem-hooks.json");
+  fs.writeFileSync(configPath, JSON.stringify(copilotHooksConfig, null, 2) + "\n");
+
+  // Also register MCP server in Copilot config if not present
+  const mcpConfigPath = path.join(copilotDir, "mcp-config.json");
+  let mcpConfig: Record<string, unknown> = {};
+  if (fs.existsSync(mcpConfigPath)) {
+    try {
+      const raw = fs.readFileSync(mcpConfigPath, "utf-8").trim();
+      if (raw) mcpConfig = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Start fresh
+    }
+  }
+
+  const servers = (mcpConfig.mcpServers ?? {}) as Record<string, unknown>;
+  if (!servers.amem) {
+    servers.amem = {
+      command: "npx",
+      args: ["-y", "@aman_asmuei/amem"],
+    };
+    mcpConfig.mcpServers = servers;
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + "\n");
+  }
+
+  return { installed, configPath };
+}
+
+/**
+ * Generate Copilot-compatible hooks configuration.
+ * Maps to the same hook lifecycle events but in Copilot's format.
+ */
+function generateCopilotHooksConfig(config: HookConfig): Record<string, unknown> {
+  const amemDir = process.env.AMEM_DIR || path.join(os.homedir(), ".amem");
+
+  const hooks: Record<string, unknown> = {
+    version: 1,
+    provider: "amem",
+    description: "Automatic memory capture hooks for GitHub Copilot CLI",
+  };
+
+  const events: Array<{
+    event: string;
+    script: string;
+    timeout: number;
+    description: string;
+  }> = [];
+
+  if (config.captureSessionStart) {
+    events.push({
+      event: "session_start",
+      script: path.join(amemDir, "hooks", "session-start.mjs"),
+      timeout: 10000,
+      description: "Inject core memories and reminders at session start",
+    });
+  }
+
+  if (config.captureToolUse) {
+    events.push({
+      event: "post_tool_use",
+      script: path.join(amemDir, "hooks", "post-tool-use.mjs"),
+      timeout: 10000,
+      description: "Capture tool observations with pattern detection",
+    });
+  }
+
+  if (config.captureSessionEnd) {
+    events.push({
+      event: "session_end",
+      script: path.join(amemDir, "hooks", "session-end.mjs"),
+      timeout: 15000,
+      description: "Auto-extract memories and summarize session",
+    });
+  }
+
+  hooks.hooks = events;
+  return hooks;
+}
+
+/**
+ * Remove amem hooks from Copilot configuration.
+ */
+export function uninstallCopilotHooks(): { removed: string[] } {
+  const removed: string[] = [];
+
+  const copilotDir = path.join(os.homedir(), ".copilot");
+  const configPath = path.join(copilotDir, "amem-hooks.json");
+
+  if (fs.existsSync(configPath)) {
+    fs.unlinkSync(configPath);
+    removed.push("amem-hooks.json");
+  }
+
+  return { removed };
+}
+
+/**
+ * Install hooks for the specified target.
+ */
+export function installHooksForTarget(
+  config: HookConfig,
+  target: HookTarget,
+): { installed: string[]; configPath: string } {
+  if (target === "copilot") {
+    return installCopilotHooks(config);
+  }
+  return installHooks(config);
+}
+
+/**
+ * Uninstall hooks for the specified target.
+ */
+export function uninstallHooksForTarget(target: HookTarget): { removed: string[] } {
+  if (target === "copilot") {
+    return uninstallCopilotHooks();
+  }
+  return uninstallHooks();
+}
+
 // ── Hook Script Templates ──────────────────────────────
 
 function getPostToolUseScript(dbPath: string): string {

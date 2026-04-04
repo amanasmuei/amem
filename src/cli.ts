@@ -205,7 +205,9 @@ SETUP
   init                 Auto-configure amem for detected AI tools
   rules [--tool NAME]  Generate auto-extraction rules for AI tools
   hooks [--uninstall]  Install/uninstall automatic memory capture hooks
+                       --target copilot  Install hooks for GitHub Copilot CLI
   sync [--dry-run]     Import Claude Code auto-memory into amem
+  sync --to copilot    Export amem memories to .github/copilot-instructions.md
   doctor               Run health diagnostics on your memory database
   repair               Attempt to repair a corrupted database from backups
   dashboard [--port=N] Open the memory dashboard in your browser (default: 3333)
@@ -427,36 +429,50 @@ function handleRules(args: string[]) {
 // ═══════════════════════════════════════════════════════════
 
 async function handleHooks(args: string[]) {
-  const { installHooks, uninstallHooks } = await import("./hooks.js");
+  const { installHooks, uninstallHooks, installHooksForTarget, uninstallHooksForTarget } = await import("./hooks.js");
+  const target = getFlag(args, "--target", "-T") as "claude" | "copilot" | undefined;
+  const isCopilot = target === "copilot";
+  const toolName = isCopilot ? "GitHub Copilot CLI" : "Claude Code";
 
   if (args.includes("--uninstall") || args.includes("--remove")) {
-    const result = uninstallHooks();
+    const result = target
+      ? uninstallHooksForTarget(target)
+      : uninstallHooks();
     if (result.removed.length > 0) {
       console.log(`Removed amem hooks: ${result.removed.join(", ")}`);
-      console.log("Hooks have been uninstalled from Claude Code settings.");
+      console.log(`Hooks have been uninstalled from ${toolName} settings.`);
     } else {
       console.log("No amem hooks found to remove.");
     }
     return;
   }
 
-  console.log("Installing amem hooks for automatic memory capture...\n");
-  const result = installHooks({
+  console.log(`Installing amem hooks for ${toolName}...\n`);
+
+  const hookConfig = {
     captureToolUse: true,
     captureSessionEnd: true,
     captureSessionStart: true,
-  });
+  };
+
+  const result = target
+    ? installHooksForTarget(hookConfig, target)
+    : installHooks(hookConfig);
 
   console.log(`  Installed hook scripts: ${result.installed.join(", ")}`);
-  console.log(`  Updated Claude Code settings: ${result.configPath}`);
+  console.log(`  Updated ${toolName} settings: ${result.configPath}`);
   console.log();
-  console.log("Hooks installed! Claude Code will now automatically:");
+  console.log(`Hooks installed! ${toolName} will now automatically:`);
   console.log("  - Inject core memories at session start (SessionStart)");
   console.log("  - Capture tool observations with pattern detection (PostToolUse)");
   console.log("  - Auto-extract corrections/decisions/preferences from conversation");
   console.log("  - Summarize sessions on end (Stop)");
+  if (isCopilot) {
+    console.log();
+    console.log("Tip: Run 'amem sync --to copilot' to export memories to copilot-instructions.md");
+  }
   console.log();
-  console.log("Use 'amem-cli hooks --uninstall' to remove hooks.");
+  console.log(`Use 'amem-cli hooks${target ? ` --target ${target}` : ""} --uninstall' to remove hooks.`);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -466,12 +482,51 @@ async function handleHooks(args: string[]) {
 async function handleSync(args: string[]) {
   const dryRun = args.includes("--dry-run") || args.includes("-n");
   const projectFilter = getFlag(args, "--project", "-p");
+  const syncTarget = getFlag(args, "--to", "-t");
 
   // Need DB for sync
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const syncDb = createDatabase(DB_PATH);
 
   try {
+    if (syncTarget === "copilot") {
+      // ── Export amem → copilot-instructions.md ──────────
+      const { syncToCopilot } = await import("@aman_asmuei/amem-core");
+
+      const projectDir = projectFilter || process.cwd();
+      console.log(`Syncing amem memories to Copilot instructions...`);
+      if (dryRun) console.log("(dry run — no changes will be made)\n");
+
+      const result = syncToCopilot(syncDb, {
+        projectDir,
+        dryRun,
+        scope: `project:${projectDir}`,
+      });
+
+      if (result.memoriesExported === 0) {
+        console.log("No memories to export. Store some memories first via amem MCP tools.");
+        return;
+      }
+
+      console.log(`  Corrections:  ${result.sections.corrections}`);
+      console.log(`  Decisions:    ${result.sections.decisions}`);
+      console.log(`  Preferences:  ${result.sections.preferences}`);
+      console.log(`  Patterns:     ${result.sections.patterns}`);
+      console.log(`  Context:      ${result.sections.other}`);
+      console.log();
+      console.log(`Total: ${result.memoriesExported} memories exported`);
+
+      if (dryRun) {
+        console.log(`\nWould write to: ${result.file}`);
+        console.log("Run without --dry-run to write the file.");
+      } else {
+        console.log(`\nWritten to: ${result.file}`);
+        console.log("Copilot will read this as persistent context in your project.");
+      }
+      return;
+    }
+
+    // ── Default: Import Claude auto-memory → amem ──────────
     const { discoverClaudeMemories, syncFromClaude } = await import("@aman_asmuei/amem-core");
 
     const discovered = discoverClaudeMemories();
