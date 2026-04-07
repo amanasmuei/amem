@@ -821,7 +821,7 @@ PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/i
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/amanasmuei"><strong>Aman Asmuei</strong></a>
+  Built with ❤️ in 🇲🇾 Malaysia by <a href="https://github.com/amanasmuei"><strong>Aman Asmuei</strong></a>
 </p>
 
 <p align="center">
