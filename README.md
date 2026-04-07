@@ -29,10 +29,10 @@
 
 <table align="center">
   <tr>
-    <td><strong>72% Recall@5</strong><br/><sub>Semantic accuracy</sub></td>
+    <td><strong>91.0% R@5</strong><br/><sub>LongMemEval Oracle, 500q</sub></td>
     <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
     <td><strong>29 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
-    <td><strong>388 tests</strong><br/><sub>All passing</sub></td>
+    <td><strong>Powered by</strong><br/><sub><a href="https://github.com/amanasmuei/amem-core">amem-core</a></sub></td>
   </tr>
 </table>
 
@@ -68,6 +68,46 @@ You (switch to Copilot): starts coding
 ```
 
 No cloud. No API keys. Everything stays on your machine.
+
+---
+
+## 🧬 Powered by `amem-core`
+
+`amem` is the **MCP server**. The actual memory engine — embeddings, recall, knowledge graph, contradiction detection, reflection — lives in a separate package: [`@aman_asmuei/amem-core`](https://github.com/amanasmuei/amem-core).
+
+```
+        Claude Code / Copilot / Cursor / any MCP client
+                          │
+                          │ MCP (stdio)
+                          ▼
+          ┌─────────────────────────────────┐
+          │   @aman_asmuei/amem (this pkg)  │
+          │   29 MCP tools, CLI, hooks      │
+          └────────────────┬────────────────┘
+                           │ imports
+                           ▼
+          ┌─────────────────────────────────┐
+          │   @aman_asmuei/amem-core        │
+          │   embeddings · HNSW · recall    │
+          │   knowledge graph · reflection  │
+          │   91.0% R@5 on LongMemEval      │
+          └────────────────┬────────────────┘
+                           │
+                           ▼
+                ┌────────────────────┐
+                │  SQLite (one file) │
+                │  ~/.amem/memory.db │
+                └────────────────────┘
+```
+
+| Package | Role | Install | Use case |
+|---|---|---|---|
+| **`@aman_asmuei/amem`** *(this)* | MCP server + CLI + hooks | `npm install -g @aman_asmuei/amem` | Plug into Claude Code, Copilot, Cursor, any MCP client |
+| **`@aman_asmuei/amem-core`** | Pure TypeScript library, zero MCP deps | `npm install @aman_asmuei/amem-core` | Embed memory directly in your own Node app |
+
+**Why the split?** The same engine powers `amem` (this MCP server), `aman-agent` (CLI), `aman-tg` (Telegram bot), and any other Node app you want to give memory to. All retrieval-quality improvements ship via `amem-core`. All MCP-tool changes ship via `amem`. They version independently.
+
+> The **91.0% R@5** headline is the engine quality from `amem-core` — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
 
 ---
 
@@ -619,41 +659,51 @@ amem-cli reset --confirm               # Wipe all data
 ```
                         Your AI Tool
            Claude Code / Copilot CLI / any MCP client
-                    |                |
-                    | MCP (stdio)    | Lifecycle Hooks
-                    v                v
-          +---------------------------------+
-          |        amem MCP Server          |
-          |                                 |
-          |  29 Tools . 7 Resources . 2 Prompts
-          |                                 |
-          |  Multi-Strategy Retrieval       |
-          |  [HNSW] + [FTS5] + [Graph] + [Temporal]
-          |       + query expansion         |
-          |       + cross-encoder (opt-in)  |
-          |                                 |
-          |  Self-Evolving Reflection       |
-          |  [Clustering] + [Contradictions]|
-          |  + [Synthesis] + [Gap Detection]|
-          |                                 |
-          |  +---------------------------+  |
-          |  | SQLite + WAL + FTS5       |  |
-          |  | ~/.amem/memory.db         |  |
-          |  |                           |  |
-          |  | memories      (tiered)    |  |
-          |  | conversation_log (raw)    |  |
-          |  | memory_versions (history) |  |
-          |  | memory_relations (graph)  |  |
-          |  | synthesis_lineage         |  |
-          |  | knowledge_gaps            |  |
-          |  | session_summaries         |  |
-          |  | reminders                 |  |
-          |  +---------------------------+  |
-          |                                 |
-          |  Embeddings: bge-small-en-v1.5  |
-          |  Config: ~/.amem/config.json    |
-          +---------------------------------+
+                    │                │
+                    │ MCP (stdio)    │ Lifecycle Hooks
+                    ▼                ▼
+          ┌─────────────────────────────────┐
+          │   @aman_asmuei/amem             │  ← this package
+          │                                 │
+          │  29 Tools · 7 Resources · 2 Prompts
+          │  Slash commands · CLI · Hooks   │
+          │  Config: ~/.amem/config.json    │
+          └────────────────┬────────────────┘
+                           │ imports
+                           ▼
+          ┌─────────────────────────────────┐
+          │   @aman_asmuei/amem-core        │  ← the engine
+          │                                 │
+          │  Multi-Strategy Retrieval       │
+          │  [HNSW] + [FTS5] + [Graph] + [Temporal]
+          │       + query expansion         │
+          │       + cross-encoder (opt-in)  │
+          │                                 │
+          │  Self-Evolving Reflection       │
+          │  [Clustering] + [Contradictions]│
+          │  + [Synthesis] + [Gap Detection]│
+          │                                 │
+          │  Embeddings: bge-small-en-v1.5  │
+          │  91.0% R@5 on LongMemEval       │
+          └────────────────┬────────────────┘
+                           │
+                           ▼
+          ┌─────────────────────────────────┐
+          │   SQLite + WAL + FTS5           │
+          │   ~/.amem/memory.db             │
+          │                                 │
+          │   memories       (tiered)       │
+          │   conversation_log (raw)        │
+          │   memory_versions (history)     │
+          │   memory_relations (graph)      │
+          │   synthesis_lineage             │
+          │   knowledge_gaps                │
+          │   session_summaries             │
+          │   reminders                     │
+          └─────────────────────────────────┘
 ```
+
+The **`amem` MCP server is a thin wrapper** around `amem-core`. The retrieval engine, embeddings, knowledge graph, reflection — all live in `amem-core` and version independently. Bug in MCP wiring? Republish `amem`. Recall improvement? Republish `amem-core`. No coupling.
 
 ### Ranking Formula
 
