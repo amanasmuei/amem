@@ -29,7 +29,7 @@
 
 <table align="center">
   <tr>
-    <td><strong>91.0% R@5</strong><br/><sub>LongMemEval Oracle, 500q</sub></td>
+    <td><strong>94.6% R@5</strong><br/><sub>LongMemEval Oracle, 500q</sub></td>
     <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
     <td><strong>29 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
     <td><strong>Powered by</strong><br/><sub><a href="https://github.com/amanasmuei/amem-core">amem-core</a></sub></td>
@@ -107,7 +107,7 @@ No cloud. No API keys. Everything stays on your machine.
 
 **Why the split?** The same engine powers `amem` (this MCP server), `aman-agent` (CLI), `aman-tg` (Telegram bot), and any other Node app you want to give memory to. All retrieval-quality improvements ship via `amem-core`. All MCP-tool changes ship via `amem`. They version independently.
 
-> The **91.0% R@5** headline is the engine quality from `amem-core` — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
+> The **94.6% R@5** headline is the engine quality from `amem-core` — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
 
 ---
 
@@ -684,7 +684,7 @@ amem-cli reset --confirm               # Wipe all data
           │  + [Synthesis] + [Gap Detection]│
           │                                 │
           │  Embeddings: bge-small-en-v1.5  │
-          │  91.0% R@5 on LongMemEval       │
+          │  94.6% R@5 on LongMemEval       │
           └────────────────┬────────────────┘
                            │
                            ▼
