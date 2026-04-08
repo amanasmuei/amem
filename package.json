@@ -1,6 +1,6 @@
 {
   "name": "@aman_asmuei/amem",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "description": "The memory layer for AI coding tools. Local-first, developer-specific, works everywhere.",
   "type": "module",
   "main": "dist/index.js",
@@ -44,8 +44,9 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@aman_asmuei/amem-core": "^0.2.0",
-    "@modelcontextprotocol/sdk": "^1.25.2"
+    "@aman_asmuei/amem-core": "^0.5.0",
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

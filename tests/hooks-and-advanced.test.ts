@@ -123,7 +123,11 @@ describe("Cross-encoder reranking", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0].id).toBeDefined();
-    expect(result[0].score).toBeGreaterThanOrEqual(0);
+    // Cross-encoder returns raw logits, which are legitimately negative.
+    // We only assert it's a finite number — the model path returns logits,
+    // the fallback path returns the original semantic score (>= 0).
+    expect(typeof result[0].score).toBe("number");
+    expect(Number.isFinite(result[0].score)).toBe(true);
   }, 60000);
 
   it("rerankWithCrossEncoder handles empty candidates", async () => {

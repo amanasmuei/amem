@@ -125,7 +125,7 @@ const server = new McpServer({
   version: pkg.version,
 });
 
-registerTools(server, db, currentProject);
+registerTools(server, db, currentProject, DB_PATH);
 
 // Register MCP prompts — these teach AI clients how to use Amem effectively
 server.registerPrompt(
