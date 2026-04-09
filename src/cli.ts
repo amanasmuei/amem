@@ -79,7 +79,16 @@ if (command === "hooks") {
 
 if (command === "sync") {
   await handleSync(args.slice(1));
-  process.exit(0);
+  // Workaround: @huggingface/transformers (ONNX Runtime) has a known
+  // teardown crash on macOS — worker threads try to release a mutex that
+  // Node has already torn down, producing
+  //   libc++abi: terminating ... mutex lock failed: Invalid argument
+  // and exit code 134. By this point all sync work is committed and the
+  // DB is closed, so we flush stdio and hard-exit via SIGKILL before the
+  // broken native destructors can run.
+  await new Promise<void>((resolve) => process.stdout.write("", () => resolve()));
+  await new Promise<void>((resolve) => process.stderr.write("", () => resolve()));
+  process.kill(process.pid, "SIGKILL");
 }
 
 // ── Commands that need a database ───────────────────────
