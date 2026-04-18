@@ -559,6 +559,66 @@ memory_store({
 
 ---
 
+## Honest Comparison: amem vs graphify
+
+[graphify](https://github.com/safishamsi/graphify) is the most common "what about X?" when people find amem. They solve **fundamentally different problems** and are genuinely complementary.
+
+### What each tool does
+
+| | **amem** | **graphify** |
+|---|---|---|
+| **One-liner** | Persistent memory across AI sessions | Codebase → knowledge graph |
+| **Core question** | *"What has my AI learned about me?"* | *"What does this codebase look like?"* |
+| **Input** | Natural language (corrections, decisions, preferences) | Files (code, docs, PDFs, images, video) |
+| **Output** | Recalled memories ranked by relevance | Structural graph + report + interactive HTML |
+| **Persistence** | Always — memory survives across sessions and tools | Snapshot — `graph.json` persists, but doesn't learn over time |
+| **When it runs** | Continuously, every session | On-demand (`/graphify .`) or on commit via git hook |
+
+### Technical comparison
+
+| | **amem** | **graphify** |
+|---|---|---|
+| **Runtime** | TypeScript / Node (≥18) | Python (≥3.10) |
+| **Protocol** | MCP server (33 tools, 7 resources) | AI skill (slash command) + optional MCP server |
+| **Storage** | SQLite + FTS5 + WAL | NetworkX graph → JSON file |
+| **Search** | Semantic embeddings + FTS5 + graph + reranking | Graph traversal (BFS/DFS) + node lookup |
+| **Embeddings** | Local `bge-small-en-v1.5` (384-dim) | None — uses graph topology, not vector similarity |
+| **Code understanding** | None — stores what you tell it | Deep — tree-sitter AST for 25 languages |
+| **Multimodal** | Text only | Code, docs, PDFs, images, video, audio |
+| **LLM required** | No (all local) | Yes for docs/images (code is LLM-free via tree-sitter) |
+| **Benchmark** | 97.8% R@5 on LongMemEval-S | 71.5x token reduction vs raw file reading |
+| **AI tool support** | Claude Code, Copilot, Cursor, any MCP client | Claude Code, Codex, Copilot, Cursor, Gemini, Aider, Kiro, +10 more |
+
+### Where each wins
+
+**amem wins at:**
+- Remembering your preferences, corrections, and decisions **across projects and tools**
+- Semantic recall — finding the right memory from a vague query (97.8% R@5)
+- Temporal intelligence — tracking what was true *when*, auto-expiring contradictions
+- Self-evolution — reflection engine clusters, detects contradictions, identifies gaps
+- Zero LLM dependency — everything runs locally, no API calls
+
+**graphify wins at:**
+- Understanding **code structure** — call graphs, imports, class hierarchies, cross-file relationships
+- Multimodal ingestion — drop in code, papers, screenshots, videos, it graphs them all
+- Token efficiency — 71.5x compression means your AI reads structure, not raw files
+- Breadth of language support — 25 programming languages via tree-sitter AST
+- Breadth of AI tool support — 15+ platforms with dedicated install commands
+
+### Honest takeaways
+
+1. **They don't compete.** amem remembers *your* knowledge (decisions, corrections, preferences). graphify maps *the codebase's* structure (call graphs, dependencies, architecture). Different data, different access patterns.
+
+2. **Use both if you want.** Run `graphify .` to get a structural map of your project. Use amem to remember "we chose this architecture because X." The graph tells your AI *what exists*. The memory tells it *why things are that way*.
+
+3. **graphify has broader platform coverage** (15+ AI tools). amem has deeper integration where it works (MCP protocol with 33 tools, structured resources, prompts).
+
+4. **graphify needs an LLM for non-code files.** amem is fully local — no API calls, no model inference beyond the local embedding model.
+
+5. **The real choice depends on your pain point.** If your AI keeps forgetting your preferences and decisions → amem. If your AI can't navigate your codebase efficiently → graphify. If both → use both.
+
+---
+
 ## Platform Compatibility
 
 | Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
