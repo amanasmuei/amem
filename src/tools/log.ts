@@ -97,7 +97,7 @@ Args:
         session_id: z.string().optional().describe("Replay a specific session — returns turns in order"),
         query: z.string().optional().describe("Full-text search across all logged content"),
         limit: z.number().int().min(1).max(200).default(20).describe("Max entries to return"),
-      }).strict().refine(d => d.session_id || d.query || true, "Provide session_id or query, or omit both for recent entries"),
+      }).strict(),
       outputSchema: LogRecallResultSchema,
       annotations: {
         readOnlyHint: true,

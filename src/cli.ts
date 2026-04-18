@@ -755,8 +755,8 @@ function handleReset(db: AmemDatabase, args: string[]) {
 
   // Delete the database file and WAL/SHM files
   fs.unlinkSync(DB_PATH);
-  try { fs.unlinkSync(DB_PATH + "-wal"); } catch {}
-  try { fs.unlinkSync(DB_PATH + "-shm"); } catch {}
+  try { fs.unlinkSync(DB_PATH + "-wal"); } catch { /* WAL file may not exist */ }
+  try { fs.unlinkSync(DB_PATH + "-shm"); } catch { /* SHM file may not exist */ }
 
   console.log("All amem data has been wiped. Starting fresh.");
   console.log(`Deleted: ${DB_PATH}`);

@@ -97,21 +97,21 @@ export function installHooks(config: HookConfig): { installed: string[]; configP
   if (config.captureToolUse) {
     const scriptPath = path.join(hooksDir, "post-tool-use.mjs");
     fs.writeFileSync(scriptPath, getPostToolUseScript(dbPath));
-    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     installed.push("post-tool-use.mjs");
   }
 
   if (config.captureSessionEnd) {
     const scriptPath = path.join(hooksDir, "session-end.mjs");
     fs.writeFileSync(scriptPath, getSessionEndScript(dbPath));
-    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     installed.push("session-end.mjs");
   }
 
   if (config.captureSessionStart) {
     const scriptPath = path.join(hooksDir, "session-start.mjs");
     fs.writeFileSync(scriptPath, getSessionStartScript(dbPath));
-    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+    if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     installed.push("session-start.mjs");
   }
 
@@ -124,8 +124,8 @@ export function installHooks(config: HookConfig): { installed: string[]; configP
     try {
       const raw = fs.readFileSync(settingsPath, "utf-8").trim();
       if (raw) settings = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      // Start fresh if corrupted
+    } catch (error) {
+      console.error("[amem] Failed to parse settings.json:", error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -178,8 +178,8 @@ export function uninstallHooks(): { removed: string[] } {
         settings.hooks = hooks;
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
       }
-    } catch {
-      // Can't parse settings — skip
+    } catch (error) {
+      console.error("[amem] Failed to update settings.json:", error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -212,7 +212,7 @@ export function installCopilotHooks(config: HookConfig): { installed: string[]; 
     const scriptPath = path.join(hooksDir, "post-tool-use.mjs");
     if (!fs.existsSync(scriptPath)) {
       fs.writeFileSync(scriptPath, getPostToolUseScript(dbPath));
-      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     }
     installed.push("post-tool-use.mjs");
   }
@@ -221,7 +221,7 @@ export function installCopilotHooks(config: HookConfig): { installed: string[]; 
     const scriptPath = path.join(hooksDir, "session-end.mjs");
     if (!fs.existsSync(scriptPath)) {
       fs.writeFileSync(scriptPath, getSessionEndScript(dbPath));
-      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     }
     installed.push("session-end.mjs");
   }
@@ -230,7 +230,7 @@ export function installCopilotHooks(config: HookConfig): { installed: string[]; 
     const scriptPath = path.join(hooksDir, "session-start.mjs");
     if (!fs.existsSync(scriptPath)) {
       fs.writeFileSync(scriptPath, getSessionStartScript(dbPath));
-      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o755);
+      if (process.platform !== "win32") fs.chmodSync(scriptPath, 0o700);
     }
     installed.push("session-start.mjs");
   }
@@ -250,8 +250,8 @@ export function installCopilotHooks(config: HookConfig): { installed: string[]; 
     try {
       const raw = fs.readFileSync(mcpConfigPath, "utf-8").trim();
       if (raw) mcpConfig = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      // Start fresh
+    } catch (error) {
+      console.error("[amem] Failed to parse mcp-config.json:", error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -460,7 +460,8 @@ try {
   }
 
   db.close();
-} catch {
+} catch (err) {
+  console.error('[amem] PostToolUse hook failed:', err instanceof Error ? err.message : String(err));
   process.exit(0);
 }
 `;
@@ -534,8 +535,8 @@ try {
     console.log('[amem] Session context loaded:');
     console.log(lines.join('\\n'));
   }
-} catch {
-  // Silent failure — don't block session start
+} catch (err) {
+  console.error('[amem] SessionStart hook failed:', err instanceof Error ? err.message : String(err));
   process.exit(0);
 }
 `;
@@ -679,12 +680,13 @@ try {
       JSON.stringify(corrections.slice(0, 10)),
       memoriesStored, project, now
     );
-  } catch {
-    // session_summaries table might not exist yet in older DBs
+  } catch (err) {
+    console.error('[amem] Failed to store session summary:', err instanceof Error ? err.message : String(err));
   }
 
   db.close();
-} catch {
+} catch (err) {
+  console.error('[amem] SessionEnd hook failed:', err instanceof Error ? err.message : String(err));
   process.exit(0);
 }
 `;

@@ -23,7 +23,9 @@ function ensureSecurePermissions(filePath: string): void {
     if (fs.existsSync(filePath) && process.platform !== "win32") {
       fs.chmodSync(filePath, 0o600);
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Failed to set file permissions:", error instanceof Error ? error.message : String(error));
+  }
 }
 
 // Automatic backup: keep last 3 backups of the DB before server starts
@@ -62,7 +64,9 @@ function detectProject(): string {
       }
       dir = path.dirname(dir);
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Project detection failed:", error instanceof Error ? error.message : String(error));
+  }
   return "global";
 }
 
@@ -106,10 +110,14 @@ async function backfillEmbeddings(): Promise<void> {
         console.error(`[amem] Auto-linked ${linked} relations for backfilled memories`);
       }
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Embedding backfill failed:", error instanceof Error ? error.message : String(error));
+  }
 }
 // Run after a short delay to not block startup
-setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
+setTimeout(() => { backfillEmbeddings().catch((error) => {
+  console.error("[amem] Embedding backfill failed:", error instanceof Error ? error.message : String(error));
+}); }, 3000);
 
 // Build vector index after embeddings are loaded
 import { buildVectorIndex } from "@aman_asmuei/amem-core";
@@ -117,7 +125,9 @@ setTimeout(() => {
   try {
     const index = buildVectorIndex(db);
     console.error(`[amem] Vector index built: ${index.size()} vectors`);
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Vector index build failed:", error instanceof Error ? error.message : String(error));
+  }
 }, 5000);
 
 const server = new McpServer({

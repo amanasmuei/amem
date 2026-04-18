@@ -462,22 +462,22 @@ a{color:var(--decision);text-decoration:none}
       renderStats(s);
       renderTypeBars(s.byType);
       renderConfBars(s.confidence);
-    }).catch(function(){});
+    }).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
 
     fetchJSON('/api/memories?limit=200').then(function(m){
       allMemories=m;
       filterMemories();
       renderTimeline(allMemories);
-    }).catch(function(){});
+    }).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
 
-    fetchJSON('/api/graph').then(renderGraph).catch(function(){});
-    fetchJSON('/api/reminders').then(renderReminders).catch(function(){});
-    fetchJSON('/api/log?limit=30').then(renderLog).catch(function(){});
-    fetchJSON('/api/summaries?limit=10').then(renderSummaries).catch(function(){});
+    fetchJSON('/api/graph').then(renderGraph).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
+    fetchJSON('/api/reminders').then(renderReminders).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
+    fetchJSON('/api/log?limit=30').then(renderLog).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
+    fetchJSON('/api/summaries?limit=10').then(renderSummaries).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
     fetchJSON('/api/copilot-preview').then(function(d){
       var el=$('copilot-preview');
       if(el) el.textContent=d.markdown||'No memories to export.';
-    }).catch(function(){});
+    }).catch(function(e){ console.error('[amem] Dashboard fetch error:', e); });
   }
 
   window.copyCopilotPreview=function(){
