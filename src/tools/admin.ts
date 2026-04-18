@@ -2,8 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — better-sqlite3 is a transitive dep via amem-core; no types bundled here.
 import Database from "better-sqlite3";
 import {
   type AmemDatabase,
