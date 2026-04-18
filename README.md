@@ -1,117 +1,74 @@
 <p align="center">
-  <img src="assets/logo.png" alt="amem" width="160" />
+  <img src="assets/logo.png" alt="amem" width="140" />
 </p>
 
 <h1 align="center">amem</h1>
 
 <p align="center">
-  <strong>One memory. Every AI tool.</strong>
+  <strong>The memory layer for AI coding tools.</strong><br/>
+  <sub>Tell your AI once — it remembers everywhere.</sub>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@aman_asmuei/amem"><img src="https://img.shields.io/npm/v/@aman_asmuei/amem?style=for-the-badge&logo=npm&logoColor=white&color=cb3837" alt="npm version" /></a>
-  &nbsp;
-  <a href="https://github.com/amanasmuei/amem/actions"><img src="https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=for-the-badge&logo=github&label=CI" alt="CI status" /></a>
-  &nbsp;
-  <a href="https://github.com/amanasmuei/amem/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="MIT License" /></a>
-  &nbsp;
-  <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2?style=for-the-badge" alt="MCP compatible" />
-  &nbsp;
-  <img src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 18+" />
-</p>
-
-<p align="center">
-  Tell your AI something once — it remembers across Claude Code, GitHub Copilot, Cursor, Windsurf, and any MCP client.<br/>
-  Local-first &middot; Semantic search &middot; Knowledge graph &middot; Self-evolving &middot; Privacy-aware &middot; No cloud required.
+  <a href="https://www.npmjs.com/package/@aman_asmuei/amem"><img src="https://img.shields.io/npm/v/@aman_asmuei/amem?style=flat-square&logo=npm&logoColor=white&color=cb3837" alt="npm" /></a>
+  <a href="https://github.com/amanasmuei/amem/actions"><img src="https://img.shields.io/github/actions/workflow/status/amanasmuei/amem/ci.yml?style=flat-square&logo=github&label=CI" alt="CI" /></a>
+  <a href="https://github.com/amanasmuei/amem/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT" /></a>
+  <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2?style=flat-square" alt="MCP" />
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=flat-square&logo=node.js&logoColor=white" alt="Node 18+" />
 </p>
 
 <br/>
 
-<table align="center">
-  <tr>
-    <td><strong>97.8% R@5</strong><br/><sub>LongMemEval-S, 500q</sub></td>
-    <td><strong>~14ms p50</strong><br/><sub>Full recall pipeline</sub></td>
-    <td><strong>33 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
-    <td><strong>Powered by</strong><br/><sub><a href="https://github.com/amanasmuei/amem-core">amem-core</a></sub></td>
-  </tr>
-</table>
+<div align="center">
 
-<br/>
+| 🎯 97.8% R@5 | ⚡ ~14ms p50 | 🛠 33 Tools | 🔒 100% Local |
+|:---:|:---:|:---:|:---:|
+| LongMemEval-S, 500q | Full recall pipeline | Complete memory toolkit | No cloud required |
+
+</div>
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> &bull;
-  <a href="#-how-it-works">How It Works</a> &bull;
-  <a href="#-benchmarks">Benchmarks</a> &bull;
-  <a href="#-tools-reference">Tools</a> &bull;
-  <a href="#-usage-guide">Usage Guide</a> &bull;
+  <a href="#-quick-start">Quick Start</a> · 
+  <a href="#-how-it-works">How It Works</a> · 
+  <a href="#-benchmarks">Benchmarks</a> · 
+  <a href="#%EF%B8%8F-tools-reference">Tools</a> · 
+  <a href="#-dashboard--knowledge-graph">Dashboard</a> · 
   <a href="#-architecture">Architecture</a>
 </p>
 
 ---
 
-## Why amem?
+## 💡 The Problem
 
 Every AI tool starts from zero. Every session. Every tool.
 
-> *"Don't use `any` in TypeScript"* — told Claude three times. Copilot still doesn't know.
->
-> *"We chose PostgreSQL over MongoDB"* — explained in Cursor. Claude has no idea.
+```diff
+- You: "Don't use 'any' in TypeScript"     → told Claude 3 times. Copilot still doesn't know.
+- You: "We chose PostgreSQL over MongoDB"   → explained in Cursor. Claude has no idea.
++ With amem: tell it once, every AI tool remembers — forever.
+```
 
-**amem** gives all your AI tools a shared, persistent memory.
+<details>
+<summary><b>See it in action</b></summary>
 
 ```
 You (in Claude Code):  "Don't use any type in TypeScript"
-  amem stores this as a correction (priority 1.0)
+  └─ amem stores this as a correction (priority 1.0, confidence 100%)
 
 You (switch to Copilot): starts coding
-  Copilot already knows — amem feeds it the same correction
+  └─ Copilot already knows — amem feeds it the same correction
+
+You (open Cursor): "What do you remember about TypeScript?"
+  └─ Instantly recalls: "Don't use any type" + all related preferences
 ```
 
-No cloud. No API keys. Everything stays on your machine.
+</details>
+
+No cloud. No API keys. One SQLite file. Everything stays on your machine.
 
 ---
 
-## 🧬 Powered by `amem-core`
-
-`amem` is the **MCP server**. The actual memory engine — embeddings, recall, knowledge graph, contradiction detection, reflection — lives in a separate package: [`@aman_asmuei/amem-core`](https://github.com/amanasmuei/amem-core).
-
-```
-        Claude Code / Copilot / Cursor / any MCP client
-                          │
-                          │ MCP (stdio)
-                          ▼
-          ┌─────────────────────────────────┐
-          │   @aman_asmuei/amem (this pkg)  │
-          │   33 MCP tools, CLI, hooks      │
-          └────────────────┬────────────────┘
-                           │ imports
-                           ▼
-          ┌─────────────────────────────────┐
-          │   @aman_asmuei/amem-core        │
-          │   embeddings · HNSW · recall    │
-          │   knowledge graph · reflection  │
-          │   97.8% R@5 on LongMemEval-S    │
-          └────────────────┬────────────────┘
-                           │
-                           ▼
-                ┌────────────────────┐
-                │  SQLite (one file) │
-                │  ~/.amem/memory.db │
-                └────────────────────┘
-```
-
-| Package | Role | Install | Use case |
-|---|---|---|---|
-| **`@aman_asmuei/amem`** *(this)* | MCP server + CLI + hooks | `npm install -g @aman_asmuei/amem` | Plug into Claude Code, Copilot, Cursor, any MCP client |
-| [**`@aman_asmuei/amem-core`**](https://github.com/amanasmuei/amem-core) | Pure TypeScript library, zero MCP deps | `npm install @aman_asmuei/amem-core` | Embed memory directly in your own Node app |
-
-**Why the split?** The same engine powers `amem` (this MCP server), `aman-agent` (CLI), `aman-tg` (Telegram bot), and any other Node app you want to give memory to. All retrieval-quality improvements ship via `amem-core`. All MCP-tool changes ship via `amem`. They version independently.
-
-> The **97.8% R@5** headline is the engine quality from `amem-core` (LongMemEval-S, session-level, 500 questions, zero API calls) — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
-
----
-
-## Quick Start
+## 🚀 Quick Start
 
 <table>
 <tr>
@@ -139,7 +96,7 @@ copilot plugin install amem
 </table>
 
 <details>
-<summary><strong>Cursor / Windsurf / Any MCP Client</strong></summary>
+<summary><b>📦 Cursor / Windsurf / Any MCP Client</b></summary>
 
 ```bash
 npm install -g @aman_asmuei/amem
@@ -147,7 +104,7 @@ amem-cli init      # Detects & configures all installed AI tools
 amem-cli rules     # Generates extraction rules for proactive memory use
 ```
 
-Or configure manually:
+Or add to your MCP config manually:
 
 ```json
 {
@@ -168,13 +125,58 @@ Or configure manually:
 amem-cli stats     # Should show "0 memories" initially
 ```
 
-Tell your AI: *"Remember: always use strict TypeScript, never use any type"*
-
-Start a **new** session: *"What do you remember about TypeScript?"* — it recalls instantly.
+> 💬 Tell your AI: *"Remember: always use strict TypeScript, never use any type"*
+>
+> 🔄 Start a **new** session: *"What do you remember about TypeScript?"* — it recalls instantly.
 
 ---
 
-## How It Works
+## 🧬 Powered by `amem-core`
+
+`amem` is the MCP server. The retrieval engine lives in [`@aman_asmuei/amem-core`](https://github.com/amanasmuei/amem-core).
+
+```
+     Claude Code / Copilot / Cursor / any MCP client
+                        │
+                        │ MCP (stdio)
+                        ▼
+        ┌──────────────────────────────────┐
+        │  @aman_asmuei/amem  (this pkg)   │
+        │  33 Tools · 7 Resources · 2 Prompts
+        │  CLI · Hooks · Dashboard         │
+        └───────────────┬──────────────────┘
+                        │ imports
+                        ▼
+        ┌──────────────────────────────────┐
+        │  @aman_asmuei/amem-core          │
+        │  Embeddings · HNSW · Recall      │
+        │  Knowledge Graph · Reflection    │
+        │  97.8% R@5 on LongMemEval-S      │
+        └───────────────┬──────────────────┘
+                        ▼
+              ┌────────────────────┐
+              │  SQLite + WAL      │
+              │  ~/.amem/memory.db │
+              └────────────────────┘
+```
+
+<details>
+<summary><b>Why two packages?</b></summary>
+
+| Package | Role | Install |
+|---|---|---|
+| **`@aman_asmuei/amem`** *(this)* | MCP server + CLI + hooks | `npm i -g @aman_asmuei/amem` |
+| [**`@aman_asmuei/amem-core`**](https://github.com/amanasmuei/amem-core) | Pure TS library, zero MCP deps | `npm i @aman_asmuei/amem-core` |
+
+The same engine powers `amem` (MCP server), `aman-agent` (CLI), `aman-tg` (Telegram bot), and any Node app you give memory to. Retrieval improvements ship via `amem-core`. MCP-tool changes ship via `amem`. They version independently.
+
+> The **97.8% R@5** headline is the engine quality from `amem-core` (LongMemEval-S, session-level, 500 questions, zero API calls) — exactly what you get whether you call it through MCP or import the library directly.
+
+</details>
+
+---
+
+## ⚙️ How It Works
 
 amem captures knowledge in **three layers** — from fully automatic to fully manual:
 
@@ -197,6 +199,9 @@ amem captures knowledge in **three layers** — from fully automatic to fully ma
 
 Corrections always surface first — they are your AI's hard constraints.
 
+<details>
+<summary><b>🔄 Memory Tiers & Temporal Validity</b></summary>
+
 ### Memory Tiers
 
 | Tier | Behavior |
@@ -212,7 +217,10 @@ Memories aren't forever. When facts change:
 - Contradictions are **auto-detected** ��� storing a new decision auto-expires the old one
 - Query any point in time with `memory_since`
 
-### Self-Evolving Memory Loop
+</details>
+
+<details>
+<summary><b>🧠 Self-Evolving Memory Loop</b></summary>
 
 Your memory doesn't just store — it **learns from its own structure**. Call `memory_reflect` to trigger the reflection engine:
 
@@ -236,7 +244,7 @@ memory_reflect → Analyzes your entire memory graph
 The system auto-nudges when reflection is due (>7 days or >50 new memories since last run).
 
 <details>
-<summary><strong>What the reflection report looks like</strong></summary>
+<summary><b>📊 What the reflection report looks like</b></summary>
 
 ```
 # Memory Reflection Report
@@ -276,7 +284,7 @@ Health Score: 68/100
 
 ---
 
-## Benchmarks
+## 📈 Benchmarks
 
 ### Recall Accuracy (LongMemEval)
 
@@ -357,7 +365,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 
 ---
 
-## Tools Reference
+## 🛠️ Tools Reference
 
 ### Core Memory (7 tools)
 
@@ -429,7 +437,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 
 ---
 
-## Usage Guide
+## 📖 Usage Guide
 
 ### Storing Memories
 
@@ -559,7 +567,10 @@ memory_store({
 
 ---
 
-## Honest Comparison: amem vs graphify
+## ⚔️ Honest Comparison: amem vs graphify
+
+<details>
+<summary><b>Click to expand — how amem compares to graphify</b></summary>
 
 [graphify](https://github.com/safishamsi/graphify) is the most common "what about X?" when people find amem. They solve **fundamentally different problems** and are genuinely complementary.
 
@@ -617,9 +628,11 @@ memory_store({
 
 5. **The real choice depends on your pain point.** If your AI keeps forgetting your preferences and decisions → amem. If your AI can't navigate your codebase efficiently → graphify. If both → use both.
 
+</details>
+
 ---
 
-## Platform Compatibility
+## 🌐 Platform Compatibility
 
 | Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
 |---|:---:|:---:|:---:|
@@ -635,6 +648,9 @@ memory_store({
 
 ### AI Skills
 
+<details>
+<summary><b>Available skills by platform</b></summary>
+
 | What you say | Skill | Claude Code | Copilot CLI |
 |---|---|:---:|:---:|
 | *"Remember never use any type"* | `remember` | Yes | Yes |
@@ -648,9 +664,11 @@ memory_store({
 | *"Open the memory dashboard"* | `dashboard` | Yes | -- |
 | *"Install hooks"* | `hooks` | Yes | -- |
 
+</details>
+
 ---
 
-## Working with Claude Code Auto-Memory
+## 🔄 Working with Claude Code Auto-Memory
 
 amem complements Claude's built-in auto-memory — it doesn't replace it.
 
@@ -711,18 +729,24 @@ Claude Code → amem sync → amem DB → amem sync --to copilot → copilot-ins
 
 ---
 
-## Dashboard
+## 📊 Dashboard & Knowledge Graph
 
 ```bash
 amem-cli dashboard              # Opens at localhost:3333
 amem-cli dashboard --port=8080  # Custom port
 ```
 
-Memory list with search and filters (type, tier, source), inline actions (promote, demote, expire), interactive knowledge graph, confidence charts, session timeline, reminders, conversation log, and **Copilot Instructions Preview** panel with copy-to-clipboard.
+Full-featured web dashboard with:
+
+- 🔍 **Memory browser** — search, filter by type/tier/source, inline actions (promote, demote, expire)
+- 🕸️ **Interactive knowledge graph** — zoom, pan, click-to-focus with neighborhood highlighting, detail panel, search, directional edges
+- 📈 **Analytics** — confidence distribution, type breakdown, session timeline
+- ⏰ **Reminders** — view and manage cross-session tasks
+- 📋 **Copilot Preview** — see what would be exported to `copilot-instructions.md`
 
 ---
 
-## CLI Reference
+## 💻 CLI Reference
 
 ```bash
 # Setup
@@ -750,7 +774,7 @@ amem-cli reset --confirm               # Wipe all data
 
 ---
 
-## Architecture
+## 🏗 Architecture
 
 ```
                         Your AI Tool
@@ -819,7 +843,7 @@ Additive scoring ensures no single low factor kills the ranking.
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 <details>
 <summary><strong>Environment variables</strong></summary>
@@ -844,7 +868,7 @@ Created automatically with defaults:
     "ftsWeight": 0.3,
     "graphWeight": 0.15,
     "temporalWeight": 0.15,
-    "rerankerEnabled": false
+    "rerankerEnabled": true
   },
   "privacy": {
     "enablePrivateTags": true,
@@ -865,7 +889,10 @@ Created automatically with defaults:
 </details>
 
 <details>
-<summary><strong>Version history</strong></summary>
+<summary><strong>📋 Version history</strong></summary>
+
+### v0.23.0 — Interactive Knowledge Graph Dashboard
+Full-width graph explorer with zoom/pan, click-to-focus neighborhood highlighting, detail panel with relation navigation, search & filter, directional edges, force-directed layout. Admin tools (doctor, repair, config, sync). 255 tests across 18 suites.
 
 ### v0.19.0 — Self-Evolving Memory Loop
 Reflection engine with HNSW-based clustering, 3-layer contradiction detection (negation + numerical + low-overlap), synthesis candidates with lineage tracking, knowledge gap detection, utility scoring, auto-trigger nudge in `memory_inject`. New DB tables: `synthesis_lineage`, `knowledge_gaps`, `reflection_meta`. Migration v5.
@@ -889,7 +916,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 
 ---
 
-## Tech Stack
+## 🧰 Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -899,34 +926,36 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 | Embeddings | HuggingFace bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
 | Reranking | ms-marco-MiniLM-L-6-v2 (default-on, int8, batched, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 239 tests across 17 suites + recall benchmarks |
+| Testing | Vitest — 255 tests across 18 suites + recall benchmarks |
 | CI/CD | GitHub Actions, npm publish on release |
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 ```bash
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 239 tests pass
+npm test        # 255 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
 
+<br/>
+
 ---
 
 <p align="center">
-  Built with ❤️ in 🇲🇾 Malaysia by <a href="https://github.com/amanasmuei"><strong>Aman Asmuei</strong></a>
+  <sub>Built with ❤️ in 🇲🇾 Malaysia by <a href="https://github.com/amanasmuei"><strong>Aman Asmuei</strong></a></sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/amanasmuei/amem">GitHub</a> &middot;
-  <a href="https://www.npmjs.com/package/@aman_asmuei/amem">npm</a> &middot;
-  <a href="https://github.com/amanasmuei/amem/issues">Issues</a>
+  <a href="https://github.com/amanasmuei/amem"><img src="https://img.shields.io/badge/GitHub-repo-181717?style=flat-square&logo=github" alt="GitHub" /></a>
+  <a href="https://www.npmjs.com/package/@aman_asmuei/amem"><img src="https://img.shields.io/badge/npm-package-cb3837?style=flat-square&logo=npm&logoColor=white" alt="npm" /></a>
+  <a href="https://github.com/amanasmuei/amem/issues"><img src="https://img.shields.io/badge/Issues-report-orange?style=flat-square&logo=github" alt="Issues" /></a>
 </p>
 
 <p align="center">
-  <sub>MIT License</sub>
+  <sub>MIT License · Star ⭐ if amem saves your AI from amnesia</sub>
 </p>
