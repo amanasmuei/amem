@@ -29,9 +29,9 @@
 
 <table align="center">
   <tr>
-    <td><strong>94.8% R@5</strong><br/><sub>LongMemEval Oracle, 500q</sub></td>
-    <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
-    <td><strong>29 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
+    <td><strong>97.8% R@5</strong><br/><sub>LongMemEval-S, 500q</sub></td>
+    <td><strong>~14ms p50</strong><br/><sub>Full recall pipeline</sub></td>
+    <td><strong>33 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
     <td><strong>Powered by</strong><br/><sub><a href="https://github.com/amanasmuei/amem-core">amem-core</a></sub></td>
   </tr>
 </table>
@@ -82,7 +82,7 @@ No cloud. No API keys. Everything stays on your machine.
                           ▼
           ┌─────────────────────────────────┐
           │   @aman_asmuei/amem (this pkg)  │
-          │   29 MCP tools, CLI, hooks      │
+          │   33 MCP tools, CLI, hooks      │
           └────────────────┬────────────────┘
                            │ imports
                            ▼
@@ -90,7 +90,7 @@ No cloud. No API keys. Everything stays on your machine.
           │   @aman_asmuei/amem-core        │
           │   embeddings · HNSW · recall    │
           │   knowledge graph · reflection  │
-          │   91.0% R@5 on LongMemEval      │
+          │   97.8% R@5 on LongMemEval-S    │
           └────────────────┬────────────────┘
                            │
                            ▼
@@ -103,11 +103,11 @@ No cloud. No API keys. Everything stays on your machine.
 | Package | Role | Install | Use case |
 |---|---|---|---|
 | **`@aman_asmuei/amem`** *(this)* | MCP server + CLI + hooks | `npm install -g @aman_asmuei/amem` | Plug into Claude Code, Copilot, Cursor, any MCP client |
-| **`@aman_asmuei/amem-core`** | Pure TypeScript library, zero MCP deps | `npm install @aman_asmuei/amem-core` | Embed memory directly in your own Node app |
+| [**`@aman_asmuei/amem-core`**](https://github.com/amanasmuei/amem-core) | Pure TypeScript library, zero MCP deps | `npm install @aman_asmuei/amem-core` | Embed memory directly in your own Node app |
 
 **Why the split?** The same engine powers `amem` (this MCP server), `aman-agent` (CLI), `aman-tg` (Telegram bot), and any other Node app you want to give memory to. All retrieval-quality improvements ship via `amem-core`. All MCP-tool changes ship via `amem`. They version independently.
 
-> The **94.8% R@5** headline is the engine quality from `amem-core` — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
+> The **97.8% R@5** headline is the engine quality from `amem-core` (LongMemEval-S, session-level, 500 questions, zero API calls) — exactly what you get whether you call it through this MCP server or import the library directly. The MCP wrapper does not change retrieval quality.
 
 ---
 
@@ -278,37 +278,64 @@ Health Score: 68/100
 
 ## Benchmarks
 
-### Recall Accuracy
+### Recall Accuracy (LongMemEval)
+
+All numbers from [`amem-core` v0.5.1](https://github.com/amanasmuei/amem-core) — the retrieval engine powering this MCP server. Zero API calls, all local, fully reproducible.
 
 <table>
 <tr>
 <td>
 
-| Strategy | Recall@5 | MRR |
-|---|---|---|
-| FTS5 keyword only | 31.3% | 31.3% |
-| **Semantic** (default) | **72.4%** | **82.5%** |
-| **Multi-strategy** | **74.5%** | **76.2%** |
-| + reranking (opt-in) | ~80%+ | ~85%+ |
+**LongMemEval-S (session-level) — headline metric**
+
+| Metric | Score |
+|:---:|:---:|
+| **R@1** | **95.0%** |
+| **R@3** | **97.0%** |
+| **R@5** | **🏆 97.8%** |
+| **R@10** | **99.0%** |
+
+500 questions · CPU only · zero API calls
 
 </td>
 <td>
 
-Corpus: 34 developer memories, 16 queries, 5 graph edges.
+**LongMemEval Oracle (turn-level)**
 
-Reproduce: `npx vitest run benchmarks/`
+| Metric | Score |
+|:---:|:---:|
+| **R@1** | **66.2%** |
+| **R@3** | **90.8%** |
+| **R@5** | **94.6%** |
+| **R@10** | **97.5%** |
 
-**Default: 72% Recall@5, 82% MRR** with local embeddings. Degrades gracefully to keyword matching (~31%) before model downloads.
+479 scoreable questions · 301s runtime · Node 22
 
 </td>
 </tr>
 </table>
 
-### Search Latency — HNSW Vector Index
+Pipeline: local `bge-small-en-v1.5` bi-encoder + `ms-marco-MiniLM-L-6-v2` cross-encoder (int8, batched, default-on). See [amem-core benchmarks](https://github.com/amanasmuei/amem-core#-benchmarks) for full per-type breakdowns, pipeline evolution, and honest notes.
+
+### Search Latency
 
 <table>
 <tr>
 <td>
+
+**Full recall pipeline (v0.5.1+)**
+
+| Stage | p50 | Share |
+|---|---|---|
+| Embed (bi-encoder) | 3.0ms | 22% |
+| Retrieve (HNSW + multi-strategy) | 0.1ms | 1% |
+| **Rerank (int8 cross-encoder)** | **10.3ms** | **74%** |
+| **Total** | **~14ms** | 100% |
+
+</td>
+<td>
+
+**HNSW index only (vector search)**
 
 | Memories | HNSW | Brute-force | Speedup |
 |---|---|---|---|
@@ -345,7 +372,7 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 | `memory_inject` | Surface corrections + decisions + graph neighbors before coding starts. |
 
 <details>
-<summary><strong>Precision, History, Advanced, Reminders, and Maintenance tools (22 more)</strong></summary>
+<summary><strong>Precision, History, Advanced, Admin, Reminders, and Maintenance tools (26 more)</strong></summary>
 
 ### Precision & History (5 tools)
 
@@ -367,6 +394,15 @@ Measured: 100 searches averaged, 384-dim embeddings, top-10 results.
 | `memory_summarize` | Store structured session summary with decisions, corrections, metrics. |
 | `memory_history` | View past session summaries. |
 | `memory_reflect` | Self-evolving reflection engine — clusters memories, detects contradictions, identifies synthesis candidates, surfaces knowledge gaps. |
+
+### Admin & Sync (4 tools)
+
+| Tool | Description |
+|---|---|
+| `memory_doctor` | Run read-only health diagnostics on the amem database. |
+| `memory_repair` | Perform safe, targeted repairs on the amem database. |
+| `memory_config` | Get or set amem configuration with safety guardrails. |
+| `memory_sync` | Import or export memories between amem and other systems (Claude auto-memory, Copilot instructions). |
 
 ### Reminders (4 tools)
 
@@ -528,14 +564,14 @@ memory_store({
 | Feature | Claude Code | GitHub Copilot CLI | Cursor / Windsurf / Other |
 |---|:---:|:---:|:---:|
 | One-command plugin install | Yes | Yes | -- |
-| 29 MCP tools | Yes | Yes | Yes |
+| 33 MCP tools | Yes | Yes | Yes |
 | AI skills | 14 | 7 | -- |
 | Auto-capture hooks | Yes | Yes | -- |
 | Session auto-summarize | Yes | Yes | -- |
 | Auto-memory sync | Yes | -- | -- |
 | CLI setup (`amem-cli init`) | Yes | Yes | Yes |
 
-**Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second. **Other MCP clients** get the full 29-tool server via manual config.
+**Claude Code** has the deepest integration (plugin + hooks + auto-memory sync). **Copilot CLI** is a close second. **Other MCP clients** get the full 33-tool server via manual config.
 
 ### AI Skills
 
@@ -665,7 +701,7 @@ amem-cli reset --confirm               # Wipe all data
           ┌─────────────────────────────────┐
           │   @aman_asmuei/amem             │  ← this package
           │                                 │
-          │  29 Tools · 7 Resources · 2 Prompts
+          │  33 Tools · 7 Resources · 2 Prompts
           │  Slash commands · CLI · Hooks   │
           │  Config: ~/.amem/config.json    │
           └────────────────┬────────────────┘
@@ -677,14 +713,15 @@ amem-cli reset --confirm               # Wipe all data
           │  Multi-Strategy Retrieval       │
           │  [HNSW] + [FTS5] + [Graph] + [Temporal]
           │       + query expansion         │
-          │       + cross-encoder (opt-in)  │
+          │       + cross-encoder reranker   │
           │                                 │
           │  Self-Evolving Reflection       │
           │  [Clustering] + [Contradictions]│
           │  + [Synthesis] + [Gap Detection]│
           │                                 │
           │  Embeddings: bge-small-en-v1.5  │
-          │  94.8% R@5 on LongMemEval       │
+          │  Reranker: ms-marco-MiniLM int8 │
+          │  97.8% R@5 on LongMemEval-S     │
           └────────────────┬────────────────┘
                            │
                            ▼
@@ -800,9 +837,9 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 | Language | TypeScript 5.6+, strict mode |
 | Database | SQLite + WAL + FTS5 |
 | Embeddings | HuggingFace bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
-| Reranking | ms-marco-MiniLM-L-6-v2 (optional, local) |
+| Reranking | ms-marco-MiniLM-L-6-v2 (default-on, int8, batched, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 388 tests across 29 suites + recall benchmarks |
+| Testing | Vitest — 239 tests across 17 suites + recall benchmarks |
 | CI/CD | GitHub Actions, npm publish on release |
 
 ---
@@ -813,7 +850,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 388 tests pass
+npm test        # 239 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
