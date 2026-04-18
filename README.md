@@ -926,7 +926,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 | Embeddings | HuggingFace bge-small-en-v1.5 (local, 80MB) + HNSW vector index |
 | Reranking | ms-marco-MiniLM-L-6-v2 (default-on, int8, batched, local) |
 | Validation | Zod 3.25+ with `.strict()` schemas |
-| Testing | Vitest — 255 tests across 18 suites + recall benchmarks |
+| Testing | Vitest — 281 tests across 19 suites + recall benchmarks |
 | CI/CD | GitHub Actions, npm publish on release |
 
 ---
@@ -937,7 +937,7 @@ Core store/recall, local embeddings, SQLite + WAL, consolidation, project scopin
 git clone https://github.com/amanasmuei/amem.git
 cd amem && npm install
 npm run build   # zero TS errors
-npm test        # 255 tests pass
+npm test        # 281 tests pass
 ```
 
 PRs must pass CI before merge. See [Issues](https://github.com/amanasmuei/amem/issues) for open tasks.
