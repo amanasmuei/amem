@@ -77,11 +77,39 @@ a{color:var(--decision);text-decoration:none}
 .mem-card .mem-meta .tag{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1px 6px}
 
 /* knowledge graph */
-#graph-svg{width:100%;height:460px;border-radius:6px;background:var(--bg);cursor:grab}
+.graph-container{position:relative;overflow:hidden;border-radius:6px;background:var(--bg);height:600px}
+#graph-svg{width:100%;height:100%;cursor:grab}
 #graph-svg:active{cursor:grabbing}
-#graph-svg circle{cursor:pointer;transition:r 0.15s}
-#graph-svg circle:hover{r:12}
+#graph-svg .node-circle{cursor:pointer;transition:opacity 0.3s,r 0.15s}
+#graph-svg .node-circle:hover{filter:brightness(1.3)}
+#graph-svg .edge-line{transition:opacity 0.3s}
+#graph-svg .node-label{transition:opacity 0.3s;pointer-events:none}
+#graph-svg .edge-label{transition:opacity 0.3s;pointer-events:none}
+.graph-dimmed{opacity:0.12!important}
 .graph-tooltip{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:0.8rem;max-width:300px;pointer-events:none;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+.graph-controls{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.graph-controls input,.graph-controls select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:0.8rem;outline:none}
+.graph-controls input:focus,.graph-controls select:focus{border-color:var(--decision)}
+.graph-controls input{flex:1;min-width:140px}
+.graph-controls button{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer}
+.graph-controls button:hover{border-color:var(--decision);color:var(--decision)}
+.graph-controls button.active{background:var(--decision);color:#fff;border-color:var(--decision)}
+.graph-legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 0}
+.graph-legend-item{display:flex;align-items:center;gap:5px;font-size:0.75rem;color:var(--muted);cursor:pointer}
+.graph-legend-item:hover{color:var(--text)}
+.graph-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.graph-stats{display:flex;gap:14px;font-size:0.75rem;color:var(--muted);padding:4px 0}
+.graph-stats b{color:var(--text)}
+.graph-detail{position:absolute;top:10px;right:10px;width:280px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:calc(100% - 20px);overflow-y:auto;display:none}
+.graph-detail h3{font-size:0.9rem;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.graph-detail .close{margin-left:auto;cursor:pointer;color:var(--muted);font-size:1rem;line-height:1}
+.graph-detail .close:hover{color:var(--text)}
+.graph-detail .detail-content{font-size:0.85rem;line-height:1.6;margin-bottom:10px;word-break:break-word}
+.graph-detail .detail-meta{font-size:0.75rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.graph-detail .detail-relations{margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+.graph-detail .relation-item{display:flex;align-items:center;gap:6px;font-size:0.8rem;padding:4px 0;cursor:pointer;color:var(--text)}
+.graph-detail .relation-item:hover{color:var(--decision)}
+.graph-detail .relation-arrow{color:var(--muted);font-size:0.7rem}
 
 /* memory actions */
 .mem-actions{display:flex;gap:6px;margin-top:6px}
@@ -196,10 +224,29 @@ a{color:var(--decision);text-decoration:none}
   </div>
 
   <!-- Knowledge graph -->
-  <div class="card" id="graph-card">
+  <div class="card full" id="graph-card">
     <h2>Knowledge Graph</h2>
-    <div id="graph-tooltip" class="graph-tooltip" style="display:none"></div>
-    <svg id="graph-svg"></svg>
+    <div class="graph-controls">
+      <input type="text" id="graph-search" placeholder="Search nodes..."/>
+      <select id="graph-type-filter">
+        <option value="">All types</option>
+        <option value="correction">correction</option>
+        <option value="decision">decision</option>
+        <option value="pattern">pattern</option>
+        <option value="preference">preference</option>
+        <option value="topology">topology</option>
+        <option value="fact">fact</option>
+      </select>
+      <button id="graph-reset" title="Reset view">Reset</button>
+      <button id="graph-fit" title="Fit all nodes">Fit All</button>
+    </div>
+    <div class="graph-stats" id="graph-stats"></div>
+    <div class="graph-legend" id="graph-legend"></div>
+    <div class="graph-container" id="graph-container">
+      <div id="graph-tooltip" class="graph-tooltip" style="display:none"></div>
+      <svg id="graph-svg"></svg>
+      <div class="graph-detail" id="graph-detail"></div>
+    </div>
   </div>
 
   <!-- Reminders -->
@@ -345,80 +392,412 @@ a{color:var(--decision);text-decoration:none}
     renderMemories(list);
   }
 
-  // -- Knowledge Graph (simple force-directed) --
-  function renderGraph(data){
-    var svg=$('graph-svg');
-    var W=svg.clientWidth||600, H=svg.clientHeight||360;
-    var nodes=data.nodes, edges=data.edges;
-    if(!nodes.length){setHTML(svg,'<text x="'+W/2+'" y="'+H/2+'" fill="#8b949e" text-anchor="middle" font-size="14">No graph data</text>');return}
+  // -- Knowledge Graph (enhanced force-directed with zoom/pan/focus) --
+  var graphNodes=[], graphEdges=[], graphNodeMap={}, graphAllNodes=[], graphAllEdges=[];
+  var graphZoom={x:0,y:0,scale:1};
+  var graphFocusId=null;
+  var graphDragNode=null, graphDragBg=false, graphDragStart={x:0,y:0}, graphPanStart={x:0,y:0};
 
-    // assign random positions
-    var i,j;
-    for(i=0;i<nodes.length;i++){
-      nodes[i].x=W*0.2+Math.random()*W*0.6;
-      nodes[i].y=H*0.2+Math.random()*H*0.6;
-      nodes[i].vx=0;nodes[i].vy=0;
+  function computeNodeDegrees(){
+    for(var i=0;i<graphAllNodes.length;i++) graphAllNodes[i].degree=0;
+    for(var i=0;i<graphAllEdges.length;i++){
+      var a=graphNodeMap[graphAllEdges[i].from];
+      var b=graphNodeMap[graphAllEdges[i].to];
+      if(a) a.degree=(a.degree||0)+1;
+      if(b) b.degree=(b.degree||0)+1;
     }
-    var nodeMap={};
-    for(i=0;i<nodes.length;i++) nodeMap[nodes[i].id]=nodes[i];
+  }
 
-    // force simulation
-    var REPULSION=3000, SPRING=0.06, DAMPING=0.85, DT=1;
-    for(var iter=0;iter<80;iter++){
-      // repulsion between all pairs
+  function nodeRadius(n){return Math.max(6,Math.min(20,6+(n.degree||0)*2))}
+
+  function getNeighborIds(nodeId){
+    var ids={};ids[nodeId]=true;
+    for(var i=0;i<graphAllEdges.length;i++){
+      if(graphAllEdges[i].from===nodeId) ids[graphAllEdges[i].to]=true;
+      if(graphAllEdges[i].to===nodeId) ids[graphAllEdges[i].from]=true;
+    }
+    return ids;
+  }
+
+  function getNodeEdges(nodeId){
+    var result=[];
+    for(var i=0;i<graphAllEdges.length;i++){
+      if(graphAllEdges[i].from===nodeId||graphAllEdges[i].to===nodeId) result.push(graphAllEdges[i]);
+    }
+    return result;
+  }
+
+  function forceLayout(nodes,edges,W,H){
+    var i,j;
+    var nodeMap={};
+    for(i=0;i<nodes.length;i++){
+      // Use stable seeded positions based on node id hash
+      var h=0;for(var c=0;c<nodes[i].id.length;c++){h=((h<<5)-h)+nodes[i].id.charCodeAt(c);h|=0}
+      nodes[i].x=W*0.15+Math.abs(h%1000)/1000*W*0.7;
+      nodes[i].y=H*0.15+Math.abs((h*31)%1000)/1000*H*0.7;
+      nodes[i].vx=0;nodes[i].vy=0;
+      nodeMap[nodes[i].id]=nodes[i];
+    }
+
+    var REPULSION=5000,SPRING=0.04,DAMPING=0.82,DT=1;
+    var ITERS=nodes.length>200?60:nodes.length>50?100:150;
+
+    for(var iter=0;iter<ITERS;iter++){
+      // Barnes-Hut approximation for large graphs: skip distant pairs
       for(i=0;i<nodes.length;i++){
         for(j=i+1;j<nodes.length;j++){
-          var dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y;
+          var dx=nodes[j].x-nodes[i].x,dy=nodes[j].y-nodes[i].y;
           var dist2=dx*dx+dy*dy+1;
+          if(dist2>400000) continue; // skip very distant pairs
           var f=REPULSION/dist2;
           var d=Math.sqrt(dist2);
-          var fx=f*dx/d, fy=f*dy/d;
+          var fx=f*dx/d,fy=f*dy/d;
           nodes[i].vx-=fx;nodes[i].vy-=fy;
           nodes[j].vx+=fx;nodes[j].vy+=fy;
         }
       }
-      // attraction along edges
       for(i=0;i<edges.length;i++){
         var a=nodeMap[edges[i].from],b=nodeMap[edges[i].to];
         if(!a||!b) continue;
         var edx=b.x-a.x,edy=b.y-a.y;
-        var efx=SPRING*edx,efy=SPRING*edy;
+        var strength=edges[i].strength||0.8;
+        var efx=SPRING*strength*edx,efy=SPRING*strength*edy;
         a.vx+=efx;a.vy+=efy;b.vx-=efx;b.vy-=efy;
       }
-      // center gravity
       for(i=0;i<nodes.length;i++){
-        nodes[i].vx+=(W/2-nodes[i].x)*0.001;
-        nodes[i].vy+=(H/2-nodes[i].y)*0.001;
-      }
-      // integrate
-      for(i=0;i<nodes.length;i++){
+        nodes[i].vx+=(W/2-nodes[i].x)*0.002;
+        nodes[i].vy+=(H/2-nodes[i].y)*0.002;
         nodes[i].vx*=DAMPING;nodes[i].vy*=DAMPING;
         nodes[i].x+=nodes[i].vx*DT;nodes[i].y+=nodes[i].vy*DT;
-        nodes[i].x=Math.max(30,Math.min(W-30,nodes[i].x));
-        nodes[i].y=Math.max(30,Math.min(H-30,nodes[i].y));
+        nodes[i].x=Math.max(40,Math.min(W-40,nodes[i].x));
+        nodes[i].y=Math.max(40,Math.min(H-40,nodes[i].y));
+      }
+    }
+    return nodeMap;
+  }
+
+  function renderGraphSvg(){
+    var svg=$('graph-svg');
+    if(!svg) return;
+    var focusNeighbors=graphFocusId?getNeighborIds(graphFocusId):null;
+
+    var defs='<defs><marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3 L0,6z" fill="#58a6ff" fill-opacity="0.6"/></marker></defs>';
+    var html=defs+'<g id="graph-pan" transform="translate('+graphZoom.x+','+graphZoom.y+') scale('+graphZoom.scale+')">';
+
+    // Edges
+    for(var i=0;i<graphEdges.length;i++){
+      var e=graphEdges[i];
+      var ea=graphNodeMap[e.from],eb=graphNodeMap[e.to];
+      if(!ea||!eb) continue;
+      var dim=focusNeighbors&&(!focusNeighbors[e.from]||!focusNeighbors[e.to]);
+      var cls='edge-line'+(dim?' graph-dimmed':'');
+      var sw=1.5+(e.strength||0.8)*2;
+      var opacity=dim?0.1:0.5;
+      // Shorten line to avoid overlapping node circles
+      var edx=eb.x-ea.x,edy=eb.y-ea.y;
+      var elen=Math.sqrt(edx*edx+edy*edy)||1;
+      var rA=nodeRadius(ea),rB=nodeRadius(eb);
+      var x1=ea.x+edx/elen*(rA+2),y1=ea.y+edy/elen*(rA+2);
+      var x2=eb.x-edx/elen*(rB+2),y2=eb.y-edy/elen*(rB+2);
+      html+='<line class="'+cls+'" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#58a6ff" stroke-opacity="'+opacity+'" stroke-width="'+sw+'" marker-end="url(#arrow)"/>';
+      if(e.type){
+        var mx=(ea.x+eb.x)/2,my=(ea.y+eb.y)/2;
+        html+='<text class="edge-label'+(dim?' graph-dimmed':'')+'" x="'+mx+'" y="'+(my-6)+'" fill="#c9d1d9" font-size="9" text-anchor="middle" font-weight="600" opacity="'+(dim?0.1:0.8)+'">'+esc(e.type)+'</text>';
       }
     }
 
-    // Store for interactive use
-    graphNodes=nodes;
-    graphEdges=edges;
-    graphNodeMap=nodeMap;
+    // Nodes
+    for(var i=0;i<graphNodes.length;i++){
+      var n=graphNodes[i];
+      var color=TYPE_COLORS[n.type]||'#8b949e';
+      var r=nodeRadius(n);
+      var dim=focusNeighbors&&!focusNeighbors[n.id];
+      var cls='node-circle'+(dim?' graph-dimmed':'');
+      var focused=graphFocusId===n.id;
+      var sw=focused?3:2;
+      var stroke=focused?'#fff':'#0d1117';
+      html+='<circle class="'+cls+'" data-nid="'+esc(n.id)+'" cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+color+'" stroke="'+stroke+'" stroke-width="'+sw+'"/>';
+      var labelOpacity=dim?0.1:(r>8?1:0.7);
+      html+='<text class="node-label'+(dim?' graph-dimmed':'')+'" x="'+n.x+'" y="'+(n.y+r+14)+'" fill="'+color+'" font-size="'+(r>12?'11':'10')+'" text-anchor="middle" font-family="-apple-system,sans-serif" opacity="'+labelOpacity+'">'+esc(n.label.slice(0,28))+'</text>';
+    }
 
-    // render SVG elements (all text escaped via esc())
-    var html='';
-    for(i=0;i<edges.length;i++){
-      var ea=nodeMap[edges[i].from],eb=nodeMap[edges[i].to];
-      if(!ea||!eb) continue;
-      var mx=(ea.x+eb.x)/2,my=(ea.y+eb.y)/2;
-      html+='<line x1="'+ea.x+'" y1="'+ea.y+'" x2="'+eb.x+'" y2="'+eb.y+'" stroke="#58a6ff" stroke-opacity="0.5" stroke-width="'+(1.5+edges[i].strength*2)+'"/>';
-      if(edges[i].type) html+='<text x="'+mx+'" y="'+(my-4)+'" fill="#c9d1d9" font-size="9" text-anchor="middle" font-weight="600">'+esc(edges[i].type)+'</text>';
+    html+='</g>';
+    setHTML(svg,html);
+  }
+
+  function renderGraphLegend(){
+    var el=$('graph-legend');
+    if(!el) return;
+    var types=['correction','decision','pattern','preference','topology','fact'];
+    setHTML(el, types.map(function(t){
+      return '<div class="graph-legend-item" data-type="'+t+'"><div class="graph-legend-dot" style="background:'+(TYPE_COLORS[t]||'#8b949e')+'"></div>'+t+'</div>';
+    }).join(''));
+  }
+
+  function renderGraphStats(){
+    var el=$('graph-stats');
+    if(!el) return;
+    var connected=0;
+    var connectedSet={};
+    for(var i=0;i<graphAllEdges.length;i++){
+      connectedSet[graphAllEdges[i].from]=true;
+      connectedSet[graphAllEdges[i].to]=true;
     }
-    for(i=0;i<nodes.length;i++){
-      var color=TYPE_COLORS[nodes[i].type]||'#8b949e';
-      html+='<circle data-nid="'+esc(nodes[i].id)+'" cx="'+nodes[i].x+'" cy="'+nodes[i].y+'" r="8" fill="'+color+'" stroke="#0d1117" stroke-width="2"/>';
-      html+='<text x="'+nodes[i].x+'" y="'+(nodes[i].y+20)+'" fill="'+color+'" font-size="10" text-anchor="middle" font-family="-apple-system,sans-serif">'+esc(nodes[i].label.slice(0,24))+'</text>';
+    connected=Object.keys(connectedSet).length;
+    setHTML(el,'<b>'+graphNodes.length+'</b> nodes · <b>'+graphEdges.length+'</b> edges · <b>'+connected+'</b> connected');
+  }
+
+  function showNodeDetail(nodeId){
+    var panel=$('graph-detail');
+    if(!panel) return;
+    var n=graphNodeMap[nodeId];
+    if(!n){panel.style.display='none';return}
+
+    var color=TYPE_COLORS[n.type]||'#8b949e';
+    var edges=getNodeEdges(nodeId);
+    var html='<h3><span class="type-badge" style="background:'+color+'">'+esc(n.type)+'</span><code class="mono" style="font-size:0.7rem;color:var(--muted)">'+esc(n.id.slice(0,8))+'</code><span class="close" id="detail-close">&times;</span></h3>';
+    html+='<div class="detail-content">'+esc(n.fullContent||n.label)+'</div>';
+    html+='<div class="detail-meta">';
+    html+='<span>Tier: '+(n.tier||'archival')+'</span>';
+    html+='<span>Connections: '+(n.degree||0)+'</span>';
+    html+='</div>';
+
+    if(edges.length){
+      html+='<div class="detail-relations"><div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600">RELATIONS</div>';
+      for(var i=0;i<edges.length;i++){
+        var e=edges[i];
+        var otherId=e.from===nodeId?e.to:e.from;
+        var other=graphNodeMap[otherId];
+        var otherLabel=other?(other.label.slice(0,30)):otherId.slice(0,8);
+        var dir=e.from===nodeId?'→':'←';
+        html+='<div class="relation-item" data-nid="'+esc(otherId)+'">';
+        html+='<span class="relation-arrow">'+dir+'</span>';
+        html+='<span style="color:var(--muted);font-size:0.7rem">'+esc(e.type||'related')+'</span> ';
+        html+=esc(otherLabel);
+        html+='</div>';
+      }
+      html+='</div>';
     }
-    setHTML(svg, html);
+
+    setHTML(panel,html);
+    panel.style.display='block';
+
+    // Close button
+    var closeBtn=$('detail-close');
+    if(closeBtn) closeBtn.addEventListener('click',function(){
+      panel.style.display='none';
+      graphFocusId=null;
+      renderGraphSvg();
+    });
+
+    // Click relation to navigate
+    var items=panel.querySelectorAll('.relation-item[data-nid]');
+    for(var i=0;i<items.length;i++){
+      items[i].addEventListener('click',function(){
+        var nid=this.dataset.nid;
+        if(nid){
+          graphFocusId=nid;
+          renderGraphSvg();
+          showNodeDetail(nid);
+        }
+      });
+    }
+  }
+
+  function filterGraphNodes(){
+    var search=($('graph-search')||{}).value||'';
+    var typeFilter=($('graph-type-filter')||{}).value||'';
+    search=search.toLowerCase();
+
+    if(!search&&!typeFilter){
+      graphNodes=graphAllNodes;
+      graphEdges=graphAllEdges;
+    } else {
+      var visibleIds={};
+      graphNodes=graphAllNodes.filter(function(n){
+        var matchSearch=!search||n.label.toLowerCase().indexOf(search)!==-1||(n.fullContent||'').toLowerCase().indexOf(search)!==-1;
+        var matchType=!typeFilter||n.type===typeFilter;
+        if(matchSearch&&matchType){visibleIds[n.id]=true;return true}
+        return false;
+      });
+      graphEdges=graphAllEdges.filter(function(e){return visibleIds[e.from]&&visibleIds[e.to]});
+    }
+    renderGraphSvg();
+    renderGraphStats();
+  }
+
+  function renderGraph(data){
+    var svg=$('graph-svg');
+    var container=$('graph-container');
+    if(!svg||!container) return;
+    var W=container.clientWidth||900,H=container.clientHeight||600;
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+
+    graphAllNodes=data.nodes;graphAllEdges=data.edges;
+    graphNodes=data.nodes;graphEdges=data.edges;
+    graphZoom={x:0,y:0,scale:1};
+    graphFocusId=null;
+
+    if(!data.nodes.length){
+      setHTML(svg,'<text x="'+W/2+'" y="'+H/2+'" fill="#8b949e" text-anchor="middle" font-size="14">No graph data — use memory_relate to connect memories</text>');
+      renderGraphStats();
+      renderGraphLegend();
+      return;
+    }
+
+    graphNodeMap=forceLayout(data.nodes,data.edges,W,H);
+    computeNodeDegrees();
+    renderGraphSvg();
+    renderGraphStats();
+    renderGraphLegend();
+  }
+
+  function setupGraphInteraction(){
+    var svg=$('graph-svg');
+    var container=$('graph-container');
+    var tooltip=$('graph-tooltip');
+    if(!svg||!container) return;
+
+    // Zoom with mouse wheel
+    container.addEventListener('wheel',function(e){
+      e.preventDefault();
+      var rect=container.getBoundingClientRect();
+      var mx=e.clientX-rect.left;
+      var my=e.clientY-rect.top;
+      var delta=e.deltaY>0?0.9:1.1;
+      var newScale=Math.max(0.2,Math.min(5,graphZoom.scale*delta));
+      // Zoom toward mouse position
+      graphZoom.x=mx-(mx-graphZoom.x)*newScale/graphZoom.scale;
+      graphZoom.y=my-(my-graphZoom.y)*newScale/graphZoom.scale;
+      graphZoom.scale=newScale;
+      renderGraphSvg();
+    },{passive:false});
+
+    // Pan with mouse drag on background
+    svg.addEventListener('mousedown',function(e){
+      if(e.target.tagName==='circle'){
+        // Node drag
+        var nid=e.target.dataset.nid;
+        if(nid) graphDragNode=graphNodeMap[nid];
+        if(graphDragNode){
+          var rect=container.getBoundingClientRect();
+          graphDragStart.x=(e.clientX-rect.left-graphZoom.x)/graphZoom.scale-graphDragNode.x;
+          graphDragStart.y=(e.clientY-rect.top-graphZoom.y)/graphZoom.scale-graphDragNode.y;
+        }
+        return;
+      }
+      // Background pan
+      graphDragBg=true;
+      graphPanStart.x=e.clientX-graphZoom.x;
+      graphPanStart.y=e.clientY-graphZoom.y;
+      svg.style.cursor='grabbing';
+    });
+
+    svg.addEventListener('mousemove',function(e){
+      if(graphDragNode){
+        var rect=container.getBoundingClientRect();
+        graphDragNode.x=(e.clientX-rect.left-graphZoom.x)/graphZoom.scale-graphDragStart.x;
+        graphDragNode.y=(e.clientY-rect.top-graphZoom.y)/graphZoom.scale-graphDragStart.y;
+        renderGraphSvg();
+      } else if(graphDragBg){
+        graphZoom.x=e.clientX-graphPanStart.x;
+        graphZoom.y=e.clientY-graphPanStart.y;
+        renderGraphSvg();
+      }
+    });
+
+    document.addEventListener('mouseup',function(){
+      graphDragNode=null;
+      graphDragBg=false;
+      svg.style.cursor='grab';
+    });
+
+    // Click node to focus
+    svg.addEventListener('click',function(e){
+      var circle=e.target;
+      if(circle.tagName!=='circle') {
+        // Click background to unfocus
+        if(graphFocusId){graphFocusId=null;renderGraphSvg();$('graph-detail').style.display='none'}
+        if(tooltip) tooltip.style.display='none';
+        return;
+      }
+      var nid=circle.dataset.nid;
+      if(!nid) return;
+
+      graphFocusId=graphFocusId===nid?null:nid;
+      renderGraphSvg();
+      if(graphFocusId) showNodeDetail(nid);
+      else $('graph-detail').style.display='none';
+    });
+
+    // Hover tooltip
+    svg.addEventListener('mouseover',function(e){
+      if(e.target.tagName!=='circle'||!tooltip) return;
+      var nid=e.target.dataset.nid;
+      var n=graphNodeMap[nid];
+      if(!n) return;
+      var rect=container.getBoundingClientRect();
+      tooltip.style.display='block';
+      tooltip.style.left=(e.clientX-rect.left+15)+'px';
+      tooltip.style.top=(e.clientY-rect.top-10)+'px';
+      var color=TYPE_COLORS[n.type]||'#8b949e';
+      setHTML(tooltip,
+        '<div style="margin-bottom:4px"><span class="type-badge" style="background:'+color+'">'+esc(n.type)+'</span> <code class="mono">'+esc(n.id.slice(0,8))+'</code></div>'+
+        '<div style="font-size:0.85rem;margin-bottom:4px">'+esc((n.fullContent||n.label).slice(0,120))+'</div>'+
+        '<div style="font-size:0.75rem;color:var(--muted)">Connections: '+(n.degree||0)+' · Tier: '+(n.tier||'archival')+'</div>'
+      );
+    });
+    svg.addEventListener('mouseout',function(e){
+      if(e.target.tagName==='circle'&&tooltip) tooltip.style.display='none';
+    });
+
+    // Graph search/filter
+    var gsDebounce;
+    var gs=$('graph-search');
+    if(gs) gs.addEventListener('input',function(){clearTimeout(gsDebounce);gsDebounce=setTimeout(filterGraphNodes,300)});
+    var gf=$('graph-type-filter');
+    if(gf) gf.addEventListener('change',filterGraphNodes);
+
+    // Reset button
+    var resetBtn=$('graph-reset');
+    if(resetBtn) resetBtn.addEventListener('click',function(){
+      graphZoom={x:0,y:0,scale:1};
+      graphFocusId=null;
+      if(gs) gs.value='';
+      if(gf) gf.value='';
+      graphNodes=graphAllNodes;graphEdges=graphAllEdges;
+      $('graph-detail').style.display='none';
+      renderGraphSvg();renderGraphStats();
+    });
+
+    // Fit all button
+    var fitBtn=$('graph-fit');
+    if(fitBtn) fitBtn.addEventListener('click',function(){
+      if(!graphNodes.length) return;
+      var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+      for(var i=0;i<graphNodes.length;i++){
+        minX=Math.min(minX,graphNodes[i].x);maxX=Math.max(maxX,graphNodes[i].x);
+        minY=Math.min(minY,graphNodes[i].y);maxY=Math.max(maxY,graphNodes[i].y);
+      }
+      var container=$('graph-container');
+      var cw=container.clientWidth,ch=container.clientHeight;
+      var gw=maxX-minX+80,gh=maxY-minY+80;
+      var scale=Math.min(cw/gw,ch/gh,2);
+      graphZoom.scale=scale;
+      graphZoom.x=cw/2-((minX+maxX)/2)*scale;
+      graphZoom.y=ch/2-((minY+maxY)/2)*scale;
+      renderGraphSvg();
+    });
+
+    // Legend click to filter
+    var legend=$('graph-legend');
+    if(legend) legend.addEventListener('click',function(e){
+      var item=e.target.closest('.graph-legend-item');
+      if(!item) return;
+      var type=item.dataset.type;
+      var gf=$('graph-type-filter');
+      if(gf){gf.value=gf.value===type?'':type;filterGraphNodes()}
+    });
   }
 
   // -- Reminders --
@@ -600,80 +979,8 @@ a{color:var(--decision);text-decoration:none}
     });
   };
 
-  // -- Interactive Graph (drag, click-to-inspect) --
-  var dragNode=null, dragOffset={x:0,y:0}, graphNodes=[], graphNodeMap={}, graphEdges=[];
-
-  function makeGraphInteractive(){
-    var svg=$('graph-svg');
-    var tooltip=$('graph-tooltip');
-    if(!svg||!tooltip) return;
-
-    svg.addEventListener('mousedown',function(e){
-      var circle=e.target;
-      if(circle.tagName!=='circle') return;
-      var nid=circle.dataset.nid;
-      if(!nid) return;
-      dragNode=graphNodeMap[nid];
-      if(!dragNode) return;
-      var rect=svg.getBoundingClientRect();
-      dragOffset.x=e.clientX-rect.left-dragNode.x;
-      dragOffset.y=e.clientY-rect.top-dragNode.y;
-      e.preventDefault();
-    });
-
-    svg.addEventListener('mousemove',function(e){
-      if(!dragNode) return;
-      var rect=svg.getBoundingClientRect();
-      dragNode.x=e.clientX-rect.left-dragOffset.x;
-      dragNode.y=e.clientY-rect.top-dragOffset.y;
-      redrawGraph();
-    });
-
-    document.addEventListener('mouseup',function(){dragNode=null});
-
-    svg.addEventListener('click',function(e){
-      var circle=e.target;
-      if(circle.tagName!=='circle') return;
-      var nid=circle.dataset.nid;
-      if(!nid) return;
-      var n=graphNodeMap[nid];
-      if(!n) return;
-      var rect=svg.getBoundingClientRect();
-      tooltip.style.display='block';
-      tooltip.style.left=(e.clientX-rect.left+15)+'px';
-      tooltip.style.top=(e.clientY-rect.top-10)+'px';
-      setHTML(tooltip,
-        '<div style="margin-bottom:4px"><span class="type-badge" style="background:'+(TYPE_COLORS[n.type]||'#8b949e')+'">'+esc(n.type)+'</span> <code class="mono">'+esc(n.id.slice(0,8))+'</code></div>'+
-        '<div style="font-size:0.85rem;margin-bottom:6px">'+esc(n.fullContent||n.label)+'</div>'+
-        '<div style="font-size:0.75rem;color:var(--muted)">Tier: '+(n.tier||'archival')+'</div>'
-      );
-    });
-
-    document.addEventListener('click',function(e){
-      if(e.target.tagName!=='circle'&&!tooltip.contains(e.target)) tooltip.style.display='none';
-    });
-  }
-
-  function redrawGraph(){
-    var svg=$('graph-svg');
-    var html='';
-    for(var i=0;i<graphEdges.length;i++){
-      var ea=graphNodeMap[graphEdges[i].from],eb=graphNodeMap[graphEdges[i].to];
-      if(!ea||!eb) continue;
-      var mx=(ea.x+eb.x)/2,my=(ea.y+eb.y)/2;
-      html+='<line x1="'+ea.x+'" y1="'+ea.y+'" x2="'+eb.x+'" y2="'+eb.y+'" stroke="#30363d" stroke-width="'+(1+graphEdges[i].strength*2)+'"/>';
-      if(graphEdges[i].type) html+='<text x="'+mx+'" y="'+(my-4)+'" fill="#8b949e" font-size="9" text-anchor="middle">'+esc(graphEdges[i].type)+'</text>';
-    }
-    for(var i=0;i<graphNodes.length;i++){
-      var color=TYPE_COLORS[graphNodes[i].type]||'#8b949e';
-      html+='<circle data-nid="'+esc(graphNodes[i].id)+'" cx="'+graphNodes[i].x+'" cy="'+graphNodes[i].y+'" r="8" fill="'+color+'" stroke="#0d1117" stroke-width="2"/>';
-      html+='<text x="'+graphNodes[i].x+'" y="'+(graphNodes[i].y+20)+'" fill="'+color+'" font-size="10" text-anchor="middle" font-family="-apple-system,sans-serif">'+esc(graphNodes[i].label.slice(0,24))+'</text>';
-    }
-    setHTML(svg,html);
-  }
-
   // -- Init --
-  makeGraphInteractive();
+  setupGraphInteraction();
   loadAll();
   setInterval(loadAll,30000);
 })();
