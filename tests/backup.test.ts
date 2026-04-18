@@ -4,11 +4,27 @@ import path from "node:path";
 import os from "node:os";
 
 // Copy of backupDatabase from src/index.ts (not exported)
+const BACKUP_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
+
 function backupDatabase(dbPath: string): void {
   try {
     if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0) return;
     const backupDir = path.join(path.dirname(dbPath), "backups");
-    fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    // Throttle: skip if the most recent backup is less than 1 hour old
+    const existing = fs
+      .readdirSync(backupDir)
+      .filter((f) => f.startsWith("memory-") && f.endsWith(".db"))
+      .sort()
+      .reverse();
+    if (existing.length > 0) {
+      const lastTs = parseInt(
+        existing[0].replace("memory-", "").replace(".db", ""),
+        10
+      );
+      if (!isNaN(lastTs) && Date.now() - lastTs < BACKUP_THROTTLE_MS) return;
+    }
 
     const backupPath = path.join(backupDir, `memory-${Date.now()}.db`);
     fs.copyFileSync(dbPath, backupPath);
@@ -83,19 +99,25 @@ describe("backupDatabase", () => {
     expect(files).toHaveLength(1);
   });
 
-  it("keeps only 3 most recent backups when more are created", async () => {
+  it("keeps only 3 most recent backups when more are created", () => {
     const tmpDir = makeTempDir();
     const dbPath = path.join(tmpDir, "test.db");
     fs.writeFileSync(dbPath, "data");
+    const backupDir = path.join(tmpDir, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
 
-    // Create 5 backups with slight time gaps to ensure unique timestamps
+    // Pre-seed 5 old backup files with timestamps older than the throttle window
+    const baseTs = Date.now() - BACKUP_THROTTLE_MS * 10;
     for (let i = 0; i < 5; i++) {
-      backupDatabase(dbPath);
-      // Small delay to ensure distinct Date.now() values
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      fs.writeFileSync(
+        path.join(backupDir, `memory-${baseTs + i * 1000}.db`),
+        "old"
+      );
     }
 
-    const backupDir = path.join(tmpDir, "backups");
+    // One more call should add a new backup and then trim to 3 total
+    backupDatabase(dbPath);
+
     const files = fs
       .readdirSync(backupDir)
       .filter((f) => f.startsWith("memory-") && f.endsWith(".db"));
@@ -151,4 +173,52 @@ describe("backupDatabase", () => {
     );
     expect(backupContent).toBe("nested data");
   });
+
+  it("skips backup when last backup is less than 1 hour old", () => {
+    const tmpDir = makeTempDir();
+    const dbPath = path.join(tmpDir, "test.db");
+    fs.writeFileSync(dbPath, "data");
+    const backupDir = path.join(tmpDir, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    // Pre-seed a backup file with a timestamp from 30 minutes ago (within throttle window)
+    const recentTs = Date.now() - 30 * 60 * 1000;
+    fs.writeFileSync(
+      path.join(backupDir, `memory-${recentTs}.db`),
+      "recent backup"
+    );
+
+    backupDatabase(dbPath);
+
+    const files = fs
+      .readdirSync(backupDir)
+      .filter((f) => f.startsWith("memory-") && f.endsWith(".db"));
+    // Still only the 1 pre-seeded file — no new backup was created
+    expect(files).toHaveLength(1);
+    expect(files[0]).toBe(`memory-${recentTs}.db`);
+  });
+
+  it("creates a new backup when last backup is more than 1 hour old", () => {
+    const tmpDir = makeTempDir();
+    const dbPath = path.join(tmpDir, "test.db");
+    fs.writeFileSync(dbPath, "data");
+    const backupDir = path.join(tmpDir, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    // Pre-seed a backup file with a timestamp from 2 hours ago (outside throttle window)
+    const oldTs = Date.now() - 2 * 60 * 60 * 1000;
+    fs.writeFileSync(
+      path.join(backupDir, `memory-${oldTs}.db`),
+      "old backup"
+    );
+
+    backupDatabase(dbPath);
+
+    const files = fs
+      .readdirSync(backupDir)
+      .filter((f) => f.startsWith("memory-") && f.endsWith(".db"));
+    // 2 files: the old pre-seeded one and the new backup
+    expect(files).toHaveLength(2);
+  });
 });
+

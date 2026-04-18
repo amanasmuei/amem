@@ -23,15 +23,30 @@ function ensureSecurePermissions(filePath: string): void {
     if (fs.existsSync(filePath) && process.platform !== "win32") {
       fs.chmodSync(filePath, 0o600);
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Failed to set file permissions:", error instanceof Error ? error.message : String(error));
+  }
 }
 
-// Automatic backup: keep last 3 backups of the DB before server starts
+// Automatic backup: keep last 3 backups of the DB before server starts.
+// Throttled: skips if a backup was created within the last hour.
+const BACKUP_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
+
 function backupDatabase(dbPath: string): void {
   try {
     if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0) return;
     const backupDir = path.join(path.dirname(dbPath), "backups");
     fs.mkdirSync(backupDir, { recursive: true });
+
+    // Throttle: skip if the most recent backup is less than 1 hour old
+    const existing = fs.readdirSync(backupDir)
+      .filter(f => f.startsWith("memory-") && f.endsWith(".db"))
+      .sort()
+      .reverse();
+    if (existing.length > 0) {
+      const lastTs = parseInt(existing[0].replace("memory-", "").replace(".db", ""), 10);
+      if (!isNaN(lastTs) && (Date.now() - lastTs) < BACKUP_THROTTLE_MS) return;
+    }
 
     const backupPath = path.join(backupDir, `memory-${Date.now()}.db`);
     fs.copyFileSync(dbPath, backupPath);
@@ -62,7 +77,9 @@ function detectProject(): string {
       }
       dir = path.dirname(dir);
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Failed to detect project:", error instanceof Error ? error.message : String(error));
+  }
   return "global";
 }
 
@@ -106,19 +123,21 @@ async function backfillEmbeddings(): Promise<void> {
         console.error(`[amem] Auto-linked ${linked} relations for backfilled memories`);
       }
     }
-  } catch {}
+  } catch (error) {
+    console.error("[amem] Embedding backfill failed:", error instanceof Error ? error.message : String(error));
+  }
 }
-// Run after a short delay to not block startup
-setTimeout(() => { backfillEmbeddings().catch(() => {}); }, 3000);
-
-// Build vector index after embeddings are loaded
+// Run after a short delay to not block startup; then chain vector index build
 import { buildVectorIndex } from "@aman_asmuei/amem-core";
-setTimeout(() => {
+setTimeout(async () => {
+  await backfillEmbeddings();
   try {
     const index = buildVectorIndex(db);
     console.error(`[amem] Vector index built: ${index.size()} vectors`);
-  } catch {}
-}, 5000);
+  } catch (error) {
+    console.error("[amem] Vector index build failed:", error instanceof Error ? error.message : String(error));
+  }
+}, 3000);
 
 const server = new McpServer({
   name: "amem-mcp-server",

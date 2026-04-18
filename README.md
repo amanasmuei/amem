@@ -31,7 +31,7 @@
   <tr>
     <td><strong>94.8% R@5</strong><br/><sub>LongMemEval Oracle, 500q</sub></td>
     <td><strong>0.08ms</strong><br/><sub>Search at 10k memories</sub></td>
-    <td><strong>29 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
+    <td><strong>33 MCP tools</strong><br/><sub>Full memory toolkit</sub></td>
     <td><strong>Powered by</strong><br/><sub><a href="https://github.com/amanasmuei/amem-core">amem-core</a></sub></td>
   </tr>
 </table>
