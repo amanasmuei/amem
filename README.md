@@ -325,6 +325,8 @@ All numbers from [`amem-core` v0.5.1](https://github.com/amanasmuei/amem-core) â
 
 Pipeline: local `bge-small-en-v1.5` bi-encoder + `ms-marco-MiniLM-L-6-v2` cross-encoder (int8, batched, default-on). See [amem-core benchmarks](https://github.com/amanasmuei/amem-core#-benchmarks) for full per-type breakdowns, pipeline evolution, and honest notes.
 
+> **Why this matters for the "rewrite it in Rust" question.** The 10.3ms rerank figure above reflects a ~30% speedup over the per-pair implementation it replaced â€” achieved with ~20 lines of batching plus int8 quantization, no native rewrite. The hot paths were already efficient; the remaining wins came from using them more carefully. We stay on TypeScript.
+
 ### Search Latency
 
 <table>
