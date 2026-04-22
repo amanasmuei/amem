@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `@types/better-sqlite3` dev dependency for full TypeScript type safety in `admin.ts`
 - `tests/admin.test.ts` — test coverage for admin helper functions (`getByPath`, `setByPath`, `diffConfig`, `findOrphanRelations`, `runIntegrityCheck`)
+- **Plugin `amem:remember` smart save flow** (plugin v0.15.0) — skill now runs a 5-phase flow (classify → dedupe → store → link → return) instead of a bare `memory_store` call. Prevents duplicate accumulation and auto-builds the knowledge graph.
+- `plugin/workflows/memory-save.md` — aflow-registrable workflow definition mirroring the skill's flow for inspection/sharing.
+- `plugin/examples/voices/` — three voice-layer templates (minimal, pragmatist, companion) showing how users format the skill's structured result with their own personality.
+- `plugin/CLAUDE.md`: "Smart Save Flow" section pointing at the new skill, workflow, and voice examples.
 
 ### Changed
+- `plugin/.claude-plugin/plugin.json`: plugin version bumped 0.14.0 → 0.15.0.
 - `src/tools/admin.ts`: removed `@ts-ignore` for `better-sqlite3` import (now covered by `@types/better-sqlite3`)
 - `src/index.ts`: empty `catch {}` blocks now log to stderr with `[amem]` prefix
 - `src/index.ts`: startup sequence chains embedding backfill → vector index build in a single `setTimeout` instead of two independent timers

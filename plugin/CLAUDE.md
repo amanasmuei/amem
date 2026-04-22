@@ -79,3 +79,13 @@ amem works alongside Claude's auto-memory. amem is authoritative when they confl
 | History | `memory_versions`, `memory_since` |
 | Session | `memory_summarize`, `memory_history` |
 | Reminders | `reminder_set`, `reminder_check` |
+
+## Smart Save Flow
+
+When the user says "remember this" / "save this" / "don't forget" / equivalent intent, use the `amem:remember` skill — it runs a 5-phase flow (classify → dedupe → store → link → return) instead of a bare `memory_store` call. This prevents duplicate accumulation and auto-builds the knowledge graph.
+
+- Skill: `skills/remember/SKILL.md`
+- Workflow definition: `workflows/memory-save.md` (aflow-registrable)
+- Voice layers: `examples/voices/` (minimal · pragmatist · companion)
+
+The skill returns a structured result; the voice layer formats the confirmation. No voice layer configured → neutral default is used.
