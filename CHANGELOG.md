@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-04-22
+
 ### Added
 - `@types/better-sqlite3` dev dependency for full TypeScript type safety in `admin.ts`
 - `tests/admin.test.ts` — test coverage for admin helper functions (`getByPath`, `setByPath`, `diffConfig`, `findOrphanRelations`, `runIntegrityCheck`)
