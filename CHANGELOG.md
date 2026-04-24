@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-04-24
+
+### Changed
+- `@aman_asmuei/amem-core` bumped `^0.5.2` → `^0.6.0`. Pulls in privacy + shared-state bug fixes, `AmemConfigSchema` exports, int8-quantized cross-encoder rerank (~2.8× faster recall), improved LongMemEval handling, and the new mirror pipeline. No breaking impact on amem — the symbols removed in 0.6.0's public API narrowing (`slugifyName`, `serializeMemoryFile`) are not used here.
+
 ## [0.24.0] - 2026-04-22
 
 ### Added
